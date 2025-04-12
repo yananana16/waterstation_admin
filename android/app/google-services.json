@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "333018391428",
+    "project_id": "waterstation-3464b",
+    "storage_bucket": "waterstation-3464b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:333018391428:android:786e9f810e9a5e71f3f3d1",
+        "android_client_info": {
+          "package_name": "com.example.waterstation_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADj2dNmoywCzMbPB_0ovoToUodnIwSWpY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:333018391428:android:8b06d2c816704976f3f3d1",
+        "android_client_info": {
+          "package_name": "com.example.waterstation_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADj2dNmoywCzMbPB_0ovoToUodnIwSWpY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
