@@ -2053,7 +2053,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                           final userDoc = userQuery.docs.first;
                                           await userDoc.reference.update({
                                             'district_president': false,
-                                            'role': 'user', // <-- set role to user when removed
+                                            'role': 'owner', // <-- set role to user when removed
                                           });
                                         }
                                       }

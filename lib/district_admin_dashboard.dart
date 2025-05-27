@@ -170,10 +170,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         ],
                       ),
                     ],
-                  ),
-                ],
+                  ),]
+                ),
               ),
-            ),
+            
             // Summary Cards
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -452,7 +452,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 // Table Content
                 Expanded(
                   child: FutureBuilder<QuerySnapshot>(
-                    future: FirebaseFirestore.instance.collection('station_owners').get(),
+                    future: FirebaseFirestore.instance
+                        .collection('station_owners')
+                        .where('status', isEqualTo: 'approved') // Filter by status "approved"
+                        .get(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -468,11 +471,11 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
                         final district = (data['districtName'] ?? '').toString().toLowerCase();
                         final matchesSearch = searchQuery.isEmpty ||
-                          stationName.contains(searchQuery) ||
-                          ownerName.contains(searchQuery) ||
-                          district.contains(searchQuery);
+                            stationName.contains(searchQuery) ||
+                            ownerName.contains(searchQuery) ||
+                            district.contains(searchQuery);
                         final matchesDistrict = widget.selectedDistrict == null ||
-                          (data['districtName']?.toString().toLowerCase() == widget.selectedDistrict!.toLowerCase());
+                            (data['districtName']?.toString().toLowerCase() == widget.selectedDistrict!.toLowerCase());
                         return matchesSearch && matchesDistrict;
                       }).toList();
 
@@ -550,6 +553,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     bool showComplianceReport = false;
     String complianceTitle = "";
     bool isLoading = false;
+    Map<String, dynamic>? selectedStationData;
+    String _complianceStatusFilter = 'approved'; // Add this line
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -557,7 +562,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (showComplianceReport) {
+        if (showComplianceReport && selectedStationData != null) {
           return Column(
             children: [
               // Header Section
@@ -569,13 +574,14 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   children: [
                     Text(
                       complianceTitle,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Color(0xFF1976D2)),
+                      icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
                       onPressed: () {
                         setState(() {
                           showComplianceReport = false;
+                          selectedStationData = null;
                         });
                       },
                     ),
@@ -584,7 +590,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: _complianceReportDetails(),
+                child: _buildComplianceReportDetailsFromData(selectedStationData!), // Use new details builder
               ),
             ],
           );
@@ -601,46 +607,41 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 children: [
                   const Text(
                     "Compliance",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                   ),
                   Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2)),
-                        onPressed: () {},
-                      ),
-                      const SizedBox(width: 16),
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2)),
-                            onPressed: () {},
+                      // Status Filter Dropdown
+                      DropdownButton<String>(
+                        value: _complianceStatusFilter,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'approved',
+                            child: Text('Approved'),
                           ),
-                          Positioned(
-                            right: 8,
-                            top: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 5,
-                                minHeight: 2,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
+                          DropdownMenuItem(
+                            value: 'pending_approval',
+                            child: Text('Pending Approval'),
                           ),
                         ],
+                        onChanged: (value) {
+                          setState(() {
+                            _complianceStatusFilter = value!;
+                          });
+                        },
+                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                        dropdownColor: Colors.white,
+                        underline: Container(
+                          height: 2,
+                          color: Colors.blueAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Colors.blueAccent),
+                        onPressed: () {
+                          // Handle settings
+                        },
                       ),
                     ],
                   ),
@@ -648,102 +649,91 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
               ),
             ),
             const SizedBox(height: 16),
-            // Responsive Layout
+            // Approved or Pending Stations List
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  bool isDesktop = constraints.maxWidth >= 800;
-                  return isDesktop
-                      ? Row(
-                          children: [
-                            // "For Approval" Section
-                            Expanded(
-                              child: _complianceSection(
-                                "For Approval",
-                                Color(0xFF1976D2),
-                                10,
-                                (title) {
-                                  setState(() {
-                                    isLoading = true;
-                                    Future.delayed(const Duration(seconds: 1), () {
-                                      setState(() {
-                                        isLoading = false;
-                                        showComplianceReport = true;
-                                        complianceTitle = title;
-                                      });
-                                    });
-                                  });
-                                },
-                              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('station_owners')
+                      .where('status', isEqualTo: _complianceStatusFilter)
+                      .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error loading stations: ${snapshot.error}'));
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    // Filter by selected district
+                    final filteredDocs = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final districtName = (data['districtName'] ?? '').toString().toLowerCase();
+                      final selectedDistrict = widget.selectedDistrict?.toLowerCase();
+                      return selectedDistrict == null || districtName == selectedDistrict;
+                    }).toList();
+
+                    if (filteredDocs.isEmpty) {
+                      return Center(
+                        child: Text(
+                          _complianceStatusFilter == 'approved'
+                              ? 'No approved stations found.'
+                              : 'No pending approval stations found.',
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: filteredDocs.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (context, idx) {
+                        final data = filteredDocs[idx].data() as Map<String, dynamic>;
+                        final stationName = data['stationName'] ?? '';
+                        final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                        final district = data['districtName'] ?? '';
+                        final address = data['address'] ?? '';
+                        return ListTile(
+                          leading: Icon(
+                            _complianceStatusFilter == 'approved'
+                                ? Icons.check_circle
+                                : Icons.hourglass_top,
+                            color: _complianceStatusFilter == 'approved'
+                                ? Colors.green
+                                : Colors.orange,
+                          ),
+                          title: Text(stationName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('$ownerName\n$district\n$address'),
+                          isThreeLine: true,
+                          trailing: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                isLoading = true;
+                              });
+                              Future.delayed(const Duration(milliseconds: 300), () {
+                                setState(() {
+                                  isLoading = false;
+                                  showComplianceReport = true;
+                                  complianceTitle = stationName;
+                                  selectedStationData = data;
+                                });
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _complianceStatusFilter == 'approved'
+                                  ? Colors.green
+                                  : Colors.orange,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            // "Approved" Section
-                            Expanded(
-                              child: _complianceSection(
-                                "Approved",
-                                Colors.green,
-                                5,
-                                (title) {
-                                  setState(() {
-                                    isLoading = true;
-                                    Future.delayed(const Duration(seconds: 1), () {
-                                      setState(() {
-                                        isLoading = false;
-                                        showComplianceReport = true;
-                                        complianceTitle = title;
-                                      });
-                                    });
-                                  });
-                                },
-                              ),
+                            child: Text(
+                              "View Details",
+                              style: const TextStyle(color: Colors.white),
                             ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            // "For Approval" Section
-                            Expanded(
-                              child: _complianceSection(
-                                "For Approval",
-                                Color(0xFF1976D2),
-                                10,
-                                (title) {
-                                  setState(() {
-                                    isLoading = true;
-                                    Future.delayed(const Duration(seconds: 1), () {
-                                      setState(() {
-                                        isLoading = false;
-                                        showComplianceReport = true;
-                                        complianceTitle = title;
-                                      });
-                                    });
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // "Approved" Section
-                            Expanded(
-                              child: _complianceSection(
-                                "Approved",
-                                Colors.green,
-                                5,
-                                (title) {
-                                  setState(() {
-                                    isLoading = true;
-                                    Future.delayed(const Duration(seconds: 1), () {
-                                      setState(() {
-                                        isLoading = false;
-                                        showComplianceReport = true;
-                                        complianceTitle = title;
-                                      });
-                                    });
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
+                          ),
                         );
-                },
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -752,75 +742,16 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     );
   }
 
-  Widget _complianceSection(String title, Color buttonColor, int itemCount, Function(String) onViewDetails) {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 2,
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: itemCount,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "$title Station ${index + 1}",
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          onViewDetails("$title Station ${index + 1}");
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: buttonColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: Text(
-                          title == "For Approval" ? "View Compliance" : "View Details",
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _complianceReportDetails() {
+  // New: Build compliance report details from Firestore data
+  Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Compliance Report Details",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
           ),
           const SizedBox(height: 16),
           Row(
@@ -830,15 +761,15 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text("PureFlow Water Station", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
-                    Text("Owner's Name: Mark Delacruz"),
-                    Text("Location: Brgy. San Vicente Jaro, Iloilo City"),
-                    Text("Contact Number: 09178456210"),
-                    Text("Email: markdelacruz@gmail.com"),
-                    Text("Date of Compliance: March 15, 2023"),
-                    Text("Status: Approved"),
+                  children: [
+                    Text(data['stationName'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text("Owner's Name: ${data['firstName'] ?? ''} ${data['lastName'] ?? ''}"),
+                    Text("Location: ${data['address'] ?? ''}"),
+                    Text("Contact Number: ${data['phone'] ?? ''}"),
+                    Text("Email: ${data['email'] ?? ''}"),
+                    Text("Date of Compliance: ${data['dateOfCompliance'] ?? ''}"),
+                    Text("Status: ${data['status'] ?? ''}"),
                   ],
                 ),
               ),
@@ -850,17 +781,17 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   children: [
                     const Text(
                       "Checklist:",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                     ),
                     const SizedBox(height: 8),
-                    _checklistItem("Bacteriological Test Result", "Approved"),
-                    _checklistItem("Physical-Chemical Test Result", "Approved"),
-                    _checklistItem("Business Permit", "Approved"),
-                    _checklistItem("DTI", "Approved"),
-                    _checklistItem("Sanitary Permit", "Approved"),
-                    _checklistItem("Mayor's Permit", "Approved"),
-                    _checklistItem("Fire Safety Certificate", "Approved"),
-                    _checklistItem("Other Documents", "Approved"),
+                    _buildChecklistItem("Bacteriological Test Result", data['bacteriologicalTestStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Physical-Chemical Test Result", data['physicalChemicalTestStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Business Permit", data['businessPermitStatus'] ?? 'Approved'),
+                    _buildChecklistItem("DTI", data['dtiStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Sanitary Permit", data['sanitaryPermitStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Mayor's Permit", data['mayorsPermitStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Fire Safety Certificate", data['fireSafetyStatus'] ?? 'Approved'),
+                    _buildChecklistItem("Other Documents", data['otherDocumentsStatus'] ?? 'Approved'),
                   ],
                 ),
               ),
@@ -871,7 +802,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     );
   }
 
-  static Widget _checklistItem(String label, String status) {
+  Widget _buildChecklistItem(String label, String status) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
