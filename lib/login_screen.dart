@@ -1,248 +1,454 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
-import 'admin_dashboard.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'district_admin_dashboard.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
+import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import
+import 'role_selection_screen.dart'; // Import RoleSelectionScreen
+import 'admin_dashboard.dart'; // Import Admin Dashboard
+import 'district_admin_dashboard.dart'; // Import District Admin Dashboard
+import 'select_location_screen.dart';
+import 'lgu_dashboard.dart'; // Add this import
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String selectedRole; // Pass the selected role from the previous screen
+  final String? selectedDistrict; // Add this line
+  const LoginScreen({
+    super.key,
+    required this.selectedRole,
+    this.selectedDistrict, // Add this line
+  });
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final AuthService _authService = AuthService();
-  String errorMessage = "";
-  bool isLoading = false; // Variable to track loading state
+  bool _isPasswordVisible = false;
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false; // Add loading state
 
-  void _login() async {
-  setState(() {
-    isLoading = true; // Show loading indicator
-  });
+  void _handleLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
 
-  try {
-    // Sign in the user with email and password
-    User? user = await _authService.signIn(
-      emailController.text.trim(),
-      passwordController.text.trim(),
-    );
+    final enteredUsername = _usernameController.text.trim();
+    final enteredPassword = _passwordController.text.trim();
 
-    if (user != null) {
-      // Fetch the user from Firestore based on UID
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid) // Use UID for direct document fetch
-          .get();
+    if (widget.selectedRole == 'federated') {
+      try {
+        // Authenticate user
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: enteredUsername,
+          password: enteredPassword,
+        );
 
-      if (userDoc.exists) {
-        // Check if the 'federated_president' and 'district_president' fields are true
-        bool isFederatedPresident = userDoc['federated_president'] ?? false;
-        bool isDistrictPresident = userDoc['district_president'] ?? false;
+        if (userCredential.user != null) {
+          String uid = userCredential.user!.uid;
 
-        print('Is Federated President: $isFederatedPresident');
-        print('Is District President: $isDistrictPresident');
+          // Check if the user is admin and federated president in users collection (docId == uid)
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+          if (userDoc.id == uid && userData['role'] == 'admin' && userData['federated_president'] == true) {
+            setState(() {
+              _isLoading = false;
+            });
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            );
+            return;
+          }
 
-        if (isFederatedPresident && isDistrictPresident) {
-          // If both roles are true, show a choice for federated or district login
-          _showRoleSelectionDialog();
-        } else if (isFederatedPresident) {
-          // If the user is a federated president, navigate to Admin Dashboard
-          Navigator.pushReplacement(
+          // Check if the user exists in the "station_owners" collection using the userId field
+          QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('userId', isEqualTo: uid)
+              .where('federated_president', isEqualTo: true)
+              .where('status', isEqualTo: 'approved')
+              .limit(1)
+              .get();
+
+          if (stationOwnerQuery.docs.isNotEmpty) {
+            setState(() {
+              _isLoading = false;
+            });
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            );
+            return;
+          } else {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Account not found or not a federated president.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+            return;
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Authentication failed.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+      });
+    } else {
+      // For other roles, use Firebase Auth
+      try {
+        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: enteredUsername,
+          password: enteredPassword,
+        );
+        if (widget.selectedRole == 'district') {
+          String uid = userCredential.user!.uid;
+
+          // Check users collection for district admin
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+          if (userDoc.id == uid &&
+              userData['role'] == 'admin' &&
+              userData['district_president'] == true &&
+              (widget.selectedDistrict == null || userData['districtName'] == widget.selectedDistrict)) {
+            setState(() {
+              _isLoading = false;
+            });
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DistrictAdminDashboard(
+                  selectedDistrict: widget.selectedDistrict,
+                ),
+              ),
+            );
+            return;
+          }
+
+          // Check station_owners collection for district admin
+          QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('userId', isEqualTo: uid)
+              .where('districtName', isEqualTo: widget.selectedDistrict)
+              .where('district_president', isEqualTo: true)
+              .where('status', isEqualTo: 'approved')
+              .limit(1)
+              .get();
+
+          if (stationOwnerQuery.docs.isNotEmpty) {
+            // Get the station_owner doc ID
+            String stationOwnerDocId = stationOwnerQuery.docs.first.id;
+
+            // Check districts collection for matching customUID
+            QuerySnapshot districtQuery = await FirebaseFirestore.instance
+                .collection('districts')
+                .where('customUID', isEqualTo: stationOwnerDocId)
+                .limit(1)
+                .get();
+
+            if (districtQuery.docs.isNotEmpty) {
+              setState(() {
+                _isLoading = false;
+              });
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DistrictAdminDashboard(
+                    selectedDistrict: widget.selectedDistrict,
+                  ),
+                ),
+              );
+            } else {
+              setState(() {
+                _isLoading = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('District record not found or not linked to this account.'),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            }
+          } else {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Account not found or not approved for this district.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+        } else if (widget.selectedRole == 'cho_lgu') {
+          setState(() {
+            _isLoading = false;
+          });
+          Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => AdminDashboard()),
-          );
-        } else if (isDistrictPresident) {
-          // If the user is a district president, navigate to District Admin Dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => DistrictAdminDashboard()),
+            MaterialPageRoute(builder: (context) => const LguDashboard()),
           );
         } else {
           setState(() {
-            errorMessage = "You are not authorized to access the admin dashboard.";
+            _isLoading = false;
           });
         }
-      } else {
+      } on FirebaseAuthException catch (e) {
         setState(() {
-          errorMessage = "User does not exist in the database.";
+          _isLoading = false;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Invalid username or password.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
-    } else {
-      setState(() {
-        errorMessage = "Invalid email or password.";
-      });
     }
-  } catch (e) {
-    setState(() {
-      errorMessage = "An error occurred. Please try again later.";
-    });
-    print('Error: $e');
-  } finally {
-    setState(() {
-      isLoading = false; // Hide loading indicator once done
-    });
   }
-}
-
-// Function to show a dialog to choose between federated or district login
-void _showRoleSelectionDialog() {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text('Choose Login Type'),
-        content: Text('You have both roles. Please choose one:'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // Navigate to Federated Admin Dashboard
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => AdminDashboard()),
-              );
-            },
-            child: Text('Federated Login'),
-          ),
-          TextButton(
-            onPressed: () {
-              // Navigate to District Admin Dashboard
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => DistrictAdminDashboard()),
-              );
-            },
-            child: Text('District Login'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Admin Login'),
-        backgroundColor: Colors.blue, // Blue color for the theme
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Add a logo or icon
-                Icon(
-                  Icons.water_drop,
-                  size: 100,
-                  color: Colors.blueAccent,
-                ),
-                SizedBox(height: 20),
+    final screenWidth = MediaQuery.of(context).size.width;
 
-                // Email TextField
-                SizedBox(
-                  width: 350, // Limit the width of the input field
-                  child: TextField(
-                    controller: emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(
+            child: Container(
+              constraints: BoxConstraints(maxWidth: 1200), // Limit the maximum width
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Left side: Back button and login form
+                  Expanded(
+                    flex: 1,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: screenWidth > 800 ? 40.0 : 20.0,
                       ),
-                      filled: true,
-                      fillColor: Colors.blue[50], // Light blue background
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ),
-                SizedBox(height: 20),
-
-                // Password TextField
-                SizedBox(
-                  width: 350, // Limit the width of the input field
-                  child: TextField(
-                    controller: passwordController,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              if (widget.selectedRole == 'district') {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
+                                );
+                              } else {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+                                );
+                              }
+                            },
+                            child: Row(
+                              children: [
+                                Icon(Icons.arrow_back, color: Colors.blue, size: 18),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Back to Previous Page',
+                                  style: TextStyle(
+                                    fontSize: screenWidth > 800 ? 16 : 14,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: screenWidth > 800 ? 40 : 20),
+                          Text(
+                            'Log in',
+                            style: TextStyle(
+                              fontSize: screenWidth > 800 ? 48 : 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          SizedBox(height: screenWidth > 800 ? 40 : 20),
+                          // Optionally display the selected district for district role
+                          if (widget.selectedRole == 'district' && widget.selectedDistrict != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: Text(
+                                'District: ${widget.selectedDistrict}',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.blue[800],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          TextField(
+                            controller: _usernameController,
+                            decoration: InputDecoration(
+                              labelText: 'Username',
+                              labelStyle: TextStyle(
+                                fontSize: 16,
+                                color: Colors.blue, // Set label text color to blue
+                              ),
+                              prefixIcon: Icon(Icons.person, color: Colors.blue),
+                              filled: true,
+                              fillColor: Color(0xFFEAF3FF),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 20),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: !_isPasswordVisible,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              labelStyle: TextStyle(
+                                fontSize: 16,
+                                color: Colors.blue, // Set label text color to blue
+                              ),
+                              prefixIcon: Icon(Icons.lock, color: Colors.blue),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isPasswordVisible
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isPasswordVisible = !_isPasswordVisible;
+                                  });
+                                },
+                              ),
+                              filled: true,
+                              fillColor: Color(0xFFEAF3FF),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(
+                              onTap: () {
+                                // Handle password reset logic
+                              },
+                              child: Text(
+                                'Forgot Password? Reset',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: screenWidth > 800 ? 40 : 20),
+                          ElevatedButton(
+                            onPressed: _handleLogin,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: screenWidth > 800 ? 50 : 30,
+                                vertical: screenWidth > 800 ? 18 : 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'Log in',
+                              style: TextStyle(
+                                fontSize: screenWidth > 800 ? 20 : 16,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      filled: true,
-                      fillColor: Colors.blue[50], // Light blue background
-                    ),
-                    obscureText: true,
-                  ),
-                ),
-                SizedBox(height: 20),
-
-                // Error message display
-                if (errorMessage.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Text(
-                      errorMessage,
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
                     ),
                   ),
 
-                // Loading indicator if isLoading is true
-                if (isLoading)
-                  CircularProgressIndicator(
-                    color: Colors.blue, // Blue color for the loading indicator
-                  ),
-
-                // Login Button
-                if (!isLoading)
-                  ElevatedButton(
-                    onPressed: _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue, // Button color
-                      padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                  // Right side: Logo and illustration
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 1,
+                              child: Image.asset(
+                                'assets/logo.png', // Match the logo from role_selection_screen
+                                height: screenWidth > 800 ? 220 : 150,
+                              ),
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                SizedBox(height: screenWidth > 800 ? 150 : 100),
+                                Text(
+                                  'H2OGO',
+                                  style: TextStyle(
+                                    fontSize: screenWidth > 800 ? 24 : 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                Text(
+                                  'Where safety meets efficiency.',
+                                  style: TextStyle(
+                                    fontSize: screenWidth > 800 ? 14 : 12,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 40),
+                        Image.asset(
+                          'assets/welcome_admin.png', // Replace with the appropriate illustration
+                          height: screenWidth > 800 ? 320 : 200,
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      'Login',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.white, // Text color white
-                      ),
-                    ),
                   ),
-                SizedBox(height: 20),
-
-                // Optional: Add a "Forgot Password" text
-                GestureDetector(
-                  onTap: () {
-                    // Add functionality for "Forgot Password"
-                  },
-                  child: Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: Colors.blueAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
+        if (_isLoading)
+          Container(
+            color: Colors.black.withOpacity(0.3),
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+      ],
     );
   }
 }

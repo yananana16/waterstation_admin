@@ -44,6 +44,8 @@ dependencies:
   flutter_hooks: ^0.21.2
   url_launcher: ^6.3.1
   shared_preferences: ^2.0.6
+  fl_heatmap: ^0.4.5
+  flutter_map: ^8.1.1
 
 
 dev_dependencies:
@@ -69,6 +71,10 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/h2ogo.png
+    - assets/logo.png
+    - assets/welcome_admin.png
+    - assets/location_illustration.png
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
