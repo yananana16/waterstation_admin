@@ -192,13 +192,25 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else if (widget.selectedRole == 'cho_lgu') {
-          setState(() {
-            _isLoading = false;
-          });
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LguDashboard()),
-          );
+          if (enteredUsername == 'admin' && enteredPassword == 'password') {
+            setState(() {
+              _isLoading = false;
+            });
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LguDashboard()),
+            );
+          } else {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invalid username or password for CHO LGU.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
         } else {
           setState(() {
             _isLoading = false;

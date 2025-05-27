@@ -914,7 +914,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       setState(() {
                                         _mapSelectedLocation = LatLng(lat as double, lng as double);
                                       });
-                                      _mapController.move(LatLng(lat as double, lng as double), 16.0);
+                                      _mapController.move(LatLng(lat, lng), 16.0);
                                     }
                                   },
                                 ),
