@@ -2123,14 +2123,14 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
       if (statusValues.isNotEmpty &&
-          statusValues.every((s) => s == 'partially')) {
+          statusValues.every((s) => s == 'passed')) {
         // Update station_owners status to "district_approved"
         await FirebaseFirestore.instance
             .collection('station_owners')
             .doc(widget.stationOwnerDocId)
-            .update({'status': 'district_approved'});
+            .update({'status': 'approved'});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All statuses are "partially". Station marked as district_approved.')),
+          const SnackBar(content: Text('All statuses are "partially". Station marked as approved.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
