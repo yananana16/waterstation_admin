@@ -668,34 +668,34 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   ),
                   Row(
                     children: [
-                      // Status Filter Dropdown
-                      DropdownButton<String>(
-                        value: _complianceStatusFilter,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'approved',
-                            child: Text('Approved'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'pending_approval',
-                            child: Text('Pending Approval'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'district_approved',
-                            child: Text('District Approved'),
-                          ),
+                      // --- Replace DropdownButton with 3 filter buttons ---
+                      ToggleButtons(
+                        isSelected: [
+                          _complianceStatusFilter == 'approved',
+                          _complianceStatusFilter == 'pending_approval',
+                          _complianceStatusFilter == 'district_approved',
                         ],
-                        onChanged: (value) {
+                        onPressed: (int idx) {
                           setState(() {
-                            _complianceStatusFilter = value!;
+                            if (idx == 0) {
+                              _complianceStatusFilter = 'approved';
+                            } else if (idx == 1) {
+                              _complianceStatusFilter = 'pending_approval';
+                            } else if (idx == 2) {
+                              _complianceStatusFilter = 'district_approved';
+                            }
                           });
                         },
-                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                        dropdownColor: Colors.white,
-                        underline: Container(
-                          height: 2,
-                          color: Colors.blueAccent,
-                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        selectedColor: Colors.white,
+                        fillColor: Colors.blueAccent,
+                        color: Colors.blueAccent,
+                        constraints: const BoxConstraints(minWidth: 120, minHeight: 40),
+                        children: const [
+                          Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('District Approved', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ],
                       ),
                       const SizedBox(width: 16),
                       IconButton(
@@ -1411,10 +1411,6 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     DropdownMenuItem(
                                       value: 'pending',
                                       child: Text('Pending'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'passed',
-                                      child: Text('Passed'),
                                     ),
                                     DropdownMenuItem(
                                       value: 'partially',

@@ -358,7 +358,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         const SizedBox(height: 16),
-        // Heatmap and District Station Counts
+        // District Station Counts
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -368,12 +368,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 return isDesktop
                     ? Row(
                         children: [
-                          // Heatmap Section
-                          Expanded(
-                            flex: 2,
-                            child: _buildHeatmapSection(),
-                          ),
-                          const SizedBox(width: 20),
                           // District Station Counts
                           Expanded(
                             child: _buildDistrictStationCounts(),
@@ -382,9 +376,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       )
                     : Column(
                         children: [
-                          // Heatmap Section
-                          _buildHeatmapSection(),
-                          const SizedBox(height: 20),
                           // District Station Counts
                           _buildDistrictStationCounts(),
                         ],
@@ -394,134 +385,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildHeatmapSection() {
-    // Sample data: rows = districts, columns = months
-    final List<String> districts = [
-      "La Paz", "Jaro 1", "Jaro 2", "Mandurriao", "City Proper 1", "City Proper 2", "Molo", "Lapuz", "Arevalo"
-    ];
-    final List<String> months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    ];
-    // Random/simulated compliance rates (0-100)
-    final List<List<double>> complianceRates = [
-      [90, 85, 80, 95, 88, 92, 87, 90, 93, 89, 91, 94],
-      [70, 75, 78, 80, 82, 85, 88, 90, 92, 91, 89, 87],
-      [60, 65, 68, 70, 72, 75, 78, 80, 82, 81, 79, 77],
-      [95, 92, 90, 93, 94, 96, 97, 98, 99, 97, 95, 94],
-      [80, 82, 84, 86, 88, 90, 92, 94, 96, 95, 93, 91],
-      [50, 55, 58, 60, 62, 65, 68, 70, 72, 71, 69, 67],
-      [85, 87, 89, 91, 93, 95, 97, 99, 98, 96, 94, 92],
-      [75, 77, 79, 81, 83, 85, 87, 89, 91, 90, 88, 86],
-      [65, 67, 69, 71, 73, 75, 77, 79, 81, 80, 78, 76],
-    ];
-
-    Color getCellColor(double value) {
-      if (value >= 90) return const Color(0xFF4CAF50); // Green
-      if (value >= 80) return const Color(0xFF8BC34A); // Light Green
-      if (value >= 70) return const Color(0xFFFFEB3B); // Yellow
-      if (value >= 60) return const Color(0xFFFFA726); // Orange
-      return const Color(0xFFF44336); // Red
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Heat Map for Monthly Compliance Submission/Failure Rates by District",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey),
-            ),
-            padding: const EdgeInsets.all(8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: [
-                  const DataColumn(label: Text('District')),
-                  ...months.map((m) => DataColumn(label: Text(m))).toList(),
-                ],
-                rows: List<DataRow>.generate(
-                  districts.length,
-                  (i) => DataRow(
-                    cells: [
-                      DataCell(Text(districts[i])),
-                      ...List<DataCell>.generate(
-                        months.length,
-                        (j) => DataCell(
-                          Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: getCellColor(complianceRates[i][j]),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              complianceRates[i][j].toInt().toString(),
-                              style: const TextStyle(fontSize: 10, color: Colors.black),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Legends
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: Text("Legends:", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            _legendBox(const Color(0xFF4CAF50)),
-            const SizedBox(width: 2),
-            _legendBox(const Color(0xFF8BC34A)),
-            const SizedBox(width: 2),
-            _legendBox(const Color(0xFFFFEB3B)),
-            const SizedBox(width: 2),
-            _legendBox(const Color(0xFFFFA726)),
-            const SizedBox(width: 2),
-            _legendBox(const Color(0xFFF44336)),
-            const SizedBox(width: 10),
-            const Text("90-100%", style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 18),
-            const Text("80-89%", style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 18),
-            const Text("70-79%", style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 18),
-            const Text("60-69%", style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 18),
-            const Text("< 60%", style: TextStyle(fontSize: 12)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _legendBox(Color color) {
-    return Container(
-      width: 28,
-      height: 14,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: Colors.black12),
-      ),
     );
   }
 
@@ -1281,34 +1144,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   Row(
                     children: [
-                      // Status Filter Dropdown
-                      DropdownButton<String>(
-                        value: _complianceStatusFilter,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'approved',
-                            child: Text('Approved'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'pending_approval',
-                            child: Text('Pending Approval'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'district_approved',
-                            child: Text('District Approved'),
-                          ),
+                      // --- Replace DropdownButton with 3 filter buttons ---
+                      ToggleButtons(
+                        isSelected: [
+                          _complianceStatusFilter == 'approved',
+                          _complianceStatusFilter == 'pending_approval',
+                          _complianceStatusFilter == 'district_approved',
                         ],
-                        onChanged: (value) {
+                        onPressed: (int idx) {
                           setState(() {
-                            _complianceStatusFilter = value!;
+                            if (idx == 0) {
+                              _complianceStatusFilter = 'approved';
+                            } else if (idx == 1) {
+                              _complianceStatusFilter = 'pending_approval';
+                            } else if (idx == 2) {
+                              _complianceStatusFilter = 'district_approved';
+                            }
                           });
                         },
-                        style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                        dropdownColor: Colors.white,
-                        underline: Container(
-                          height: 2,
-                          color: Colors.blueAccent,
-                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        selectedColor: Colors.white,
+                        fillColor: Colors.blueAccent,
+                        color: Colors.blueAccent,
+                        constraints: const BoxConstraints(minWidth: 120, minHeight: 40),
+                        children: const [
+                          Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('District Approved', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ],
                       ),
                       const SizedBox(width: 16),
                       IconButton(
@@ -2838,7 +2701,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                           final userDoc = userQuery.docs.first;
                                           await userDoc.reference.update({
                                             'district_president': false,
-                                            'role': 'owner', // <-- set role to user when removed
+                                            'role': 'user',
                                           });
                                         }
                                       }
