@@ -5,6 +5,8 @@ import 'role_selection_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
   final String? selectedDistrict; // Add this line
@@ -555,6 +557,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     bool isLoading = false;
     Map<String, dynamic>? selectedStationData;
     String _complianceStatusFilter = 'approved'; // Add this line
+    String? selectedStationOwnerDocId; // Track docId for details
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -562,7 +565,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (showComplianceReport && selectedStationData != null) {
+        if (showComplianceReport && selectedStationData != null && selectedStationOwnerDocId != null) {
           return Column(
             children: [
               // Header Section
@@ -582,6 +585,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         setState(() {
                           showComplianceReport = false;
                           selectedStationData = null;
+                          selectedStationOwnerDocId = null;
                         });
                       },
                     ),
@@ -589,8 +593,61 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 ),
               ),
               const SizedBox(height: 16),
+              // --- Remove View Files button and display files beside details ---
               Expanded(
-                child: _buildComplianceReportDetailsFromData(selectedStationData!), // Use new details builder
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Details (left)
+                      Expanded(
+                        flex: 1,
+                        child: _buildComplianceReportDetailsFromData(selectedStationData!),
+                      ),
+                      const SizedBox(width: 24),
+                      // Files (right)
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: ComplianceFilesViewer(
+                                  stationOwnerDocId: selectedStationOwnerDocId!,
+                                ),
+                              ),
+                              // Optional close button (if you want to allow hiding the panel)
+                              // Positioned(
+                              //   top: 8,
+                              //   right: 8,
+                              //   child: IconButton(
+                              //     icon: Icon(Icons.close),
+                              //     onPressed: () {
+                              //       // Implement close/hide logic if needed
+                              //     },
+                              //   ),
+                              // ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           );
@@ -622,6 +679,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                           DropdownMenuItem(
                             value: 'pending_approval',
                             child: Text('Pending Approval'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'district_approved',
+                            child: Text('District Approved'),
                           ),
                         ],
                         onChanged: (value) {
@@ -692,6 +753,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
                         final district = data['districtName'] ?? '';
                         final address = data['address'] ?? '';
+                        final stationOwnerDocId = filteredDocs[idx].id;
                         return ListTile(
                           leading: Icon(
                             _complianceStatusFilter == 'approved'
@@ -715,6 +777,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                   showComplianceReport = true;
                                   complianceTitle = stationName;
                                   selectedStationData = data;
+                                  selectedStationOwnerDocId = stationOwnerDocId; // Set docId for details
                                 });
                               });
                             },
@@ -744,83 +807,173 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
   // New: Build compliance report details from Firestore data
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
+    final docId = data['docId'] ?? data['id'] ?? '';
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Compliance Report Details",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-          ),
-          const SizedBox(height: 16),
-          Row(
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left Section
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data['stationName'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text("Owner's Name: ${data['firstName'] ?? ''} ${data['lastName'] ?? ''}"),
-                    Text("Location: ${data['address'] ?? ''}"),
-                    Text("Contact Number: ${data['phone'] ?? ''}"),
-                    Text("Email: ${data['email'] ?? ''}"),
-                    Text("Date of Compliance: ${data['dateOfCompliance'] ?? ''}"),
-                    Text("Status: ${data['status'] ?? ''}"),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Right Section (Checklist)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Checklist:",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+              Row(
+                children: [
+                  Icon(Icons.assignment_turned_in, color: Colors.blueAccent, size: 32),
+                  const SizedBox(width: 12),
+                  Text(
+                    "Compliance Report Details",
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1976D2),
+                      letterSpacing: 0.5,
                     ),
-                    const SizedBox(height: 8),
-                    _buildChecklistItem("Bacteriological Test Result", data['bacteriologicalTestStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Physical-Chemical Test Result", data['physicalChemicalTestStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Business Permit", data['businessPermitStatus'] ?? 'Approved'),
-                    _buildChecklistItem("DTI", data['dtiStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Sanitary Permit", data['sanitaryPermitStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Mayor's Permit", data['mayorsPermitStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Fire Safety Certificate", data['fireSafetyStatus'] ?? 'Approved'),
-                    _buildChecklistItem("Other Documents", data['otherDocumentsStatus'] ?? 'Approved'),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left Section
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['stationName'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.person, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Owner: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}",
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Address: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                data['address'] ?? '',
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.phone, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Contact: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              data['phone'] ?? '',
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.email, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Email: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                data['email'] ?? '',
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Date of Compliance: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              data['dateOfCompliance'] ?? '',
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.verified, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Status: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: (data['status'] == 'approved')
+                                    ? Colors.green
+                                    : (data['status'] == 'pending_approval')
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                (data['status'] ?? '').toString().toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChecklistItem(String label, String status) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 14)),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.green,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              status,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -961,6 +1114,598 @@ class _ChartPlaceholder extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// --- Compliance Files Viewer Widget ---
+class ComplianceFilesViewer extends StatefulWidget {
+  final String stationOwnerDocId;
+  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId});
+
+  @override
+  State<ComplianceFilesViewer> createState() => _ComplianceFilesViewerState();
+}
+
+class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
+  List<FileObject> uploadedFiles = [];
+  bool isLoading = true;
+  final Set<int> _expandedIndexes = {};
+  Map<String, dynamic> complianceStatuses = {};
+  Map<String, String> statusEdits = {}; // Track dropdown edits
+
+  @override
+  void initState() {
+    super.initState();
+    fetchComplianceFiles(widget.stationOwnerDocId);
+    fetchComplianceStatuses(widget.stationOwnerDocId);
+  }
+
+  Future<void> fetchComplianceFiles(String docId) async {
+    try {
+      final response = await Supabase.instance.client.storage
+          .from('compliance_docs')
+          .list(path: 'uploads/$docId');
+      setState(() {
+        uploadedFiles = response;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> fetchComplianceStatuses(String docId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('compliance_uploads')
+          .doc(docId)
+          .get();
+      if (doc.exists) {
+        setState(() {
+          complianceStatuses = doc.data() ?? {};
+        });
+      }
+    } catch (e) {
+      // ignore error, just leave complianceStatuses empty
+    }
+  }
+
+  Future<void> updateStatus(String statusKey, String newStatus) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('compliance_uploads')
+          .doc(widget.stationOwnerDocId)
+          .set({statusKey: newStatus}, SetOptions(merge: true));
+      setState(() {
+        complianceStatuses[statusKey] = newStatus;
+        statusEdits.remove(statusKey);
+      });
+
+      // After updating, check if all statuses are "partially"
+      final doc = await FirebaseFirestore.instance
+          .collection('compliance_uploads')
+          .doc(widget.stationOwnerDocId)
+          .get();
+      final data = doc.data() ?? {};
+      // Get all status fields (ending with _status)
+      final statusValues = data.entries
+          .where((e) => e.key.endsWith('_status'))
+          .map((e) => (e.value ?? '').toString().toLowerCase())
+          .toList();
+      if (statusValues.isNotEmpty &&
+          statusValues.every((s) => s == 'partially')) {
+        // Update station_owners status to "district_approved"
+        await FirebaseFirestore.instance
+            .collection('station_owners')
+            .doc(widget.stationOwnerDocId)
+            .update({'status': 'district_approved'});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All statuses are "partially". Station marked as district_approved.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Status updated')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update status')),
+      );
+    }
+  }
+
+  /// Returns a tuple: (categoryKey, displayLabel)
+  (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
+    final prefix = '${docId}_';
+    if (fileName.startsWith(prefix)) {
+      final rest = fileName.substring(prefix.length);
+      final categoryKey = rest.split('.').first.toLowerCase();
+      final displayLabel = categoryKey
+          .replaceAll('_', ' ')
+          .split(' ')
+          .map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
+          .join(' ');
+      return (categoryKey, displayLabel);
+    }
+    return ('unknown', 'Unknown Category');
+  }
+
+  void _showFileDialog(FileObject file, String fileUrl, bool isImage, bool isPdf, bool isWord) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.all(24),
+          child: Container(
+            width: 600,
+            height: 600,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        file.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Center(
+                    child: isImage
+                        ? Image.network(
+                            fileUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text('Failed to load image'),
+                                ),
+                          )
+                        : isPdf
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.picture_as_pdf, color: Colors.red, size: 64),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    icon: const Icon(Icons.open_in_new),
+                                    label: const Text('Open PDF'),
+                                    onPressed: () async {
+                                      if (await canLaunchUrl(Uri.parse(fileUrl))) {
+                                        await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Could not open file')),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              )
+                            : isWord
+                                ? Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.description, color: Colors.blue, size: 64),
+                                      const SizedBox(height: 16),
+                                      ElevatedButton.icon(
+                                        icon: const Icon(Icons.open_in_new),
+                                        label: const Text('Open Document'),
+                                        onPressed: () async {
+                                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
+                                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                          } else {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Could not open file')),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
+                  ),
+                ),
+              ],
+            ),
+          ));
+        },
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : uploadedFiles.isEmpty
+              ? const Center(child: Text('No uploaded compliance files found.'))
+              : ListView.builder(
+                  itemCount: uploadedFiles.length,
+                  itemBuilder: (context, index) {
+                    final file = uploadedFiles[index];
+                    final fileUrl = Supabase.instance.client.storage
+                        .from('compliance_docs')
+                        .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
+                    final extension = file.name.split('.').last.toLowerCase();
+                    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
+                    final isPdf = extension == 'pdf';
+                    final isWord = extension == 'doc' || extension == 'docx';
+                    final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
+
+                    // Compose status key (e.g. business_permit_status)
+                    final statusKey = '${categoryKey}_status';
+                    final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Unknown').toString();
+
+                    // Status color logic
+                    Color statusColor;
+                    switch (status.toLowerCase()) {
+                      case 'pending':
+                        statusColor = Colors.orange;
+                        break;
+                      case 'passed':
+                        statusColor = Colors.green;
+                        break;
+                      case 'partially':
+                        statusColor = Colors.teal.shade300;
+                        break;
+                      case 'failed':
+                        statusColor = Colors.red;
+                        break;
+                      default:
+                        statusColor = Colors.grey;
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  categoryLabel,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: statusColor,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    status,
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                DropdownButton<String>(
+                                  value: status.toLowerCase() == 'unknown' ? null : status,
+                                  hint: const Text('Set Status'),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'pending',
+                                      child: Text('Pending'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'passed',
+                                      child: Text('Passed'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'partially',
+                                      child: Text('Partially'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'failed',
+                                      child: Text('Failed'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value != null) {
+                                        statusEdits[statusKey] = value;
+                                      }
+                                    });
+                                  },
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+                                  dropdownColor: Colors.white,
+                                  underline: Container(
+                                    height: 1,
+                                    color: Colors.blueAccent,
+                                  ),
+                                ),
+                                if (statusEdits.containsKey(statusKey))
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 8.0),
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        final newStatus = statusEdits[statusKey]!;
+                                        updateStatus(statusKey, newStatus);
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blueAccent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('Update', style: TextStyle(fontSize: 12)),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              file.name,
+                              style: const TextStyle(fontSize: 13, color: Colors.black87),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: () {
+                                _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.blue,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(color: Colors.blue),
+                                ),
+                              ),
+                              child: const Text('View File', style: TextStyle(color: Colors.blue)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+// Checklist widget with file view buttons
+class ComplianceChecklistWithFiles extends StatefulWidget {
+  final String stationOwnerDocId;
+  final Map<String, dynamic> data;
+  const ComplianceChecklistWithFiles({required this.stationOwnerDocId, required this.data});
+
+  @override
+  State<ComplianceChecklistWithFiles> createState() => _ComplianceChecklistWithFilesState();
+}
+
+class _ComplianceChecklistWithFilesState extends State<ComplianceChecklistWithFiles> {
+  List<FileObject> uploadedFiles = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchComplianceFiles(widget.stationOwnerDocId);
+  }
+
+  Future<void> fetchComplianceFiles(String docId) async {
+    try {
+      final response = await Supabase.instance.client.storage
+          .from('compliance_docs')
+          .list(path: 'uploads/$docId');
+      setState(() {
+        uploadedFiles = response;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Helper to find file for a given category key
+  FileObject? _findFileForCategory(String categoryKey) {
+    for (final file in uploadedFiles) {
+      final prefix = '${widget.stationOwnerDocId}_';
+      if (file.name.startsWith(prefix)) {
+        final rest = file.name.substring(prefix.length);
+        final fileCategory = rest.split('.').first.toLowerCase();
+        if (fileCategory == categoryKey) return file;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // List of checklist items: label, statusKey, fileKey
+    final checklist = [
+      ("Bacteriological Test Result", "bacteriologicalTestStatus", "bacteriological_test_result"),
+      ("Physical-Chemical Test Result", "physicalChemicalTestStatus", "physical_chemical_test_result"),
+      ("Business Permit", "businessPermitStatus", "business_permit"),
+      ("DTI", "dtiStatus", "dti"),
+      ("Sanitary Permit", "sanitaryPermitStatus", "sanitary_permit"),
+      ("Mayor's Permit", "mayorsPermitStatus", "mayors_permit"),
+      ("Fire Safety Certificate", "fireSafetyStatus", "fire_safety_certificate"),
+      ("Other Documents", "otherDocumentsStatus", "other_documents"),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Checklist:",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+        ),
+        const SizedBox(height: 8),
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: LinearProgressIndicator(),
+          ),
+        ...checklist.map((item) {
+          final label = item.$1;
+          final status = widget.data[item.$2] ?? 'Approved';
+          final categoryKey = item.$3;
+          final file = _findFileForCategory(categoryKey);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(label, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: status == 'Approved'
+                              ? Colors.green
+                              : (status == 'Pending' ? Colors.orange : Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          status,
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (file != null)
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.remove_red_eye, size: 16),
+                    label: const Text("View File", style: TextStyle(fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Colors.blue),
+                      ),
+                    ),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (context) => SingleComplianceFileViewer(
+                          stationOwnerDocId: widget.stationOwnerDocId,
+                          file: file,
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// Viewer for a single compliance file
+class SingleComplianceFileViewer extends StatelessWidget {
+  final String stationOwnerDocId;
+  final FileObject file;
+  const SingleComplianceFileViewer({required this.stationOwnerDocId, required this.file});
+
+  @override
+  Widget build(BuildContext context) {
+    final fileUrl = Supabase.instance.client.storage
+        .from('compliance_docs')
+        .getPublicUrl('uploads/$stationOwnerDocId/${file.name}');
+    final extension = file.name.split('.').last.toLowerCase();
+    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
+    final isPdf = extension == 'pdf';
+    final isWord = extension == 'doc' || extension == 'docx';
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return Container(
+            color: Colors.white,
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  file.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue),
+                ),
+                const SizedBox(height: 16),
+                if (isImage)
+                  Image.network(
+                    fileUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text('Failed to load image'),
+                        ),
+                  )
+                else if (isPdf || isWord)
+                  Row(
+                    children: [
+                      Icon(
+                        isPdf ? Icons.picture_as_pdf : Icons.description,
+                        color: isPdf ? Colors.red : Colors.blue,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isPdf ? 'PDF Document' : 'Word Document',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.open_in_new, color: Colors.blue),
+                        onPressed: () async {
+                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
+                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not open file')),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  )
+                else
+                  const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

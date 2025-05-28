@@ -10,6 +10,30 @@ class LguDashboard extends StatefulWidget {
 class _LguDashboardState extends State<LguDashboard> {
   int selectedIndex = 0; // 0: Dashboard, 1: Water Stations, 2: Compliance, 3: Schedule, 4: Officers
 
+  // Add logout method
+  void _logout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (shouldLogout == true) {
+      Navigator.of(context).pop(); // or pushReplacement to login page if available
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -76,6 +100,7 @@ class _LguDashboardState extends State<LguDashboard> {
                   child: _SidebarButton(
                     icon: Icons.logout,
                     label: 'Log out',
+                    onTap: _logout, // <-- wire up logout
                   ),
                 ),
               ],

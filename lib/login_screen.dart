@@ -136,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
 
-          // Check station_owners collection for district admin
+          // If not found in users, check station_owners collection for district admin
           QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
               .collection('station_owners')
               .where('userId', isEqualTo: uid)
