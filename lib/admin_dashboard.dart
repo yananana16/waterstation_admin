@@ -2699,9 +2699,12 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                             .get();
                                         if (userQuery.docs.isNotEmpty) {
                                           final userDoc = userQuery.docs.first;
+                                          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+                                          final isFederatedPresident = userData['federated_president'] == true;
                                           await userDoc.reference.update({
                                             'district_president': false,
-                                            'role': 'user',
+                                            if (!isFederatedPresident) 'role': 'owner',
+                                            // If federated_president is true, do not change role
                                           });
                                         }
                                       }
