@@ -43,7 +43,7 @@ void main() async {
     final supabaseClient = Supabase.instance.client;
     final session = supabaseClient.auth.currentSession;
     if (session != null) {
-      print("✅ Connected to Supabase. Session user: ${session.user?.id}");
+      print("✅ Connected to Supabase. Session user: ${session.user.id}");
     } else {
       print("ℹ️ No Supabase session found.");
     }

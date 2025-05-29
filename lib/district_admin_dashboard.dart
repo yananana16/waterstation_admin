@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
-import 'login_screen.dart';
 import 'role_selection_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:flutter_map/flutter_map.dart';
@@ -395,7 +393,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error loading districts'));
                 }
-                final districts = snapshot.data ?? [];
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1064,7 +1061,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
   // New: Build compliance report details from Firestore data
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
-    final docId = data['docId'] ?? data['id'] ?? '';
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Card(
@@ -1244,6 +1240,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 }
 
 // Sidebar button widget
+// ignore: unused_element
 class _SidebarButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1387,7 +1384,6 @@ class ComplianceFilesViewer extends StatefulWidget {
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   List<FileObject> uploadedFiles = [];
   bool isLoading = true;
-  final Set<int> _expandedIndexes = {};
   Map<String, dynamic> complianceStatuses = {};
   Map<String, String> statusEdits = {}; // Track dropdown edits
 

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'login_screen.dart';
 import 'role_selection_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
-import 'package:fl_heatmap/fl_heatmap.dart'; 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -25,7 +24,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isLoading = false; // <-- Add this line
   bool _showSettingsPage = false; // <-- Add this line
   bool _showNotificationsPage = false; // <-- Add this line
-  String? _selectedDistrictForOwners; // <-- Add this line
+// <-- Add this line
   LatLng? _mapSelectedLocation;
   final MapController _mapController = MapController(); // <-- Add this line
   final TextEditingController _searchController = TextEditingController(); // <-- Add this line
@@ -75,13 +74,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _checkIfFederatedPresident();
   }
 
-  final List<String> _pageTitles = [
-    "Dashboard Overview",
-    "Water Stations",
-    "District Management", // Switched from "Users"
-    "Compliance Documents",
-    "Profile", // Changed from "Users" to "Profile"
-  ];
 
   void _onItemTapped(int index) async {
     setState(() {
@@ -1148,7 +1140,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       ),
                                       onPressed: () async {
                                         setState(() {
-                                          _selectedDistrictForOwners = districtName;
                                         });
                                         await showDialog(
                                           context: context,
@@ -1549,7 +1540,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // New: Build compliance report details from Firestore data
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
-    final docId = data['docId'] ?? data['id'] ?? '';
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Card(
@@ -1724,6 +1714,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return FutureBuilder<DocumentSnapshot>(
       future: user != null
           ? FirebaseFirestore.instance.collection('users').doc(user.uid).get()
+          // ignore: null_argument_to_non_null_type
           : Future.value(null),
       builder: (context, snapshot) {
         String adminName = "";
@@ -2173,6 +2164,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 }
 
 // Summary card widget
+// ignore: unused_element
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
@@ -2224,6 +2216,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // Chart placeholder widget
+// ignore: unused_element
 class _ChartPlaceholder extends StatelessWidget {
   final String title;
 
@@ -2267,6 +2260,7 @@ class ComplianceFilesViewer extends StatefulWidget {
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   List<FileObject> uploadedFiles = [];
   bool isLoading = true;
+  // ignore: unused_field
   final Set<int> _expandedIndexes = {};
   Map<String, dynamic> complianceStatuses = {};
   Map<String, String> statusEdits = {}; // Track dropdown edits

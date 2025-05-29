@@ -123,7 +123,6 @@ class _LoginScreenState extends State<LoginScreen> {
             // Get the station_owner doc ID and data
             var stationOwnerDoc = stationOwnerQuery.docs.first;
             String stationOwnerDocId = stationOwnerDoc.id;
-            final stationOwnerData = stationOwnerDoc.data() as Map<String, dynamic>? ?? {};
 
             // Use the districtName from stationOwnerData
             QuerySnapshot districtQuery = await FirebaseFirestore.instance

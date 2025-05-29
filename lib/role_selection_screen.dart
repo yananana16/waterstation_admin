@@ -214,7 +214,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   groupValue: selectedRole,
                   onChanged: (value) {
                     setState(() {
-                      selectedRole = value as String?;
+                      selectedRole = value;
                     });
                   },
                 ),
@@ -224,7 +224,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   groupValue: selectedRole,
                   onChanged: (value) {
                     setState(() {
-                      selectedRole = value as String?;
+                      selectedRole = value;
                     });
                   },
                 ),
@@ -234,7 +234,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   groupValue: selectedRole,
                   onChanged: (value) {
                     setState(() {
-                      selectedRole = value as String?;
+                      selectedRole = value;
                     });
                   },
                 ),
