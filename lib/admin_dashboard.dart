@@ -31,6 +31,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final TextEditingController _searchController = TextEditingController(); // <-- Add this line
   String _searchQuery = ""; // <-- Add this line
 
+  // --- Pagination and filter state ---
+  int _registeredStationsCurrentPage = 0;
+  String? _registeredStationsDistrictFilter;
+
+  // Add state for compliance report details navigation from Water Stations page
+  bool _showComplianceReportDetails = false;
+  Map<String, dynamic>? _selectedComplianceStationData;
+  String? _selectedComplianceStationDocId;
+  String _complianceReportTitle = "";
+
   // Check if user is federated president
   Future<void> _checkIfFederatedPresident() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -495,286 +505,471 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildRegisteredStationsPage() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header Section
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: const Color(0xFFE3F2FD),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // --- Remove local state, use class fields instead ---
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        // --- Remove local state, use class fields instead ---
+        const int _rowsPerPage = 6;
+
+        // Show compliance report details if requested
+        if (_showComplianceReportDetails &&
+            _selectedComplianceStationData != null &&
+            _selectedComplianceStationDocId != null) {
+          return Column(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.local_drink, color: Colors.blueAccent, size: 28),
-                  const SizedBox(width: 10),
-                  const Text(
-                    "Water Refilling Stations",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                  ),
-                ],
+              // Header Section
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: const Color(0xFFE3F2FD),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+                      onPressed: () {
+                        setState(() {
+                          _showComplianceReportDetails = false;
+                          _selectedComplianceStationData = null;
+                          _selectedComplianceStationDocId = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _complianceReportTitle,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                    ),
+                  ],
+                ),
               ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                    onPressed: () {
-                      setState(() {
-                        _showSettingsPage = true;
-                        _showNotificationsPage = false;
-                      });
-                    },
+              const SizedBox(height: 16),
+              // --- Remove View Files button and display files beside details ---
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Details (left)
+                      Expanded(
+                        flex: 1,
+                        child: _buildComplianceReportDetailsFromData(_selectedComplianceStationData!),
+                      ),
+                      const SizedBox(width: 24),
+                      // Files (right)
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ComplianceFilesViewer(
+                              stationOwnerDocId: _selectedComplianceStationDocId!,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Stack(
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Section
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: const Color(0xFFE3F2FD),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.local_drink, color: Colors.blueAccent, size: 28),
+                      const SizedBox(width: 10),
+                      const Text(
+                        "Water Refilling Stations",
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                      ),
+                    ],
+                  ),
+                  Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.notifications, color: Colors.blueAccent),
+                        icon: const Icon(Icons.settings, color: Colors.blueAccent),
                         onPressed: () {
                           setState(() {
-                            _showNotificationsPage = true;
-                            _showSettingsPage = false;
+                            _showSettingsPage = true;
+                            _showNotificationsPage = false;
                           });
                         },
                       ),
-                      Positioned(
-                        right: 8,
-                        top: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
+                      const SizedBox(width: 16),
+                      Stack(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications, color: Colors.blueAccent),
+                            onPressed: () {
+                              setState(() {
+                                _showNotificationsPage = true;
+                                _showSettingsPage = false;
+                              });
+                            },
                           ),
-                          constraints: const BoxConstraints(
-                            minWidth: 5,
-                            minHeight: 2,
-                          ),
-                          child: const Text(
-                            '3',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                          Positioned(
+                            right: 8,
+                            top: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 5,
+                                minHeight: 2,
+                              ),
+                              child: const Text(
+                                '3',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-        // Map Section with shadow and rounded corners
-        Container(
-          height: 280,
-          width: double.infinity,
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.07),
-                blurRadius: 12,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
+            ),
+            // Map Section with shadow and rounded corners
+            Container(
+              height: 280,
+              width: double.infinity,
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blueAccent.withOpacity(0.07),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
-              builder: (context, snapshot) {
-                final center = _mapSelectedLocation ?? LatLng(10.7202, 122.5621);
-                List<Marker> markers = [];
-                if (snapshot.hasData) {
-                  final docs = snapshot.data!.docs;
-                  for (final doc in docs) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    double? lat, lng;
-                    if (data['geopoint'] != null) {
-                      final geo = data['geopoint'];
-                      lat = geo.latitude?.toDouble();
-                      lng = geo.longitude?.toDouble();
-                    } else if (data['location'] != null && data['location'] is Map) {
-                      lat = (data['location']['latitude'] as num?)?.toDouble();
-                      lng = (data['location']['longitude'] as num?)?.toDouble();
-                    } else {
-                      lat = (data['latitude'] as num?)?.toDouble();
-                      lng = (data['longitude'] as num?)?.toDouble();
-                    }
-                    final stationName = data['stationName'] ?? '';
-                    if (lat != null && lng != null) {
-                      markers.add(
-                        Marker(
-                          width: 44,
-                          height: 44,
-                          point: LatLng(lat, lng),
-                          child: Tooltip(
-                            message: stationName,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blueAccent.withOpacity(0.15),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance.collection('station_owners').get(),
+                  builder: (context, snapshot) {
+                    final center = _mapSelectedLocation ?? LatLng(10.7202, 122.5621);
+                    List<Marker> markers = [];
+                    if (snapshot.hasData) {
+                      final docs = snapshot.data!.docs;
+                      for (final doc in docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        double? lat, lng;
+                        if (data['geopoint'] != null) {
+                          final geo = data['geopoint'];
+                          lat = geo.latitude?.toDouble();
+                          lng = geo.longitude?.toDouble();
+                        } else if (data['location'] != null && data['location'] is Map) {
+                          lat = (data['location']['latitude'] as num?)?.toDouble();
+                          lng = (data['location']['longitude'] as num?)?.toDouble();
+                        } else {
+                          lat = (data['latitude'] as num?)?.toDouble();
+                          lng = (data['longitude'] as num?)?.toDouble();
+                        }
+                        final stationName = data['stationName'] ?? '';
+                        if (lat != null && lng != null) {
+                          markers.add(
+                            Marker(
+                              width: 44,
+                              height: 44,
+                              point: LatLng(lat, lng),
+                              child: Tooltip(
+                                message: stationName,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.blueAccent.withOpacity(0.15),
+                                        blurRadius: 6,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                  child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
+                                ),
                               ),
-                              child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
+                            ),
+                          );
+                        }
+                      }
+                    }
+                    return FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: center,
+                        initialZoom: _mapSelectedLocation != null ? 16.0 : 12.0,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          subdomains: const ['a', 'b', 'c'],
+                          userAgentPackageName: 'com.example.app',
+                        ),
+                        MarkerLayer(markers: markers),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: "Search Water Stations...",
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.blue[50],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                ),
+              ),
+            ),
+            // --- Add district filter dropdown here ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance.collection('districts').get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
+                  }
+                  if (snapshot.hasError) {
+                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: Text('Error loading districts')));
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
+                  return Row(
+                    children: [
+                      const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                      const SizedBox(width: 12),
+                      DropdownButton<String>(
+                        value: _registeredStationsDistrictFilter,
+                        hint: const Text("All Districts"),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text("All Districts"),
+                          ),
+                          ...districts.map((district) => DropdownMenuItem<String>(
+                                value: district,
+                                child: Text(district),
+                              )),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _registeredStationsDistrictFilter = value;
+                            _registeredStationsCurrentPage = 0; // Reset to first page on filter change
+                          });
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            // Table-based Station List
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance.collection('station_owners').get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error loading station owners: ${snapshot.error}'));
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return const Center(child: Text('No station owners found.'));
+                    }
+                    // --- Filter by selected district ---
+                    final filteredDocs = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final stationName = (data['stationName'] ?? '').toString().toLowerCase();
+                      final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
+                      final district = (data['districtName'] ?? '').toString().toLowerCase();
+                      final matchesSearch = _searchQuery.isEmpty ||
+                          stationName.contains(_searchQuery) ||
+                          ownerName.contains(_searchQuery) ||
+                          district.contains(_searchQuery);
+                      final matchesDistrict = _registeredStationsDistrictFilter == null || _registeredStationsDistrictFilter!.isEmpty
+                          ? true
+                          : (data['districtName'] ?? '') == _registeredStationsDistrictFilter;
+                      return matchesSearch && matchesDistrict;
+                    }).toList();
+
+                    // --- Pagination logic ---
+                    final totalRows = filteredDocs.length;
+                    final totalPages = (totalRows / _rowsPerPage).ceil();
+                    final startIdx = _registeredStationsCurrentPage * _rowsPerPage;
+                    final endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+                    final pageDocs = filteredDocs.sublist(
+                      startIdx < totalRows ? startIdx : 0,
+                      endIdx < totalRows ? endIdx : totalRows,
+                    );
+
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                              ],
+                              rows: pageDocs.map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final stationName = data['stationName'] ?? '';
+                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                                final district = data['districtName'] ?? '';
+                                final address = data['address'] ?? '';
+                                double? lat, lng;
+                                if (data['geopoint'] != null) {
+                                  final geo = data['geopoint'];
+                                  lat = geo.latitude?.toDouble();
+                                  lng = geo.longitude?.toDouble();
+                                } else if (data['location'] != null && data['location'] is Map) {
+                                  lat = (data['location']['latitude'] as num?)?.toDouble();
+                                  lng = (data['location']['longitude'] as num?)?.toDouble();
+                                } else {
+                                  lat = (data['latitude'] as num?)?.toDouble();
+                                  lng = (data['longitude'] as num?)?.toDouble();
+                                }
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                    DataCell(Text(ownerName)),
+                                    DataCell(Text(district)),
+                                    DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DataCell(Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                          tooltip: "View on Map",
+                                          onPressed: () {
+                                            if (lat != null && lng != null) {
+                                              setState(() {
+                                                _mapSelectedLocation = LatLng(lat as double, lng as double);
+                                              });
+                                              _mapController.move(LatLng(lat, lng), 16.0);
+                                            }
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                          tooltip: "View Compliance Report",
+                                          onPressed: () {
+                                            setState(() {
+                                              _showComplianceReportDetails = true;
+                                              _selectedComplianceStationData = data;
+                                              _selectedComplianceStationDocId = doc.id;
+                                              _complianceReportTitle = stationName;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    )),
+                                  ],
+                                );
+                              }).toList(),
                             ),
                           ),
                         ),
-                      );
-                    }
-                  }
-                }
-                return FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: center,
-                    initialZoom: _mapSelectedLocation != null ? 16.0 : 12.0,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c'],
-                      userAgentPackageName: 'com.example.app',
-                    ),
-                    MarkerLayer(markers: markers),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-        // Search Bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value.toLowerCase();
-              });
-            },
-            decoration: InputDecoration(
-              hintText: "Search Water Stations...",
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.blue[50],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-            ),
-          ),
-        ),
-        // Table-based Station List
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-            child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error loading station owners: ${snapshot.error}'));
-                }
-                final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return const Center(child: Text('No station owners found.'));
-                }
-                final filteredDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final stationName = (data['stationName'] ?? '').toString().toLowerCase();
-                  final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
-                  final district = (data['district'] ?? '').toString().toLowerCase();
-                  return _searchQuery.isEmpty ||
-                      stationName.contains(_searchQuery) ||
-                      ownerName.contains(_searchQuery) ||
-                      district.contains(_searchQuery);
-                }).toList();
-
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                    ],
-                    rows: filteredDocs.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final stationName = data['stationName'] ?? '';
-                      final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                      final district = data['districtName'] ?? '';
-                      final address = data['address'] ?? '';
-                      double? lat, lng;
-                      if (data['geopoint'] != null) {
-                        final geo = data['geopoint'];
-                        lat = geo.latitude?.toDouble();
-                        lng = geo.longitude?.toDouble();
-                      } else if (data['location'] != null && data['location'] is Map) {
-                        lat = (data['location']['latitude'] as num?)?.toDouble();
-                        lng = (data['location']['longitude'] as num?)?.toDouble();
-                      } else {
-                        lat = (data['latitude'] as num?)?.toDouble();
-                        lng = (data['longitude'] as num?)?.toDouble();
-                      }
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                          DataCell(Text(ownerName)),
-                          DataCell(Text(district)),
-                          DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          DataCell(Row(
+                        // --- Pagination controls ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.location_on, color: Colors.blueAccent),
-                                tooltip: "View on Map",
-                                onPressed: () {
-                                  if (lat != null && lng != null) {
-                                    setState(() {
-                                      _mapSelectedLocation = LatLng(lat as double, lng as double);
-                                    });
-                                    _mapController.move(LatLng(lat, lng), 16.0);
-                                  }
-                                },
+                                icon: const Icon(Icons.chevron_left),
+                                onPressed: _registeredStationsCurrentPage > 0
+                                    ? () => setState(() {
+                                        _registeredStationsCurrentPage--;
+                                      })
+                                    : null,
+                              ),
+                              Text(
+                                'Page ${totalPages == 0 ? 0 : (_registeredStationsCurrentPage + 1)} of $totalPages',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.description, color: Colors.blueAccent),
-                                tooltip: "View Compliance Report",
-                                onPressed: () {
-                                  // Handle compliance report view
-                                },
+                                icon: const Icon(Icons.chevron_right),
+                                onPressed: (_registeredStationsCurrentPage < totalPages - 1)
+                                    ? () => setState(() {
+                                        _registeredStationsCurrentPage++;
+                                      })
+                                    : null,
                               ),
                             ],
-                          )),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                );
-              },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+            // ...existing code...
+          ],
+        );
+      },
     );
   }
 
@@ -858,7 +1053,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    "District Association President",
+                    "District Association Presidents",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -867,7 +1062,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
-                  // Fetch districts from Firestore
+                  // Table format for districts
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance.collection('districts').snapshots(),
@@ -882,122 +1077,90 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         if (docs.isEmpty) {
                           return const Center(child: Text('No districts found.'));
                         }
-                        return ListView.builder(
-                          itemCount: docs.length,
-                          itemBuilder: (context, idx) {
-                            final data = docs[idx].data() as Map<String, dynamic>;
-                            final districtName = data['districtName'] ?? 'Unknown';
-                            final customUID = data['customUID'] ?? null;
-                            return _districtRow(districtName, customUID);
-                          },
-                        );
-                      },
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: const [
+                              DataColumn(label: Text('District Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('President', style: TextStyle(fontWeight: FontWeight.bold))),
+                              DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                            ],
+                            rows: docs.map((doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              final districtName = data['districtName'] ?? 'Unknown';
+                              final customUID = data['customUID'] ?? null;
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text(districtName)),
+                                  DataCell(
+                                    FutureBuilder<DocumentSnapshot?>(
+                                      future: (customUID != null && customUID.isNotEmpty)
+                                          ? FirebaseFirestore.instance.collection('station_owners').doc(customUID).get()
+                                          : Future.value(null),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState == ConnectionState.waiting) {
+                                          return const SizedBox(
+                                            width: 80,
+                                            height: 16,
+                                            child: LinearProgressIndicator(minHeight: 2),
+                                          );
+                                        }
+                                        String ownerDisplay = "Not assigned";
+                                        if (customUID != null && customUID.isNotEmpty && snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+                                          final ownerData = snapshot.data!.data() as Map<String, dynamic>?;
+                                          if (ownerData != null) {
+                                            final firstName = ownerData['firstName'] ?? '';
+                                            final lastName = ownerData['lastName'] ?? '';
+                                            ownerDisplay = (firstName.toString() + ' ' + lastName.toString()).trim();
+                                            if (ownerDisplay.isEmpty) ownerDisplay = "Not assigned";
+                                          }
+                                        }
+                                        return Text(
+                                          ownerDisplay,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: ownerDisplay == "Not assigned" ? Colors.grey : Colors.blue[900],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  DataCell(
+                                    ElevatedButton.icon(
+                                      icon: const Icon(Icons.people, size: 18),
+                                      label: const Text("Owners", style: TextStyle(fontSize: 13)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blueAccent,
+                                        foregroundColor: Colors.white,
+                                        minimumSize: const Size(0, 36),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        textStyle: const TextStyle(fontSize: 13),
+                                      ),
+                                      onPressed: () async {
+                                        setState(() {
+                                          _selectedDistrictForOwners = districtName;
+                                        });
+                                        await showDialog(
+                                          context: context,
+                                          builder: (context) => StationOwnersDialog(districtName: districtName),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ));
+                        },
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _districtRow(String districtName, String? customUID) {
-    return FutureBuilder<DocumentSnapshot?>(
-      future: (customUID != null && customUID.isNotEmpty)
-          ? FirebaseFirestore.instance.collection('station_owners').doc(customUID).get()
-          : Future.value(null),
-      builder: (context, snapshot) {
-        String ownerDisplay = "Not assigned";
-        TextStyle ownerStyle = const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Colors.blueAccent,
-        );
-        if (customUID != null && customUID.isNotEmpty && snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>?;
-          if (data != null) {
-            final firstName = data['firstName'] ?? '';
-            final lastName = data['lastName'] ?? '';
-            ownerDisplay = (firstName.toString() + ' ' + lastName.toString()).trim();
-            if (ownerDisplay.isEmpty) ownerDisplay = "Not assigned";
-          }
-        } else {
-          ownerStyle = const TextStyle(
-            fontSize: 13,
-            color: Colors.grey,
-            fontWeight: FontWeight.normal,
-          );
-        }
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Color(0xFFB6D6F6),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        districtName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Colors.blueAccent,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        ownerDisplay,
-                        style: ownerStyle.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: ownerDisplay == "Not assigned" ? Colors.grey : Colors.blue[900],
-                          letterSpacing: 0.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 48,
-                height: 36,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(4),
-                  onTap: () async {
-                    setState(() {
-                      _selectedDistrictForOwners = districtName;
-                    });
-                    await showDialog(
-                      context: context,
-                      builder: (context) => StationOwnersDialog(districtName: districtName),
-                    );
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Color(0xFF4B7ACF),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.people, color: Colors.white, size: 22),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -1008,6 +1171,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
     Map<String, dynamic>? selectedStationData;
     String _complianceStatusFilter = 'approved'; // Add this line
     String? selectedStationOwnerDocId; // Track docId for details
+
+    // --- Add state for district filter ---
+    String? _selectedDistrictFilter;
+
+    // --- Pagination state ---
+    int _complianceCurrentPage = 0;
+    const int _complianceRowsPerPage = 6;
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -1074,26 +1244,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               ),
                             ],
                           ),
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: ComplianceFilesViewer(
-                                  stationOwnerDocId: selectedStationOwnerDocId!,
-                                ),
-                              ),
-                              // Optional close button (if you want to allow hiding the panel)
-                              // Positioned(
-                              //   top: 8,
-                              //   right: 8,
-                              //   child: IconButton(
-                              //     icon: Icon(Icons.close),
-                              //     onPressed: () {
-                              //       // Implement close/hide logic if needed
-                              //     },
-                              //   ),
-                              // ),
-                            ],
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ComplianceFilesViewer(
+                              stationOwnerDocId: selectedStationOwnerDocId!,
+                            ),
                           ),
                         ),
                       ),
@@ -1120,7 +1275,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   Row(
                     children: [
-                      // --- Replace DropdownButton with 3 filter buttons ---
+                      // --- Replace DropdownButton with 2 filter buttons ---
                       ToggleButtons(
                         isSelected: [
                           _complianceStatusFilter == 'approved',
@@ -1157,8 +1312,50 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            // Approved or Pending Stations List
+            // --- Add district filter dropdown here ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance.collection('districts').get(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
+                  }
+                  if (snapshot.hasError) {
+                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: Text('Error loading districts')));
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
+                  return Row(
+                    children: [
+                      const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                      const SizedBox(width: 12),
+                      DropdownButton<String>(
+                        value: _selectedDistrictFilter,
+                        hint: const Text("All Districts"),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text("All Districts"),
+                          ),
+                          ...districts.map((district) => DropdownMenuItem<String>(
+                                value: district,
+                                child: Text(district),
+                              )),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDistrictFilter = value;
+                          });
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            // --- Table-based Station List ---
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -1175,8 +1372,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       return Center(child: Text('Error loading stations: ${snapshot.error}'));
                     }
                     final docs = snapshot.data?.docs ?? [];
-                    // Filter by selected district
-                    final filteredDocs = docs; // Show all docs, no district filter
+                    // --- Filter by selected district ---
+                    final filteredDocs = _selectedDistrictFilter == null || _selectedDistrictFilter!.isEmpty
+                        ? docs
+                        : docs.where((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final district = (data['districtName'] ?? '').toString();
+                            return district == _selectedDistrictFilter;
+                          }).toList();
+
+                    // --- Pagination logic ---
+                    final totalRows = filteredDocs.length;
+                    final totalPages = (totalRows / _complianceRowsPerPage).ceil();
+                    final startIdx = _complianceCurrentPage * _complianceRowsPerPage;
+                    final endIdx = (startIdx + _complianceRowsPerPage) > totalRows ? totalRows : (startIdx + _complianceRowsPerPage);
+                    final pageDocs = filteredDocs.sublist(
+                      startIdx < totalRows ? startIdx : 0,
+                      endIdx < totalRows ? endIdx : totalRows,
+                    );
 
                     if (filteredDocs.isEmpty) {
                       return Center(
@@ -1187,56 +1400,124 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                       );
                     }
-                    return ListView.separated(
-                      itemCount: filteredDocs.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (context, idx) {
-                        final data = filteredDocs[idx].data() as Map<String, dynamic>;
-                        final stationName = data['stationName'] ?? '';
-                        final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                        final district = data['districtName'] ?? '';
-                        final address = data['address'] ?? '';
-                        final stationOwnerDocId = filteredDocs[idx].id;
-                        return ListTile(
-                          leading: Icon(
-                            _complianceStatusFilter == 'approved'
-                                ? Icons.check_circle
-                                : Icons.hourglass_top,
-                            color: _complianceStatusFilter == 'approved'
-                                ? Colors.green
-                                : Colors.orange,
-                          ),
-                          title: Text(stationName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('$ownerName\n$district\n$address'),
-                          isThreeLine: true,
-                          trailing: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                isLoading = true;
-                              });
-                              Future.delayed(const Duration(milliseconds: 300), () {
-                                setState(() {
-                                  isLoading = false;
-                                  showComplianceReport = true;
-                                  complianceTitle = stationName;
-                                  selectedStationData = data;
-                                  selectedStationOwnerDocId = stationOwnerDocId; // Set docId for details
-                                });
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _complianceStatusFilter == 'approved'
-                                  ? Colors.green
-                                  : Colors.orange,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    // --- Table format ---
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                              ],
+                              rows: pageDocs.map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final stationName = data['stationName'] ?? '';
+                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                                final district = data['districtName'] ?? '';
+                                final address = data['address'] ?? '';
+                                final status = data['status'] ?? '';
+                                final stationOwnerDocId = doc.id;
+                                Color statusColor;
+                                switch ((status ?? '').toString().toLowerCase()) {
+                                  case 'approved':
+                                    statusColor = Colors.green;
+                                    break;
+                                  case 'district_approved':
+                                    statusColor = Colors.orange;
+                                    break;
+                                  default:
+                                    statusColor = Colors.grey;
+                                }
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                    DataCell(Text(ownerName)),
+                                    DataCell(Text(district)),
+                                    DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DataCell(Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: statusColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        (status ?? '').toString().toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    )),
+                                    DataCell(
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            isLoading = true;
+                                          });
+                                          Future.delayed(const Duration(milliseconds: 300), () {
+                                            setState(() {
+                                              isLoading = false;
+                                              showComplianceReport = true;
+                                              complianceTitle = stationName;
+                                              selectedStationData = data;
+                                              selectedStationOwnerDocId = stationOwnerDocId;
+                                            });
+                                          });
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: statusColor,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        child: const Text(
+                                          "View Details",
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
                             ),
-                            child: Text(
-                              "View Details",
-                              style: const TextStyle(color: Colors.white),
-                            ),
                           ),
-                        );
-                      },
+                        ),
+                        // --- Pagination controls ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left),
+                                onPressed: _complianceCurrentPage > 0
+                                    ? () => setState(() {
+                                        _complianceCurrentPage--;
+                                      })
+                                    : null,
+                              ),
+                              Text(
+                                'Page ${totalPages == 0 ? 0 : (_complianceCurrentPage + 1)} of $totalPages',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.chevron_right),
+                                onPressed: (_complianceCurrentPage < totalPages - 1)
+                                    ? () => setState(() {
+                                        _complianceCurrentPage++;
+                                      })
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -2177,7 +2458,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                 ),
                                 const SizedBox(width: 10),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal:  10),
                                   decoration: BoxDecoration(
                                     color: statusColor,
                                     borderRadius: BorderRadius.circular(8),
@@ -2210,7 +2491,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                                     ),
                                                                   ],
                                                                   onChanged: (value) {
-                                                                    setState(() {
+                                                                                                                                       setState(() {
                                                                       if (value != null) {
                                                                         statusEdits[statusKey] = value;
                                                                       }
