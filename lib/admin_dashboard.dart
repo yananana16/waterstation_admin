@@ -1023,12 +1023,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 padding: const EdgeInsets.all(16),
                 color: const Color(0xFFE3F2FD),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    Text(
-                      complianceTitle,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                    ),
+                    // Move back button to the left of the station name
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
                       onPressed: () {
@@ -1038,6 +1035,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           selectedStationOwnerDocId = null;
                         });
                       },
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      complianceTitle,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                     ),
                   ],
                 ),
@@ -1122,7 +1124,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ToggleButtons(
                         isSelected: [
                           _complianceStatusFilter == 'approved',
-                          _complianceStatusFilter == 'pending_approval',
                           _complianceStatusFilter == 'district_approved',
                         ],
                         onPressed: (int idx) {
@@ -1130,8 +1131,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             if (idx == 0) {
                               _complianceStatusFilter = 'approved';
                             } else if (idx == 1) {
-                              _complianceStatusFilter = 'pending_approval';
-                            } else if (idx == 2) {
                               _complianceStatusFilter = 'district_approved';
                             }
                           });
@@ -1144,7 +1143,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         children: const [
                           Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
                           Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text('District Approved', style: TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(width: 16),
