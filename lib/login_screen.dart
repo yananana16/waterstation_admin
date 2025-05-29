@@ -4,16 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import
 import 'role_selection_screen.dart'; // Import RoleSelectionScreen
 import 'admin_dashboard.dart'; // Import Admin Dashboard
 import 'district_admin_dashboard.dart'; // Import District Admin Dashboard
-import 'select_location_screen.dart';
 import 'lgu_dashboard.dart'; // Add this import
 
 class LoginScreen extends StatefulWidget {
   final String selectedRole; // Pass the selected role from the previous screen
-  final String? selectedDistrict; // Add this line
   const LoginScreen({
     super.key,
     required this.selectedRole,
-    this.selectedDistrict, // Add this line
   });
 
   @override
@@ -100,17 +97,14 @@ class _LoginScreenState extends State<LoginScreen> {
           final userData = userDoc.data() as Map<String, dynamic>? ?? {};
           if (userDoc.id == uid &&
               userData['role'] == 'admin' &&
-              userData['district_president'] == true &&
-              (widget.selectedDistrict == null || userData['districtName'] == widget.selectedDistrict)) {
+              userData['district_president'] == true) {
             setState(() {
               _isLoading = false;
             });
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => DistrictAdminDashboard(
-                  selectedDistrict: widget.selectedDistrict,
-                ),
+                builder: (context) => DistrictAdminDashboard(),
               ),
             );
             return;
@@ -120,17 +114,18 @@ class _LoginScreenState extends State<LoginScreen> {
           QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
               .collection('station_owners')
               .where('userId', isEqualTo: uid)
-              .where('districtName', isEqualTo: widget.selectedDistrict)
               .where('district_president', isEqualTo: true)
               .where('status', isEqualTo: 'approved')
               .limit(1)
               .get();
 
           if (stationOwnerQuery.docs.isNotEmpty) {
-            // Get the station_owner doc ID
-            String stationOwnerDocId = stationOwnerQuery.docs.first.id;
+            // Get the station_owner doc ID and data
+            var stationOwnerDoc = stationOwnerQuery.docs.first;
+            String stationOwnerDocId = stationOwnerDoc.id;
+            final stationOwnerData = stationOwnerDoc.data() as Map<String, dynamic>? ?? {};
 
-            // Check districts collection for matching customUID
+            // Use the districtName from stationOwnerData
             QuerySnapshot districtQuery = await FirebaseFirestore.instance
                 .collection('districts')
                 .where('customUID', isEqualTo: stationOwnerDocId)
@@ -144,11 +139,10 @@ class _LoginScreenState extends State<LoginScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => DistrictAdminDashboard(
-                    selectedDistrict: widget.selectedDistrict,
-                  ),
+                  builder: (context) => DistrictAdminDashboard(),
                 ),
               );
+              return;
             } else {
               setState(() {
                 _isLoading = false;
@@ -159,6 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   backgroundColor: Colors.redAccent,
                 ),
               );
+              return;
             }
           } else {
             setState(() {
@@ -228,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               if (widget.selectedRole == 'district') {
                                 Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
+                                  MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
                                 );
                               } else {
                                 Navigator.pushReplacement(
@@ -262,19 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           SizedBox(height: screenWidth > 800 ? 40 : 20),
-                          // Optionally display the selected district for district role
-                          if (widget.selectedRole == 'district' && widget.selectedDistrict != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
-                              child: Text(
-                                'District: ${widget.selectedDistrict}',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.blue[800],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
                           TextField(
                             controller: _usernameController,
                             decoration: InputDecoration(

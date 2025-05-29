@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
-// Add import for SelectLocationScreen
-import 'select_location_screen.dart';
-
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
 
@@ -16,10 +13,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   void _navigateToLogin() {
     if (selectedRole != null) {
       if (selectedRole == 'district') {
-        // Navigate to SelectLocationScreen for District President
+        // Navigate directly to LoginScreen for District President
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => SelectLocationScreen()),
+          MaterialPageRoute(builder: (context) => LoginScreen(selectedRole: 'district')),
         );
       } else {
         // Navigate to LoginScreen for other roles
