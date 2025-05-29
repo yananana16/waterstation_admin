@@ -48,27 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Check if the user is admin and federated president in users collection (docId == uid)
           DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
           final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-          if (userDoc.id == uid && userData['federated_president'] == true) {
-            setState(() {
-              _isLoading = false;
-            });
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AdminDashboard()),
-            );
-            return;
-          }
-
-          // Check if the user exists in the "station_owners" collection using the userId field
-          QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
-              .collection('station_owners')
-              .where('userId', isEqualTo: uid)
-              .where('federated_president', isEqualTo: true)
-              .where('status', isEqualTo: 'approved')
-              .limit(1)
-              .get();
-
-          if (stationOwnerQuery.docs.isNotEmpty) {
+          if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
             setState(() {
               _isLoading = false;
             });
@@ -83,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
             });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Account not found or not a federated president.'),
+                content: Text('Account not found or not a federated president admin.'),
                 backgroundColor: Colors.redAccent,
               ),
             );

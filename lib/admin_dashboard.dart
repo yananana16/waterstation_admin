@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthProvider, FirebaseAuthException;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -419,6 +419,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 10),
+            // Center the card list and limit width
             Expanded(
               child: ListView(
                 children: sortedDistricts.map((district) {
@@ -679,7 +680,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
         ),
-        // Card-based Station List
+        // Table-based Station List
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
@@ -707,94 +708,67 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       district.contains(_searchQuery);
                 }).toList();
 
-                return GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 18,
-                    crossAxisSpacing: 18,
-                    childAspectRatio: 2.8,
-                  ),
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (context, idx) {
-                    final data = filteredDocs[idx].data() as Map<String, dynamic>;
-                    final stationName = data['stationName'] ?? '';
-                    final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                    final district = data['districtName'] ?? '';
-                    final address = data['address'] ?? '';
-                    double? lat, lng;
-                    if (data['geopoint'] != null) {
-                      final geo = data['geopoint'];
-                      lat = geo.latitude?.toDouble();
-                      lng = geo.longitude?.toDouble();
-                    } else if (data['location'] != null && data['location'] is Map) {
-                      lat = (data['location']['latitude'] as num?)?.toDouble();
-                      lng = (data['location']['longitude'] as num?)?.toDouble();
-                    } else {
-                      lat = (data['latitude'] as num?)?.toDouble();
-                      lng = (data['longitude'] as num?)?.toDouble();
-                    }
-                    return Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      color: Colors.white,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 28,
-                              backgroundColor: Colors.blue[50],
-                              child: Icon(Icons.local_drink, color: Colors.blueAccent, size: 28),
-                            ),
-                            const SizedBox(width: 18),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    stationName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text("Owner: $ownerName", style: const TextStyle(fontSize: 13)),
-                                  Text("District: $district", style: const TextStyle(fontSize: 13)),
-                                  Text("Address: $address", style: const TextStyle(fontSize: 12, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                    rows: filteredDocs.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final stationName = data['stationName'] ?? '';
+                      final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                      final district = data['districtName'] ?? '';
+                      final address = data['address'] ?? '';
+                      double? lat, lng;
+                      if (data['geopoint'] != null) {
+                        final geo = data['geopoint'];
+                        lat = geo.latitude?.toDouble();
+                        lng = geo.longitude?.toDouble();
+                      } else if (data['location'] != null && data['location'] is Map) {
+                        lat = (data['location']['latitude'] as num?)?.toDouble();
+                        lng = (data['location']['longitude'] as num?)?.toDouble();
+                      } else {
+                        lat = (data['latitude'] as num?)?.toDouble();
+                        lng = (data['longitude'] as num?)?.toDouble();
+                      }
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text(ownerName)),
+                          DataCell(Text(district)),
+                          DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          DataCell(Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                tooltip: "View on Map",
+                                onPressed: () {
+                                  if (lat != null && lng != null) {
+                                    setState(() {
+                                      _mapSelectedLocation = LatLng(lat as double, lng as double);
+                                    });
+                                    _mapController.move(LatLng(lat, lng), 16.0);
+                                  }
+                                },
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.location_on, color: Colors.blueAccent),
-                                  tooltip: "View on Map",
-                                  onPressed: () {
-                                    if (lat != null && lng != null) {
-                                      setState(() {
-                                        _mapSelectedLocation = LatLng(lat as double, lng as double);
-                                      });
-                                      _mapController.move(LatLng(lat, lng), 16.0);
-                                    }
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.description, color: Colors.blueAccent),
-                                  tooltip: "View Compliance Report",
-                                  onPressed: () {
-                                    // Handle compliance report view
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                              IconButton(
+                                icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                tooltip: "View Compliance Report",
+                                onPressed: () {
+                                  // Handle compliance report view
+                                },
+                              ),
+                            ],
+                          )),
+                        ],
+                      );
+                    }).toList(),
+                  ),
                 );
               },
             ),
@@ -1518,6 +1492,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                           ),
                           child: const Text("Save Changes", style: TextStyle(fontSize: 16, color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      // --- Change Password Button ---
+                      SizedBox(
+                        width: 250,
+                        height: 45,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.lock, color: Colors.blueAccent),
+                          label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.blueAccent),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => _ChangePasswordDialog(),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -2385,7 +2381,7 @@ class _ComplianceChecklistWithFilesState extends State<ComplianceChecklistWithFi
                     ],
                   ),
                 ),
-                if (file != null)
+                               if (file != null)
                   ElevatedButton.icon(
                     icon: const Icon(Icons.remove_red_eye, size: 16),
                     label: const Text("View File", style: TextStyle(fontSize: 13)),
@@ -2923,6 +2919,157 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Change Password Dialog Widget ---
+class _ChangePasswordDialog extends StatefulWidget {
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _currentPassword = TextEditingController();
+  final TextEditingController _newPassword = TextEditingController();
+  final TextEditingController _confirmPassword = TextEditingController();
+  bool _isLoading = false;
+  String? _error;
+
+  Future<void> _changePassword() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() {
+          _error = "User not logged in.";
+          _isLoading = false;
+        });
+        return;
+      }
+      // Re-authenticate
+      final cred = EmailAuthProvider.credential(
+        email: user.email!,
+        password: _currentPassword.text.trim(),
+      );
+      await user.reauthenticateWithCredential(cred);
+      // Update password
+      await user.updatePassword(_newPassword.text.trim());
+      setState(() {
+        _isLoading = false;
+      });
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password changed successfully.')),
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = e.message ?? "Failed to change password.";
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = "Failed to change password.";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: SizedBox(
+          width: 400,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Change Password",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blueAccent),
+                ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _currentPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Current Password",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (val) => val == null || val.isEmpty ? "Enter current password" : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _newPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "New Password",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.isEmpty) return "Enter new password";
+                    if (val.length < 6) return "Password must be at least 6 characters";
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _confirmPassword,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Confirm New Password",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.isEmpty) return "Confirm new password";
+                    if (val != _newPassword.text) return "Passwords do not match";
+                    return null;
+                  },
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                      child: const Text("Cancel"),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              if (_formKey.currentState?.validate() ?? false) {
+                                _changePassword();
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text("Change Password", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
