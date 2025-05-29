@@ -850,9 +850,6 @@ class _CompliancePage extends StatelessWidget {
       ['PureFlow Water Station', 'Mark Delacruz', 'Passed'],
       ['AquaSpring Refilling Hub', 'Julia Fernandez', 'Passed'],
       ['BlueWave Water Depot', 'Richard Gomez', 'Passed'],
-      ['Crystal Clear Refills', 'Anna Rodriguez', 'Failed'],
-      ['HydroPure Station', 'James Villanueva', 'Passed'],
-      ['EverFresh Water Refilling', 'Samantha Lopez', 'Failed'],
       ['AquaPrime Refilling Station', 'Carlos Mendoza', 'Passed'],
       ['HydroPure H2O Haven', 'Isabella Reyes', 'Passed'],
     ];
@@ -1481,9 +1478,6 @@ class _AllStationsTable extends StatelessWidget {
       ['PureFlow Water Station', 'Mark Delacruz', 'Passed'],
       ['AquaSpring Refilling Hub', 'Julia Fernandez', 'Passed'],
       ['BlueWave Water Depot', 'Richard Gomez', 'Passed'],
-      ['Crystal Clear Refills', 'Anna Rodriguez', 'Failed'],
-      ['HydroPure Station', 'James Villanueva', 'Passed'],
-      ['EverFresh Water Refilling', 'Samantha Lopez', 'Failed'],
       ['AquaPrime Refilling Station', 'Carlos Mendoza', 'Passed'],
       ['HydroPure H2O Haven', 'Isabella Reyes', 'Passed'],
     ];
