@@ -48,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Check if the user is admin and federated president in users collection (docId == uid)
           DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
           final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-          if (userDoc.id == uid && userData['role'] == 'admin' && userData['federated_president'] == true) {
+          if (userDoc.id == uid && userData['federated_president'] == true) {
             setState(() {
               _isLoading = false;
             });
