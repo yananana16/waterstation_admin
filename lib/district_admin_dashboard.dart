@@ -629,7 +629,16 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                             DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
                                             DataCell(Text(ownerName)),
                                             DataCell(Text(district)),
-                                            DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                            DataCell(
+                                              SizedBox(
+                                                width: 250, // Set your desired max width here
+                                                child: Text(
+                                                  address,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
                                             DataCell(Row(
                                               children: [
                                                 IconButton(
@@ -952,7 +961,16 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                         DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
                                         DataCell(Text(ownerName)),
                                         DataCell(Text(district)),
-                                        DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                        DataCell(
+                                          SizedBox(
+                                            width: 180, // Set your desired max width here
+                                            child: Text(
+                                              address,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ),
                                         DataCell(Container(
                                           padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
                                           decoration: BoxDecoration(

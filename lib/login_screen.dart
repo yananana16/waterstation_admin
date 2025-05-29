@@ -167,13 +167,32 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
         } else if (widget.selectedRole == 'cho_lgu') {
-          setState(() {
-            _isLoading = false;
-          });
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LguDashboard()),
-          );
+          String uid = userCredential.user!.uid;
+
+          // Check if the user is in the users collection with role 'cho_lgu'
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+          if (userDoc.id == uid && userData['role'] == 'cho_lgu') {
+            setState(() {
+              _isLoading = false;
+            });
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LguDashboard()),
+            );
+            return;
+          } else {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Account not found or not authorized for CHO LGU role.'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+            return;
+          }
         } else {
           setState(() {
             _isLoading = false;

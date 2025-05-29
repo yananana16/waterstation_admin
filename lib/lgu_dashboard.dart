@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firebase import
 import 'package:flutter/material.dart';
 
 class LguDashboard extends StatefulWidget {
@@ -571,257 +572,270 @@ class _WaterStationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stations = [
-      ['PureFlow Water Station', 'Mark Delacruz', 'Passed'],
-      ['AquaSpring Refilling Hub', 'Julia Fernandez', 'Passed'],
-      ['BlueWave Water Depot', 'Richard Gomez', 'Passed'],
-      ['Crystal Clear Refills', 'Anna Rodriguez', 'Failed'],
-      ['HydroPure Station', 'James Villanueva', 'Passed'],
-      ['EverFresh Water Refilling', 'Samantha Lopez', 'Failed'],
-      ['AquaPrime Refilling Station', 'Carlos Mendoza', 'Passed'],
-      ['HydroPure H2O Haven', 'Isabella Reyes', 'Passed'],
-    ];
-    return Column(
-      children: [
-        // Header
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          child: Row(
-            children: [
-              const Text(
-                'Water Refilling Stations',
-                style: TextStyle(
-                  color: Color(0xFF0B63B7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 28,
-                ),
-              ),
-              const Spacer(),
-              Icon(Icons.settings, color: Color(0xFF0B63B7)),
-              const SizedBox(width: 20),
-              Icon(Icons.notifications_none, color: Color(0xFF0B63B7)),
-              const SizedBox(width: 20),
-              Icon(Icons.person_outline, color: Color(0xFF0B63B7)),
-            ],
-          ),
-        ),
-        // Date and time row
-        Container(
-          color: const Color(0xFFF2F4F8),
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-          child: Row(
-            children: [
-              Icon(Icons.calendar_today, color: Colors.black54, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Monday, May 5, 2025',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
-              ),
-              const Spacer(),
-              Icon(Icons.access_time, color: Colors.black54, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                '11:25 AM PST',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-        // Search and filter row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-          child: Row(
-            children: [
-              // Search box
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Color(0xFFE0E0E0)),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          decoration: InputDecoration(
-                            hintText: 'Search',
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.search, color: Color(0xFF0B63B7)),
-                        onPressed: () {},
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Filter button
-              Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Color(0xFFE0E0E0)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.filter_list, color: Color(0xFF0B63B7)),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Filter',
-                      style: TextStyle(
-                        color: Color(0xFF0B63B7),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Table
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Color(0xFFE0E0E0)),
-              ),
-              child: Column(
+    const int rowsPerPage = 6; // Pagination rows per page
+    return StatefulBuilder(
+      builder: (context, setState) {
+        int currentPage = 0; // Track current page
+        String searchQuery = ""; // Track search query
+        String selectedDistrict = 'All Districts'; // Track selected district for filtering
+
+        return Column(
+          children: [
+            // Search and filter row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+              child: Row(
                 children: [
-                  // Table header
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFFE0E0E0)),
+                  // Search bar
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      onChanged: (value) {
+                        setState(() {
+                          searchQuery = value.toLowerCase();
+                          currentPage = 0; // Reset to first page on search
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Search by owner name or station name...",
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                       ),
                     ),
-                    child: Row(
-                      children: const [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            'Name of Station',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            'Owner Name',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'Status',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                  // Table rows
-                  ...stations.map((row) => Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Color(0xFFE0E0E0)),
-                          ),
+                  const SizedBox(width: 16),
+                  // Filter dropdown for districts
+                  Expanded(
+                    flex: 1,
+                    child: DropdownButtonFormField<String>(
+                      value: selectedDistrict,
+                      items: ['All Districts', 'La Paz', 'Mandurriao', 'Molo', 'Lapuz', 'Arevalo', 'Jaro', 'City Proper']
+                          .map((district) => DropdownMenuItem(
+                                value: district,
+                                child: Text(district),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedDistrict = value ?? 'All Districts';
+                          currentPage = 0; // Reset to first page on filter change
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Filter by district",
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text(row[0]),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(row[1]),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                row[2],
-                                style: TextStyle(
-                                  color: row[2] == 'Passed'
-                                      ? Colors.green
-                                      : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )),
-                  // Pagination and navigation
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                    child: Row(
-                      children: [
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE0E0E0),
-                            foregroundColor: Colors.black87,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text('Back'),
-                        ),
-                        const Spacer(),
-                        const Text(
-                          'Page 1 / 20',
-                          style: TextStyle(
-                            color: Color(0xFF0B63B7),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0B63B7),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text('Next'),
-                        ),
-                      ],
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-      ],
+            // Table
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance.collection('station_owners').get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error loading station owners: ${snapshot.error}'));
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    // Filter by search query
+                    final filteredDocs = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final stationName = (data['stationName'] ?? '').toString().toLowerCase();
+                      final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
+                      final districtName = (data['districtName'] ?? '').toString().toLowerCase();
+
+                      final matchesSearch = stationName.contains(searchQuery) || ownerName.contains(searchQuery);
+                      final matchesDistrict = selectedDistrict == 'All Districts' || districtName == selectedDistrict.toLowerCase();
+
+                      return matchesSearch && matchesDistrict;
+                    }).toList();
+
+                    // Pagination logic
+                    final totalRows = filteredDocs.length;
+                    final totalPages = (totalRows / rowsPerPage).ceil();
+                    final startIdx = currentPage * rowsPerPage;
+                    final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
+                    final pageDocs = filteredDocs.sublist(
+                      startIdx < totalRows ? startIdx : 0,
+                      endIdx < totalRows ? endIdx : totalRows,
+                    );
+
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              headingRowColor: MaterialStateProperty.all(const Color(0xFFEAF6FF)),
+                              dataRowColor: MaterialStateProperty.resolveWith<Color?>(
+                                (Set<MaterialState> states) {
+                                  if (states.contains(MaterialState.selected)) {
+                                    return const Color(0xFFE0F7FA);
+                                  }
+                                  return null; // Use default color
+                                },
+                              ),
+                              columnSpacing: 24,
+                              headingTextStyle: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0B63B7),
+                              ),
+                              dataTextStyle: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.black87,
+                              ),
+                              border: TableBorder.all(
+                                color: Color(0xFFE0E0E0),
+                                width: 1,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              columns: const [
+                                DataColumn(label: Text('Station Name')),
+                                DataColumn(label: Text('Owner')),
+                                DataColumn(label: Text('Status')),
+                                DataColumn(label: Text('District')),
+                                DataColumn(label: Text('Actions')),
+                              ],
+                              rows: pageDocs.map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final stationName = data['stationName'] ?? '';
+                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                                final status = data['status'] ?? 'Unknown';
+                                final districtName = data['districtName'] ?? 'Unknown';
+                                final address = data['address'] ?? 'Unknown';
+                                final email = data['email'] ?? 'Unknown';
+                                final phone = data['phone'] ?? 'Unknown';
+
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(stationName)),
+                                    DataCell(Text(ownerName)),
+                                    DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: status == 'approved'
+                                              ? const Color(0xFF4CAF50).withOpacity(0.1)
+                                              : const Color(0xFFD32F2F).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: status == 'approved'
+                                                ? const Color(0xFF4CAF50)
+                                                : const Color(0xFFD32F2F),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(Text(districtName)),
+                                    DataCell(
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          // Logic to view all details of the station_owner
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) {
+                                              return AlertDialog(
+                                                title: Text('Details of $stationName'),
+                                                content: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    _DetailRow(label: 'Owner:', value: ownerName),
+                                                    _DetailRow(label: 'Status:', value: status),
+                                                    _DetailRow(label: 'District:', value: districtName),
+                                                    _DetailRow(label: 'Address:', value: address),
+                                                    _DetailRow(label: 'Email:', value: email),
+                                                    _DetailRow(label: 'Phone:', value: phone),
+                                                    _DetailRow(label: 'Station Name:', value: stationName),
+                                                  ],
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.of(context).pop(),
+                                                    child: const Text('Close'),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF0B63B7),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: const Text('View'),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                        // Pagination controls
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left, color: Color(0xFF0B63B7)),
+                                onPressed: currentPage > 0
+                                    ? () => setState(() => currentPage--)
+                                    : null,
+                              ),
+                              Text(
+                                'Page ${totalPages == 0 ? 0 : (currentPage + 1)} of $totalPages',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0B63B7),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.chevron_right, color: Color(0xFF0B63B7)),
+                                onPressed: (currentPage < totalPages - 1)
+                                    ? () => setState(() => currentPage++)
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1451,6 +1465,180 @@ class _OfficersPage extends StatelessWidget {
           fontWeight: FontWeight.bold,
           fontSize: 28,
         ),
+      ),
+    );
+  }
+}
+
+// All Stations Table Page
+class _AllStationsTable extends StatelessWidget {
+  const _AllStationsTable();
+
+  @override
+  Widget build(BuildContext context) {
+    final stations = [
+      ['PureFlow Water Station', 'Mark Delacruz', 'Passed'],
+      ['AquaSpring Refilling Hub', 'Julia Fernandez', 'Passed'],
+      ['BlueWave Water Depot', 'Richard Gomez', 'Passed'],
+      ['Crystal Clear Refills', 'Anna Rodriguez', 'Failed'],
+      ['HydroPure Station', 'James Villanueva', 'Passed'],
+      ['EverFresh Water Refilling', 'Samantha Lopez', 'Failed'],
+      ['AquaPrime Refilling Station', 'Carlos Mendoza', 'Passed'],
+      ['HydroPure H2O Haven', 'Isabella Reyes', 'Passed'],
+    ];
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          child: Row(
+            children: [
+              const Text(
+                'All Water Stations',
+                style: TextStyle(
+                  color: Color(0xFF0B63B7),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 28,
+                ),
+              ),
+              const Spacer(),
+              Icon(Icons.settings, color: Color(0xFF0B63B7)),
+              const SizedBox(width: 20),
+              Icon(Icons.notifications_none, color: Color(0xFF0B63B7)),
+              const SizedBox(width: 20),
+              Icon(Icons.person_outline, color: Color(0xFF0B63B7)),
+            ],
+          ),
+        ),
+        // Table
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Color(0xFFE0E0E0)),
+              ),
+              child: Column(
+                children: [
+                  // Table header
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE0E0E0)),
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            'Name of Station',
+                            style: TextStyle(
+                              color: Color(0xFF0B63B7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            'Owner Name',
+                            style: TextStyle(
+                              color: Color(0xFF0B63B7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            'Status',
+                            style: TextStyle(
+                              color: Color(0xFF0B63B7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Table rows
+                  ...stations.map((row) => Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFE0E0E0)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text(row[0]),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(row[1]),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                row[2],
+                                style: TextStyle(
+                                  color: row[2] == 'Passed'
+                                      ? Colors.green
+                                      : Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Add a helper widget for displaying details in rows
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
+        ],
       ),
     );
   }

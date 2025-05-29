@@ -896,7 +896,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
                                     DataCell(Text(ownerName)),
                                     DataCell(Text(district)),
-                                    DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 220, // Set your desired max width here
+                                        child: Text(
+                                          address,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
                                     DataCell(Row(
                                       children: [
                                         IconButton(
@@ -1439,7 +1448,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
                                     DataCell(Text(ownerName)),
                                     DataCell(Text(district)),
-                                    DataCell(Text(address, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 220, // Set your desired max width here
+                                        child: Text(
+                                          address,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
                                     DataCell(Container(
                                       padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
                                       decoration: BoxDecoration(
