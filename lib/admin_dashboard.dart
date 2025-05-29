@@ -1720,110 +1720,145 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final TextEditingController contactController = TextEditingController(text: contact);
         final TextEditingController emailController = TextEditingController(text: email);
 
-        return Center(
-          child: Container(
-            width: 800,
-            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        // Track edit state
+        bool isSaving = false;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Center(
+              child: Container(
+                width: 800,
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Profile Picture Section
-                    Column(
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 55,
-                          backgroundColor: Colors.grey[200],
-                          child: const Icon(Icons.person, size: 70, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
+                        // Profile Picture Section
+                        Column(
                           children: [
-                            const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
-                            IconButton(
-                              icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
-                              onPressed: () {
-                                // Handle profile picture change
-                              },
+                            CircleAvatar(
+                              radius: 55,
+                              backgroundColor: Colors.grey[200],
+                              child: const Icon(Icons.person, size: 70, color: Colors.grey),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
+                                  onPressed: () {
+                                    // Handle profile picture change
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),
+                        const SizedBox(width: 40),
+                        // Profile Details Section
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _profileField(
+                                label: "User Name:",
+                                controller: nameController,
+                                enabled: true,
+                              ),
+                              const SizedBox(height: 24),
+                              _profileField(
+                                label: "Contact Number:",
+                                controller: contactController,
+                                enabled: true,
+                              ),
+                              const SizedBox(height: 24),
+                              _profileField(
+                                label: "Email:",
+                                controller: emailController,
+                                enabled: false, // Disable email input
+                              ),
+                              const SizedBox(height: 40),
+                              SizedBox(
+                                width: 250,
+                                height: 45,
+                                child: ElevatedButton(
+                                  onPressed: isSaving
+                                      ? null
+                                      : () async {
+                                          setState(() {
+                                            isSaving = true;
+                                          });
+                                          if (user != null) {
+                                            await FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(user.uid)
+                                                .update({
+                                              'admin_name': nameController.text.trim(),
+                                              'contact': contactController.text.trim(),
+                                            });
+                                          }
+                                          setState(() {
+                                            isSaving = false;
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Profile updated successfully')),
+                                          );
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  child: isSaving
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Text("Save Changes", style: TextStyle(fontSize: 16, color: Colors.white)),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              // --- Change Password Button ---
+                              SizedBox(
+                                width: 250,
+                                height: 45,
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.lock, color: Colors.blueAccent),
+                                  label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.blueAccent),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => _ChangePasswordDialog(),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                    const SizedBox(width: 40),
-                    // Profile Details Section
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _profileField(
-                            label: "User Name:",
-                            controller: nameController,
-                          ),
-                          const SizedBox(height: 24),
-                          _profileField(
-                            label: "Contact Number:",
-                            controller: contactController,
-                          ),
-                          const SizedBox(height: 24),
-                          _profileField(
-                            label: "Email:",
-                            controller: emailController,
-                          ),
-                          const SizedBox(height: 40),
-                          SizedBox(
-                            width: 250,
-                            height: 45,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                // Handle save changes
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueAccent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                              child: const Text("Save Changes", style: TextStyle(fontSize: 16, color: Colors.white)),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          // --- Change Password Button ---
-                          SizedBox(
-                            width: 250,
-                            height: 45,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.lock, color: Colors.blueAccent),
-                              label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.blueAccent),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => _ChangePasswordDialog(),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _profileField({required String label, required TextEditingController controller}) {
+  Widget _profileField({required String label, required TextEditingController controller, bool enabled = true}) {
     return Row(
       children: [
         Container(
@@ -1853,6 +1888,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Expanded(
                   child: TextField(
                     controller: controller,
+                    enabled: enabled,
                     style: const TextStyle(fontSize: 15),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
@@ -1861,12 +1897,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
-                  onPressed: () {
-                    // Optionally focus the field or handle edit
-                  },
-                ),
+                if (enabled)
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
+                    onPressed: () {
+                      // Optionally focus the field or handle edit
+                    },
+                  ),
               ],
             ),
           ),
