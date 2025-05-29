@@ -184,9 +184,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
-                const Text(
-                  "admin@gmail.com",
-                  style: TextStyle(fontSize: 13, color: Colors.white),
+                Text(
+                  userEmail, // <-- Show actual user email here
+                  style: const TextStyle(fontSize: 13, color: Colors.white),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const Divider(color: Colors.white24, thickness: 1, height: 30),
@@ -1701,108 +1701,125 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ));
   }
   Widget _buildProfilePage() {
-    final TextEditingController nameController = TextEditingController(text: "Alison T. Goazon");
-    final TextEditingController contactController = TextEditingController(text: "0963 218 6769");
-    final TextEditingController emailController = TextEditingController(text: "email@gmail.com");
+    final user = FirebaseAuth.instance.currentUser;
+    // Fetch admin_name and contact from Firestore (users collection)
+    return FutureBuilder<DocumentSnapshot>(
+      future: user != null
+          ? FirebaseFirestore.instance.collection('users').doc(user.uid).get()
+          : Future.value(null),
+      builder: (context, snapshot) {
+        String adminName = "";
+        String contact = "";
+        String email = user?.email ?? "";
+        if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          adminName = data['admin_name']?.toString() ?? "";
+          contact = data['contact']?.toString() ?? "";
+        }
+        final TextEditingController nameController = TextEditingController(text: adminName);
+        final TextEditingController contactController = TextEditingController(text: contact);
+        final TextEditingController emailController = TextEditingController(text: email);
 
-    return Center(
-      child: Container(
-        width: 800,
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        return Center(
+          child: Container(
+            width: 800,
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Profile Picture Section
-                Column(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 55,
-                      backgroundColor: Colors.grey[200],
-                      child: const Icon(Icons.person, size: 70, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+                    // Profile Picture Section
+                    Column(
                       children: [
-                        const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
-                          onPressed: () {
-                            // Handle profile picture change
-                          },
+                        CircleAvatar(
+                          radius: 55,
+                          backgroundColor: Colors.grey[200],
+                          child: const Icon(Icons.person, size: 70, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
+                              onPressed: () {
+                                // Handle profile picture change
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                    const SizedBox(width: 40),
+                    // Profile Details Section
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _profileField(
+                            label: "User Name:",
+                            controller: nameController,
+                          ),
+                          const SizedBox(height: 24),
+                          _profileField(
+                            label: "Contact Number:",
+                            controller: contactController,
+                          ),
+                          const SizedBox(height: 24),
+                          _profileField(
+                            label: "Email:",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 40),
+                          SizedBox(
+                            width: 250,
+                            height: 45,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                // Handle save changes
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              child: const Text("Save Changes", style: TextStyle(fontSize: 16, color: Colors.white)),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          // --- Change Password Button ---
+                          SizedBox(
+                            width: 250,
+                            height: 45,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.lock, color: Colors.blueAccent),
+                              label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.blueAccent),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => _ChangePasswordDialog(),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
-                const SizedBox(width: 40),
-                // Profile Details Section
-                Expanded(
-                  child: Column(
-                    children: [
-                      _profileField(
-                        label: "User Name:",
-                        controller: nameController,
-                      ),
-                      const SizedBox(height: 24),
-                      _profileField(
-                        label: "Contact Number:",
-                        controller: contactController,
-                      ),
-                      const SizedBox(height: 24),
-                      _profileField(
-                        label: "Email:",
-                        controller: emailController,
-                      ),
-                      const SizedBox(height: 40),
-                      SizedBox(
-                        width: 250,
-                        height: 45,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // Handle save changes
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                          child: const Text("Save Changes", style: TextStyle(fontSize: 16, color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      // --- Change Password Button ---
-                      SizedBox(
-                        width: 250,
-                        height: 45,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.lock, color: Colors.blueAccent),
-                          label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.blueAccent),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => _ChangePasswordDialog(),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
