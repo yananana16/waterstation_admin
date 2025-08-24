@@ -293,8 +293,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     final MapController mapController = MapController();
 
     // --- Pagination and filter state ---
-    int _currentPage = 0;
-    const int _rowsPerPage = 6;
+    int currentPage = 0;
+    const int rowsPerPage = 6;
 
     // Show compliance report details if requested
     if (_showComplianceReportDetails &&
@@ -578,9 +578,9 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
                             // Pagination logic
                             final totalRows = filteredDocs.length;
-                            final totalPages = (totalRows / _rowsPerPage).ceil();
-                            final startIdx = _currentPage * _rowsPerPage;
-                            final endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+                            final totalPages = (totalRows / rowsPerPage).ceil();
+                            final startIdx = currentPage * rowsPerPage;
+                            final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
                             final pageDocs = filteredDocs.sublist(
                               startIdx < totalRows ? startIdx : 0,
                               endIdx < totalRows ? endIdx : totalRows,
@@ -677,21 +677,21 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                     children: [
                                       IconButton(
                                         icon: const Icon(Icons.chevron_left),
-                                        onPressed: _currentPage > 0
+                                        onPressed: currentPage > 0
                                             ? () => setState(() {
-                                                _currentPage--;
+                                                currentPage--;
                                               })
                                             : null,
                                       ),
                                       Text(
-                                        'Page ${totalPages == 0 ? 0 : (_currentPage + 1)} of $totalPages',
+                                        'Page ${totalPages == 0 ? 0 : (currentPage + 1)} of $totalPages',
                                         style: const TextStyle(fontWeight: FontWeight.bold),
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.chevron_right),
-                                        onPressed: (_currentPage < totalPages - 1)
+                                        onPressed: (currentPage < totalPages - 1)
                                             ? () => setState(() {
-                                                _currentPage++;
+                                                currentPage++;
                                               })
                                             : null,
                                       ),
@@ -719,12 +719,12 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     String complianceTitle = "";
     bool isLoading = false;
     Map<String, dynamic>? selectedStationData;
-    String _complianceStatusFilter = 'approved';
+    String complianceStatusFilter = 'approved';
     String? selectedStationOwnerDocId;
 
     // --- Pagination state ---
-    int _complianceCurrentPage = 0;
-    const int _complianceRowsPerPage = 6;
+    int complianceCurrentPage = 0;
+    const int complianceRowsPerPage = 6;
 
     return FutureBuilder<void>(
       future: _userDistrictFuture,
@@ -833,20 +833,20 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         children: [
                           ToggleButtons(
                             isSelected: [
-                              _complianceStatusFilter == 'approved',
-                              _complianceStatusFilter == 'pending_approval',
-                              _complianceStatusFilter == 'district_approved',
+                              complianceStatusFilter == 'approved',
+                              complianceStatusFilter == 'pending_approval',
+                              complianceStatusFilter == 'district_approved',
                             ],
                             onPressed: (int idx) {
                               setState(() {
                                 if (idx == 0) {
-                                  _complianceStatusFilter = 'approved';
+                                  complianceStatusFilter = 'approved';
                                 } else if (idx == 1) {
-                                  _complianceStatusFilter = 'pending_approval';
+                                  complianceStatusFilter = 'pending_approval';
                                 } else if (idx == 2) {
-                                  _complianceStatusFilter = 'district_approved';
+                                  complianceStatusFilter = 'district_approved';
                                 }
-                                _complianceCurrentPage = 0;
+                                complianceCurrentPage = 0;
                               });
                             },
                             borderRadius: BorderRadius.circular(8),
@@ -880,7 +880,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     child: FutureBuilder<QuerySnapshot>(
                       future: FirebaseFirestore.instance
                           .collection('station_owners')
-                          .where('status', isEqualTo: _complianceStatusFilter)
+                          .where('status', isEqualTo: complianceStatusFilter)
                           .get(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -900,9 +900,9 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
                         // Pagination logic
                         final totalRows = filteredDocs.length;
-                        final totalPages = (totalRows / _complianceRowsPerPage).ceil();
-                        final startIdx = _complianceCurrentPage * _complianceRowsPerPage;
-                        final endIdx = (startIdx + _complianceRowsPerPage) > totalRows ? totalRows : (startIdx + _complianceRowsPerPage);
+                        final totalPages = (totalRows / complianceRowsPerPage).ceil();
+                        final startIdx = complianceCurrentPage * complianceRowsPerPage;
+                        final endIdx = (startIdx + complianceRowsPerPage) > totalRows ? totalRows : (startIdx + complianceRowsPerPage);
                         final pageDocs = filteredDocs.sublist(
                           startIdx < totalRows ? startIdx : 0,
                           endIdx < totalRows ? endIdx : totalRows,
@@ -911,7 +911,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         if (filteredDocs.isEmpty) {
                           return Center(
                             child: Text(
-                              _complianceStatusFilter == 'approved'
+                              complianceStatusFilter == 'approved'
                                   ? 'No approved stations found.'
                                   : 'No pending approval stations found.',
                             ),
@@ -1024,21 +1024,21 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.chevron_left),
-                                    onPressed: _complianceCurrentPage > 0
+                                    onPressed: complianceCurrentPage > 0
                                         ? () => setState(() {
-                                            _complianceCurrentPage--;
+                                            complianceCurrentPage--;
                                           })
                                         : null,
                                   ),
                                   Text(
-                                    'Page ${totalPages == 0 ? 0 : (_complianceCurrentPage + 1)} of $totalPages',
+                                    'Page ${totalPages == 0 ? 0 : (complianceCurrentPage + 1)} of $totalPages',
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.chevron_right),
-                                    onPressed: (_complianceCurrentPage < totalPages - 1)
+                                    onPressed: (complianceCurrentPage < totalPages - 1)
                                         ? () => setState(() {
-                                            _complianceCurrentPage++;
+                                            complianceCurrentPage++;
                                           })
                                         : null,
                                   ),
@@ -1470,6 +1470,51 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     }
   }
 
+  Future<void> updateAllStatuses() async {
+    if (statusEdits.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('compliance_uploads')
+          .doc(widget.stationOwnerDocId)
+          .set(statusEdits, SetOptions(merge: true));
+      setState(() {
+        for (final entry in statusEdits.entries) {
+          complianceStatuses[entry.key] = entry.value;
+        }
+        statusEdits.clear();
+      });
+
+      // After updating, check if all statuses are "partially"
+      final doc = await FirebaseFirestore.instance
+          .collection('compliance_uploads')
+          .doc(widget.stationOwnerDocId)
+          .get();
+      final data = doc.data() ?? {};
+      final statusValues = data.entries
+          .where((e) => e.key.endsWith('_status'))
+          .map((e) => (e.value ?? '').toString().toLowerCase())
+          .toList();
+      if (statusValues.isNotEmpty &&
+          statusValues.every((s) => s == 'partially')) {
+        await FirebaseFirestore.instance
+            .collection('station_owners')
+            .doc(widget.stationOwnerDocId)
+            .update({'status': 'district_approved'});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All statuses are "partially". Station marked as district_approved.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All statuses updated')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update statuses')),
+      );
+    }
+  }
+
   /// Returns a tuple: (categoryKey, displayLabel)
   (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
     final prefix = '${docId}_';
@@ -1587,164 +1632,197 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           ? const Center(child: CircularProgressIndicator())
           : uploadedFiles.isEmpty
               ? const Center(child: Text('No uploaded compliance files found.'))
-              : ListView.builder(
-                  itemCount: uploadedFiles.length,
-                  itemBuilder: (context, index) {
-                    final file = uploadedFiles[index];
-                    final fileUrl = Supabase.instance.client.storage
-                        .from('compliance_docs')
-                        .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
-                    final extension = file.name.split('.').last.toLowerCase();
-                    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
-                    final isPdf = extension == 'pdf';
-                    final isWord = extension == 'doc' || extension == 'docx';
-                    final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
-
-                    // Compose status key (e.g. business_permit_status)
-                    final statusKey = '${categoryKey}_status';
-                    final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Unknown').toString();
-
-                    // Status color logic
-                    Color statusColor;
-                    switch (status.toLowerCase()) {
-                      case 'pending':
-                        statusColor = Colors.orange;
-                        break;
-                      case 'passed':
-                        statusColor = Colors.green;
-                        break;
-                      case 'partially':
-                        statusColor = Colors.teal.shade300;
-                        break;
-                      case 'failed':
-                        statusColor = Colors.red;
-                        break;
-                      default:
-                        statusColor = Colors.grey;
-                    }
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  categoryLabel,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-                                  decoration: BoxDecoration(
-                                    color: statusColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    status,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                DropdownButton<String>(
-                                  value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
-                                      ? status.toLowerCase()
-                                      : null,
-                                  hint: const Text('Set Status'),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'pending',
-                                      child: Text('Pending'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'partially',
-                                      child: Text('Partially'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'failed',
-                                      child: Text('Failed'),
-                                    ),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      if (value != null) {
-                                        statusEdits[statusKey] = value;
-                                      }
-                                    });
-                                  },
-                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                                  dropdownColor: Colors.white,
-                                  underline: Container(
-                                    height: 1,
-                                    color: Colors.blueAccent,
-                                  ),
-                                ),
-                                if (statusEdits.containsKey(statusKey))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        final newStatus = statusEdits[statusKey]!;
-                                        updateStatus(statusKey, newStatus);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      child: const Text('Update', style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ),
-                              ],
+              : Column(
+                  children: [
+                    // --- Add Update All Statuses button ---
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.update),
+                            label: const Text('Update All Statuses'),
+                            onPressed: statusEdits.isNotEmpty ? updateAllStatuses : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blueAccent,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              file.name,
-                              style: const TextStyle(fontSize: 13, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: const BorderSide(color: Colors.blue),
-                                ),
+                          ),
+                          if (statusEdits.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12.0),
+                              child: Text(
+                                '${statusEdits.length} pending change(s)',
+                                style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
                               ),
-                              child: const Text('View File', style: TextStyle(color: Colors.blue)),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                    );
-                  },
-                ),
-    );
+                    ),
+                    // --- Existing ListView.builder ---
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: uploadedFiles.length,
+                        itemBuilder: (context, index) {
+                          final file = uploadedFiles[index];
+                          final fileUrl = Supabase.instance.client.storage
+                              .from('compliance_docs')
+                              .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
+                          final extension = file.name.split('.').last.toLowerCase();
+                          final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
+                          final isPdf = extension == 'pdf';
+                          final isWord = extension == 'doc' || extension == 'docx';
+                          final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
+
+                          // Compose status key (e.g. business_permit_status)
+                          final statusKey = '${categoryKey}_status';
+                          final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Unknown').toString();
+
+                          // Status color logic
+                          Color statusColor;
+                          switch (status.toLowerCase()) {
+                            case 'pending':
+                              statusColor = Colors.orange;
+                              break;
+                            case 'passed':
+                              statusColor = Colors.green;
+                              break;
+                            case 'partially':
+                              statusColor = Colors.teal.shade300;
+                              break;
+                            case 'failed':
+                              statusColor = Colors.red;
+                              break;
+                            default:
+                              statusColor = Colors.grey;
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        categoryLabel,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                        decoration: BoxDecoration(
+                                          color: statusColor,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      DropdownButton<String>(
+                                        value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
+                                            ? status.toLowerCase()
+                                            : null,
+                                        hint: const Text('Set Status'),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'pending',
+                                            child: Text('Pending'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'partially',
+                                            child: Text('Partially'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'failed',
+                                            child: Text('Failed'),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          setState(() {
+                                            if (value != null) {
+                                              statusEdits[statusKey] = value;
+                                            }
+                                          });
+                                        },
+                                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+                                        dropdownColor: Colors.white,
+                                        underline: Container(
+                                          height: 1,
+                                          color: Colors.blueAccent,
+                                        ),
+                                      ),
+                                      if (statusEdits.containsKey(statusKey))
+                                        Padding(
+                                          padding: const EdgeInsets.only(left: 8.0),
+                                          child: ElevatedButton(
+                                            onPressed: () {
+                                              final newStatus = statusEdits[statusKey]!;
+                                              updateStatus(statusKey, newStatus);
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.blueAccent,
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            ),
+                                            child: const Text('Update', style: TextStyle(fontSize: 12)),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    file.name,
+                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: Colors.blue,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: const BorderSide(color: Colors.blue),
+                                      ),
+                                    ),
+                                    child: const Text('View File', style: TextStyle(color: Colors.blue)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ));
   }
 }
 
-// Checklist widget with file view buttons
+// Checklist widget with file view buttons  
 class ComplianceChecklistWithFiles extends StatefulWidget {
   final String stationOwnerDocId;
   final Map<String, dynamic> data;
-  const ComplianceChecklistWithFiles({required this.stationOwnerDocId, required this.data});
+  const ComplianceChecklistWithFiles({super.key, required this.stationOwnerDocId, required this.data});
 
   @override
   State<ComplianceChecklistWithFiles> createState() => _ComplianceChecklistWithFilesState();
@@ -1883,7 +1961,7 @@ class _ComplianceChecklistWithFilesState extends State<ComplianceChecklistWithFi
 class SingleComplianceFileViewer extends StatelessWidget {
   final String stationOwnerDocId;
   final FileObject file;
-  const SingleComplianceFileViewer({required this.stationOwnerDocId, required this.file});
+  const SingleComplianceFileViewer({super.key, required this.stationOwnerDocId, required this.file});
 
   @override
   Widget build(BuildContext context) {

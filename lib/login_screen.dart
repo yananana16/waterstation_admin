@@ -225,7 +225,53 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Left side: Back button and login form
+                  // Left side: Logo and illustration (was previously on the right)
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              top: 1,
+                              child: Image.asset(
+                                'assets/logo.png', // Match the logo from role_selection_screen
+                                height: screenWidth > 800 ? 220 : 150,
+                              ),
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                SizedBox(height: screenWidth > 800 ? 150 : 100),
+                                Text(
+                                  'H2OGO',
+                                  style: TextStyle(
+                                    fontSize: screenWidth > 800 ? 24 : 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                Text(
+                                  'Where safety meets efficiency.',
+                                  style: TextStyle(
+                                    fontSize: screenWidth > 800 ? 14 : 12,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 40),
+    
+                      ],
+                    ),
+                  ),
+
+                  // Right side: Back button and login form (was previously on the left)
                   Expanded(
                     flex: 1,
                     child: Padding(
@@ -365,55 +411,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  ),
-
-                  // Right side: Logo and illustration
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              top: 1,
-                              child: Image.asset(
-                                'assets/logo.png', // Match the logo from role_selection_screen
-                                height: screenWidth > 800 ? 220 : 150,
-                              ),
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                SizedBox(height: screenWidth > 800 ? 150 : 100),
-                                Text(
-                                  'H2OGO',
-                                  style: TextStyle(
-                                    fontSize: screenWidth > 800 ? 24 : 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                                Text(
-                                  'Where safety meets efficiency.',
-                                  style: TextStyle(
-                                    fontSize: screenWidth > 800 ? 14 : 12,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 40),
-                        Image.asset(
-                          'assets/welcome_admin.png', // Replace with the appropriate illustration
-                          height: screenWidth > 800 ? 320 : 200,
-                        ),
-                      ],
                     ),
                   ),
                 ],

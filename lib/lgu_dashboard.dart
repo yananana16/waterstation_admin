@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firebase import
 import 'package:flutter/material.dart';
 
 class LguDashboard extends StatefulWidget {
-  const LguDashboard({Key? key}) : super(key: key);
+  const LguDashboard({super.key});
 
   @override
   State<LguDashboard> createState() => _LguDashboardState();
@@ -685,10 +685,10 @@ class _WaterStationsPage extends StatelessWidget {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
-                              headingRowColor: MaterialStateProperty.all(const Color(0xFFEAF6FF)),
-                              dataRowColor: MaterialStateProperty.resolveWith<Color?>(
-                                (Set<MaterialState> states) {
-                                  if (states.contains(MaterialState.selected)) {
+                              headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF6FF)),
+                              dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                                (Set<WidgetState> states) {
+                                  if (states.contains(WidgetState.selected)) {
                                     return const Color(0xFFE0F7FA);
                                   }
                                   return null; // Use default color
@@ -1200,7 +1200,7 @@ class _SchedulePage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Calendar
-                Container(
+                SizedBox(
                   width: 340,
                   child: _ScheduleCalendar(),
                 ),

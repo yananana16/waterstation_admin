@@ -502,7 +502,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return StatefulBuilder(
       builder: (context, setState) {
         // --- Remove local state, use class fields instead ---
-        const int _rowsPerPage = 6;
+        const int rowsPerPage = 6;
 
         // Show compliance report details if requested
         if (_showComplianceReportDetails &&
@@ -844,9 +844,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // --- Pagination logic ---
                     final totalRows = filteredDocs.length;
-                    final totalPages = (totalRows / _rowsPerPage).ceil();
-                    final startIdx = _registeredStationsCurrentPage * _rowsPerPage;
-                    final endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+                    final totalPages = (totalRows / rowsPerPage).ceil();
+                    final startIdx = _registeredStationsCurrentPage * rowsPerPage;
+                    final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
                     final pageDocs = filteredDocs.sublist(
                       startIdx < totalRows ? startIdx : 0,
                       endIdx < totalRows ? endIdx : totalRows,
@@ -1089,7 +1089,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             rows: docs.map((doc) {
                               final data = doc.data() as Map<String, dynamic>;
                               final districtName = data['districtName'] ?? 'Unknown';
-                              final customUID = data['customUID'] ?? null;
+                              final customUID = data['customUID'];
                               return DataRow(
                                 cells: [
                                   DataCell(Text(districtName)),
@@ -1112,7 +1112,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                           if (ownerData != null) {
                                             final firstName = ownerData['firstName'] ?? '';
                                             final lastName = ownerData['lastName'] ?? '';
-                                            ownerDisplay = (firstName.toString() + ' ' + lastName.toString()).trim();
+                                            ownerDisplay = ('$firstName $lastName').trim();
                                             if (ownerDisplay.isEmpty) ownerDisplay = "Not assigned";
                                           }
                                         }
@@ -1169,15 +1169,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     String complianceTitle = "";
     bool isLoading = false;
     Map<String, dynamic>? selectedStationData;
-    String _complianceStatusFilter = 'approved'; // Add this line
+    String complianceStatusFilter = 'approved'; // Add this line
     String? selectedStationOwnerDocId; // Track docId for details
 
     // --- Add state for district filter ---
-    String? _selectedDistrictFilter;
+    String? selectedDistrictFilter;
 
     // --- Pagination state ---
-    int _complianceCurrentPage = 0;
-    const int _complianceRowsPerPage = 6;
+    int complianceCurrentPage = 0;
+    const int complianceRowsPerPage = 6;
 
     return StatefulBuilder(
       builder: (context, setState) {
@@ -1278,15 +1278,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       // --- Replace DropdownButton with 2 filter buttons ---
                       ToggleButtons(
                         isSelected: [
-                          _complianceStatusFilter == 'approved',
-                          _complianceStatusFilter == 'district_approved',
+                          complianceStatusFilter == 'approved',
+                          complianceStatusFilter == 'district_approved',
                         ],
                         onPressed: (int idx) {
                           setState(() {
                             if (idx == 0) {
-                              _complianceStatusFilter = 'approved';
+                              complianceStatusFilter = 'approved';
                             } else if (idx == 1) {
-                              _complianceStatusFilter = 'district_approved';
+                              complianceStatusFilter = 'district_approved';
                             }
                           });
                         },
@@ -1331,7 +1331,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                       const SizedBox(width: 12),
                       DropdownButton<String>(
-                        value: _selectedDistrictFilter,
+                        value: selectedDistrictFilter,
                         hint: const Text("All Districts"),
                         items: [
                           const DropdownMenuItem<String>(
@@ -1345,7 +1345,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ],
                         onChanged: (value) {
                           setState(() {
-                            _selectedDistrictFilter = value;
+                            selectedDistrictFilter = value;
                           });
                         },
                       ),
@@ -1362,7 +1362,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: FutureBuilder<QuerySnapshot>(
                   future: FirebaseFirestore.instance
                       .collection('station_owners')
-                      .where('status', isEqualTo: _complianceStatusFilter)
+                      .where('status', isEqualTo: complianceStatusFilter)
                       .get(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1373,19 +1373,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     }
                     final docs = snapshot.data?.docs ?? [];
                     // --- Filter by selected district ---
-                    final filteredDocs = _selectedDistrictFilter == null || _selectedDistrictFilter!.isEmpty
+                    final filteredDocs = selectedDistrictFilter == null || selectedDistrictFilter!.isEmpty
                         ? docs
                         : docs.where((doc) {
                             final data = doc.data() as Map<String, dynamic>;
                             final district = (data['districtName'] ?? '').toString();
-                            return district == _selectedDistrictFilter;
+                            return district == selectedDistrictFilter;
                           }).toList();
 
                     // --- Pagination logic ---
                     final totalRows = filteredDocs.length;
-                    final totalPages = (totalRows / _complianceRowsPerPage).ceil();
-                    final startIdx = _complianceCurrentPage * _complianceRowsPerPage;
-                    final endIdx = (startIdx + _complianceRowsPerPage) > totalRows ? totalRows : (startIdx + _complianceRowsPerPage);
+                    final totalPages = (totalRows / complianceRowsPerPage).ceil();
+                    final startIdx = complianceCurrentPage * complianceRowsPerPage;
+                    final endIdx = (startIdx + complianceRowsPerPage) > totalRows ? totalRows : (startIdx + complianceRowsPerPage);
                     final pageDocs = filteredDocs.sublist(
                       startIdx < totalRows ? startIdx : 0,
                       endIdx < totalRows ? endIdx : totalRows,
@@ -1394,7 +1394,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     if (filteredDocs.isEmpty) {
                       return Center(
                         child: Text(
-                          _complianceStatusFilter == 'approved'
+                          complianceStatusFilter == 'approved'
                               ? 'No approved stations found.'
                               : 'No pending approval stations found.',
                         ),
@@ -1505,21 +1505,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.chevron_left),
-                                onPressed: _complianceCurrentPage > 0
+                                onPressed: complianceCurrentPage > 0
                                     ? () => setState(() {
-                                        _complianceCurrentPage--;
+                                        complianceCurrentPage--;
                                       })
                                     : null,
                               ),
                               Text(
-                                'Page ${totalPages == 0 ? 0 : (_complianceCurrentPage + 1)} of $totalPages',
+                                'Page ${totalPages == 0 ? 0 : (complianceCurrentPage + 1)} of $totalPages',
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.chevron_right),
-                                onPressed: (_complianceCurrentPage < totalPages - 1)
+                                onPressed: (complianceCurrentPage < totalPages - 1)
                                     ? () => setState(() {
-                                        _complianceCurrentPage++;
+                                        complianceCurrentPage++;
                                       })
                                     : null,
                               ),
@@ -2624,7 +2624,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 class ComplianceChecklistWithFiles extends StatefulWidget {
   final String stationOwnerDocId;
   final Map<String, dynamic> data;
-  const ComplianceChecklistWithFiles({required this.stationOwnerDocId, required this.data});
+  const ComplianceChecklistWithFiles({super.key, required this.stationOwnerDocId, required this.data});
 
   @override
   State<ComplianceChecklistWithFiles> createState() => _ComplianceChecklistWithFilesState();
@@ -2763,7 +2763,7 @@ class _ComplianceChecklistWithFilesState extends State<ComplianceChecklistWithFi
 class SingleComplianceFileViewer extends StatelessWidget {
   final String stationOwnerDocId;
   final FileObject file;
-  const SingleComplianceFileViewer({required this.stationOwnerDocId, required this.file});
+  const SingleComplianceFileViewer({super.key, required this.stationOwnerDocId, required this.file});
 
   @override
   Widget build(BuildContext context) {
@@ -2842,7 +2842,7 @@ class SingleComplianceFileViewer extends StatelessWidget {
 }
 class StationOwnersDialog extends StatefulWidget {
   final String districtName;
-  const StationOwnersDialog({Key? key, required this.districtName}) : super(key: key);
+  const StationOwnersDialog({super.key, required this.districtName});
 
   @override
   State<StationOwnersDialog> createState() => _StationOwnersDialogState();
@@ -3199,7 +3199,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                         final prevUserDoc = prevUserQuery.docs.first;
                                         await prevUserDoc.reference.update({
                                           'district_president': false,
-                                          'role': 'user',
+                                          'role': 'owner',
                                         });
                                       }
                                     }
