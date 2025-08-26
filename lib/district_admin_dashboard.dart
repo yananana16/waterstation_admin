@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'role_selection_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
   const DistrictAdminDashboard({super.key});
@@ -1234,7 +1234,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
   void _logout(BuildContext context) {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => RoleSelectionScreen()),
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
 }

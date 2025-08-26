@@ -3,8 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'role_selection_screen.dart';
-
+import 'login_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -66,7 +65,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Water Station Admin',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const RoleSelectionScreen(), // Set RoleSelectionScreen as the initial screen
+      home: const LoginScreen(), // Set LoginScreen as the initial screen
     );
   }
 }

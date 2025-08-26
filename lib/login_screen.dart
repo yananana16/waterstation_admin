@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
-import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import
-import 'role_selection_screen.dart'; // Import RoleSelectionScreen
+import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import/ Import RoleSelectionScreen
 import 'admin_dashboard.dart'; // Import Admin Dashboard
 import 'district_admin_dashboard.dart'; // Import District Admin Dashboard
 import 'lgu_dashboard.dart'; // Add this import
 
 class LoginScreen extends StatefulWidget {
-  final String selectedRole; // Pass the selected role from the previous screen
-  const LoginScreen({
-    super.key,
-    required this.selectedRole,
-  });
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -31,183 +26,83 @@ class _LoginScreenState extends State<LoginScreen> {
     final enteredUsername = _usernameController.text.trim();
     final enteredPassword = _passwordController.text.trim();
 
-    if (widget.selectedRole == 'federated') {
-      try {
-        // Authenticate user
-        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: enteredUsername,
-          password: enteredPassword,
-        );
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: enteredUsername,
+        password: enteredPassword,
+      );
+      if (userCredential.user != null) {
+        String uid = userCredential.user!.uid;
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
 
-        if (userCredential.user != null) {
-          String uid = userCredential.user!.uid;
+        // Determine role and route accordingly
+        if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
+          setState(() { _isLoading = false; });
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboard()));
+          return;
+        }
+        if (userDoc.id == uid && userData['role'] == 'admin' && userData['district_president'] == true) {
+          setState(() { _isLoading = false; });
+          Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));
+          return;
+        }
+        if (userDoc.id == uid && userData['role'] == 'cho_lgu') {
+          setState(() { _isLoading = false; });
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const LguDashboard()));
+          return;
+        }
 
-          // Check if the user is admin and federated president in users collection (docId == uid)
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-          if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
-            setState(() {
-              _isLoading = false;
-            });
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AdminDashboard()),
-            );
+        // If not found in users, check station_owners for district admin
+        QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
+            .collection('station_owners')
+            .where('userId', isEqualTo: uid)
+            .where('district_president', isEqualTo: true)
+            .where('status', isEqualTo: 'approved')
+            .limit(1)
+            .get();
+
+        if (stationOwnerQuery.docs.isNotEmpty) {
+          var stationOwnerDoc = stationOwnerQuery.docs.first;
+          String stationOwnerDocId = stationOwnerDoc.id;
+          QuerySnapshot districtQuery = await FirebaseFirestore.instance
+              .collection('districts')
+              .where('customUID', isEqualTo: stationOwnerDocId)
+              .limit(1)
+              .get();
+          if (districtQuery.docs.isNotEmpty) {
+            setState(() { _isLoading = false; });
+            Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));
             return;
           } else {
-            setState(() {
-              _isLoading = false;
-            });
+            setState(() { _isLoading = false; });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Account not found or not a federated president admin.'),
+                content: Text('District record not found or not linked to this account.'),
                 backgroundColor: Colors.redAccent,
               ),
             );
             return;
           }
         }
-      } on FirebaseAuthException catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
+
+        setState(() { _isLoading = false; });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message ?? 'Authentication failed.'),
+            content: Text('Account not found or not authorized for any role.'),
             backgroundColor: Colors.redAccent,
           ),
         );
         return;
       }
-      setState(() {
-        _isLoading = false;
-      });
-    } else {
-      // For other roles, use Firebase Auth
-      try {
-        UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: enteredUsername,
-          password: enteredPassword,
-        );
-        if (widget.selectedRole == 'district') {
-          String uid = userCredential.user!.uid;
-
-          // Check users collection for district admin
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-          if (userDoc.id == uid &&
-              userData['role'] == 'admin' &&
-              userData['district_president'] == true) {
-            setState(() {
-              _isLoading = false;
-            });
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DistrictAdminDashboard(),
-              ),
-            );
-            return;
-          }
-
-          // If not found in users, check station_owners collection for district admin
-          QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
-              .collection('station_owners')
-              .where('userId', isEqualTo: uid)
-              .where('district_president', isEqualTo: true)
-              .where('status', isEqualTo: 'approved')
-              .limit(1)
-              .get();
-
-          if (stationOwnerQuery.docs.isNotEmpty) {
-            // Get the station_owner doc ID and data
-            var stationOwnerDoc = stationOwnerQuery.docs.first;
-            String stationOwnerDocId = stationOwnerDoc.id;
-
-            // Use the districtName from stationOwnerData
-            QuerySnapshot districtQuery = await FirebaseFirestore.instance
-                .collection('districts')
-                .where('customUID', isEqualTo: stationOwnerDocId)
-                .limit(1)
-                .get();
-
-            if (districtQuery.docs.isNotEmpty) {
-              setState(() {
-                _isLoading = false;
-              });
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DistrictAdminDashboard(),
-                ),
-              );
-              return;
-            } else {
-              setState(() {
-                _isLoading = false;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('District record not found or not linked to this account.'),
-                  backgroundColor: Colors.redAccent,
-                ),
-              );
-              return;
-            }
-          } else {
-            setState(() {
-              _isLoading = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Account not found or not approved for this district.'),
-                backgroundColor: Colors.redAccent,
-              ),
-            );
-          }
-        } else if (widget.selectedRole == 'cho_lgu') {
-          String uid = userCredential.user!.uid;
-
-          // Check if the user is in the users collection with role 'cho_lgu'
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-          if (userDoc.id == uid && userData['role'] == 'cho_lgu') {
-            setState(() {
-              _isLoading = false;
-            });
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const LguDashboard()),
-            );
-            return;
-          } else {
-            setState(() {
-              _isLoading = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Account not found or not authorized for CHO LGU role.'),
-                backgroundColor: Colors.redAccent,
-              ),
-            );
-            return;
-          }
-        } else {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      } on FirebaseAuthException catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message ?? 'Invalid username or password.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } on FirebaseAuthException catch (e) {
+      setState(() { _isLoading = false; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Invalid username or password.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -225,14 +120,25 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Left side: Logo and illustration (was previously on the right)
+                  // Left side: Logo and illustration
                   Expanded(
                     flex: 1,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors:[
+                            Color(0xFFF9FBFF), // near white
+                            Color(0xFFEAF3FF), // light blue
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                      ),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Stack(
-                          alignment: Alignment.center,
+                          alignment: Alignment.centerRight,
                           children: [
                             Positioned(
                               top: 1,
@@ -266,12 +172,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         SizedBox(height: 40),
-    
+                        // Image.asset(
+                        //   'assets/welcome_admin.png', // Replace with the appropriate illustration
+                        //   height: screenWidth > 800 ? 320 : 200,
+                        // ),
                       ],
                     ),
                   ),
-
-                  // Right side: Back button and login form (was previously on the left)
+                  ),
+                  // Right side: Back button and login form
                   Expanded(
                     flex: 1,
                     child: Padding(
@@ -282,42 +191,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          GestureDetector(
-                            onTap: () {
-                              if (widget.selectedRole == 'district') {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-                                );
-                              } else {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-                                );
-                              }
-                            },
-                            child: Row(
-                              children: [
-                                Icon(Icons.arrow_back, color: Colors.blue, size: 18),
-                                SizedBox(width: 5),
-                                Text(
-                                  'Back to Previous Page',
-                                  style: TextStyle(
-                                    fontSize: screenWidth > 800 ? 16 : 14,
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                          Text(
+                            'WELCOME',
+                            style: TextStyle(
+                              fontSize: screenWidth > 800 ? 50 : 20,
+                              color: Color(0xFF0066B2),
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          SizedBox(height: screenWidth > 800 ? 40 : 20),
+                          SizedBox(height: 8),
                           Text(
-                            'Log in',
+                            'Log in to your account',
                             style: TextStyle(
-                              fontSize: screenWidth > 800 ? 48 : 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
+                              fontSize: 16,
+                              color: Colors.black54,
                             ),
                           ),
                           SizedBox(height: screenWidth > 800 ? 40 : 20),
@@ -327,9 +214,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Username',
                               labelStyle: TextStyle(
                                 fontSize: 16,
-                                color: Colors.blue, // Set label text color to blue
+                                color: Color(0xFF0066B2), // Set label text color to blue
                               ),
-                              prefixIcon: Icon(Icons.person, color: Colors.blue),
+                              prefixIcon: Icon(Icons.person, color: Color(0xFF0066B2)),
                               filled: true,
                               fillColor: Color(0xFFEAF3FF),
                               border: OutlineInputBorder(
@@ -346,15 +233,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Password',
                               labelStyle: TextStyle(
                                 fontSize: 16,
-                                color: Colors.blue, // Set label text color to blue
+                                color: Color(0xFF0066B2), // Set label text color to blue
                               ),
-                              prefixIcon: Icon(Icons.lock, color: Colors.blue),
+                              prefixIcon: Icon(Icons.lock, color: Color(0xFF0066B2)),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _isPasswordVisible
                                       ? Icons.visibility
                                       : Icons.visibility_off,
-                                  color: Colors.blue,
+                                  color: Color(0xFF0066B2),
                                 ),
                                 onPressed: () {
                                   setState(() {
@@ -381,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 'Forgot Password? Reset',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.blue,
+                                  color: Color(0xFF0066B2),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

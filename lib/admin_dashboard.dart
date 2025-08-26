@@ -1,13 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthProvider, FirebaseAuthException;
 import 'package:flutter/material.dart';
+import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
-import 'login_screen.dart';
-import 'role_selection_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
+import 'login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'compliance_page.dart';
+import 'change_password_dialog.dart'; // <-- Add this import
+import 'compliance_files_viewer.dart'; // <-- Add this import
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -57,7 +60,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           });
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const LoginScreen(selectedRole: 'admin')),
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
           );
         }
       } else {
@@ -144,7 +147,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       await _authService.signOut();
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => RoleSelectionScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
   }
@@ -160,84 +163,233 @@ class _AdminDashboardState extends State<AdminDashboard> {
           // Sidebar
           Container(
             width: 250,
-            color: Colors.blueAccent,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD6E8FD),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: Column(
               children: [
-                const SizedBox(height: 32),
-                // Admin panel logo and info (updated to match provided image)
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 40, color: Colors.blueAccent),
+                // Logo, App Name, Tagline
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFFD6E8FD), // Match sidebar background
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
+
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                const Text(
-                  "Admin",
-                  style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
+                // User Info
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFFD6E8FD),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 32,
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        "Admin",
+                        style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        FirebaseAuth.instance.currentUser?.email ?? "user@gmail.com",
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  userEmail, // <-- Show actual user email here
-                  style: const TextStyle(fontSize: 13, color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const Divider(color: Colors.white24, thickness: 1, height: 30),
-                _buildSidebarItem(Icons.dashboard, "Dashboard", 0),
-                _buildSidebarItem(Icons.local_drink, "Water Stations", 1),
-                _buildSidebarItem(Icons.location_city, "Districts", 2),
-                _buildSidebarItem(Icons.article, "Compliance", 3),
+                // Navigation Items
+                const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+                _sidebarNavItem("Dashboard", 0),
+                _sidebarNavItem("Water Stations", 1),
+                _sidebarNavItem("District Presidents", 2),
+                _sidebarNavItem("Compliance", 3),
+                _sidebarNavItem("Profile", 4),
                 const Spacer(),
-                _buildSidebarItem(Icons.person, "Profile", 4), // Move Profile above Logout
-                _buildSidebarItem(Icons.logout, "Logout", -1),
-                const SizedBox(height: 20),
+                // Log out button
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: SizedBox(
+                    width: 160,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.logout, color: Color(0xFF004687)),
+                      label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        side: const BorderSide(color: Color(0xFFD6E8FD)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => _logout(context),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
           // Main Content Area
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
+            child: Column(
+              children: [
+                // --- Top Bar: logo, tagline, icons ---
+                Container(
+                  height: 60,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD6E8FD), // <-- Match sidebar background
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
                     children: [
-                      // Body
-                      Expanded(
-                        child: Center(
+                      const SizedBox(width: 32),
+                      // Logo and tagline
+
+                      const SizedBox(width: 16),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
+                        onPressed: () {
+                          setState(() {
+                            _showSettingsPage = true;
+                            _showNotificationsPage = false;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Stack(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
+                            onPressed: () {
+                              setState(() {
+                                _showNotificationsPage = true;
+                                _showSettingsPage = false;
+                              });
+                            },
+                          ),
+                          Positioned(
+                            right: 8,
+                            top: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 5,
+                                minHeight: 2,
+                              ),
+                              child: const Text(
+                                '3',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 32),
+                    ],
+                  ),
+                ),
+                // --- Main Page Content ---
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : Center(
                           child: _showNotificationsPage
                               ? _buildNotificationsPage()
                               : _showSettingsPage
                                   ? _buildSettingsPage()
                                   : _getSelectedPage(),
                         ),
-                      ),
-                    ],
-                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSidebarItem(IconData icon, String label, int index) {
+  // Sidebar navigation item builder (matches image style)
+  Widget _sidebarNavItem(String label, int index) {
     bool isSelected = _selectedIndex == index;
+    IconData icon;
+    switch (label) {
+      case "Dashboard":
+        icon = Icons.dashboard;
+        break;
+      case "Water Stations":
+        icon = Icons.local_drink;
+        break;
+      case "District Presidents":
+        icon = Icons.location_city;
+        break;
+      case "Compliance":
+        icon = Icons.article;
+        break;
+      case "Profile":
+        icon = Icons.person;
+        break;
+      default:
+        icon = Icons.circle;
+    }
     return Material(
-      color: isSelected ? Colors.blueAccent[700] : Colors.transparent,
+      color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          if (index == -1) {
-            _logout(context);
-          } else {
-            _onItemTapped(index);
-          }
-        },
-        child: ListTile(
-          leading: Icon(icon, color: isSelected ? Colors.white : Colors.white70),
-          title: Text(
-            label,
-            style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontSize: 14),
+        onTap: () => _onItemTapped(index),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+          child: Row(
+            children: [
+              Icon(icon, color: isSelected ? Color(0xFF004687) : Colors.blueGrey, size: 22),
+              const SizedBox(width: 16),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Color(0xFF004687) : Colors.blueGrey,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 15,
+                ),
+              ),
+            ],
           ),
-          tileColor: isSelected ? Colors.blueAccent[800] : Colors.transparent,
-          hoverColor: Colors.blueAccent[200],
-          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
         ),
       ),
     );
@@ -252,7 +404,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 2:  // Districts page
         return _buildDistrictManagementPage();
       case 3:
-        return _buildCompliancePage();
+        return const CompliancePage();
       case 4:  // Profile page
         return _buildProfilePage(); // Changed from _buildUsersPage to _buildProfilePage
       default:
@@ -263,126 +415,178 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildDashboardOverview() {
     return Column(
       children: [
-        // Header Section
+        // Top header bar (date, time)
         Container(
-          padding: const EdgeInsets.all(16),
-          color: const Color(0xFFE3F2FD),
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "Dashboard Overview",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+              const Icon(Icons.calendar_today, color: Colors.blueAccent),
+              const SizedBox(width: 8),
+              Text(
+                "Monday, May 5, 2025",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                    onPressed: () {
-                      setState(() {
-                        _showSettingsPage = true;
-                        _showNotificationsPage = false;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications, color: Colors.blueAccent),
-                        onPressed: () {
-                          setState(() {
-                            _showNotificationsPage = true;
-                            _showSettingsPage = false;
-                          });
-                        },
-                      ),
-                      // Notification badge
-                      Positioned(
-                        right: 8,
-                        top: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 5,
-                            minHeight: 2,
-                          ),
-                          child: const Text(
-                            '3', // <-- Set your new notification count here
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              const Spacer(),
+              const Icon(Icons.access_time, color: Colors.blueAccent),
+              const SizedBox(width: 8),
+              Text(
+                "11:25 AM PST",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        // Statistics Cards
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              bool isDesktop = constraints.maxWidth >= 800;
-              return isDesktop
-                  ? Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildStatisticCard("Pending Compliance Approvals", "45"),
-                        const SizedBox(width: 16),
-                        _buildStatisticCard("Number of Compliant Station", "285"),
-                        const SizedBox(width: 16),
-                        _buildStatisticCard("Non-Compliant Stations", "178"),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        _buildStatisticCard("Pending Compliance Approvals", "45"),
-                        const SizedBox(height: 16),
-                        _buildStatisticCard("Number of Compliant Station", "285"),
-                        const SizedBox(height: 16),
-                        _buildStatisticCard("Non-Compliant Stations", "178"),
-                      ],
-                    );
-            },
+        // Welcome message
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Text(
+            "Hello, User!",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
           ),
         ),
-        const SizedBox(height: 16),
-        // District Station Counts
+        // Main content row: Map and Compliance Overview
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                bool isDesktop = constraints.maxWidth >= 800;
-                return isDesktop
-                    ? Row(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // District map card
+                Container(
+                  width: 480, // Increased from 340
+                  height: 520, // Increased from 370
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      // Map image (replace with your asset or widget)
+                      Expanded(
+                        child: Image.asset(
+                          'assets/district_map.png', // <-- Use your colored district map asset here
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      // Legend
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Legend:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                _legendDot(Colors.green),
+                                const SizedBox(width: 8),
+                                const Text("Good", style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 18),
+                                _legendDot(Colors.orange),
+                                const SizedBox(width: 8),
+                                const Text("Moderate Concern", style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 18),
+                                _legendDot(Colors.amber),
+                                const SizedBox(width: 8),
+                                const Text("High Concern", style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 18),
+                                _legendDot(Colors.red),
+                                const SizedBox(width: 8),
+                                const Text("Critical", style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 32),
+                // Compliance Overview card with summary cards on top
+                Expanded(
+                  child: Container(
+                    height: 520, // Match map card height for alignment
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // District Station Counts
-                          Expanded(
-                            child: _buildDistrictStationCounts(),
+                          // Summary cards row (moved here)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              _SummaryCard(title: "Pending Compliance Approval", value: "45"),
+                              const SizedBox(width: 24),
+                              _SummaryCard(title: "Compliant Stations", value: "285"),
+                              const SizedBox(width: 24),
+                              _SummaryCard(title: "Non-Compliant Stations", value: "178"),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _complianceOverviewItem(
+                            "Jaro 1 & 2 and City Proper 1 & 2",
+                            "Good",
+                            Colors.green,
+                            "Maintain good practices. Continue regular testing and permit renewals.",
+                          ),
+                          _complianceOverviewItem(
+                            "Mandurriao and La Paz",
+                            "Moderate Concern",
+                            Colors.orange,
+                            "Some issues detected. Do spot checks, conduct refreshers, and monitor closely.",
+                          ),
+                          _complianceOverviewItem(
+                            "Molo and Lapuz",
+                            "High Concern",
+                            Colors.amber,
+                            "Several failures. Schedule inspections, send reminders, and assist WRS with compliance.",
+                          ),
+                          _complianceOverviewItem(
+                            "Arevalo",
+                            "Critical",
+                            Colors.red,
+                            "Urgent action needed. Deploy teams, provide support, and launch a full compliance drive.",
                           ),
                         ],
-                      )
-                    : Column(
-                        children: [
-                          // District Station Counts
-                          _buildDistrictStationCounts(),
-                        ],
-                      );
-              },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -390,108 +594,52 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildDistrictStationCounts() {
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance.collection('station_owners').get(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Expanded(child: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return Expanded(
-            child: Center(child: Text('Error loading station owners: ${snapshot.error}')),
-          );
-        }
-        final docs = snapshot.data?.docs ?? [];
-        // Count per districtName
-        final Map<String, int> districtCounts = {};
-        for (final doc in docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final district = (data['districtName'] ?? '').toString();
-          if (district.isEmpty) continue;
-          districtCounts[district] = (districtCounts[district] ?? 0) + 1;
-        }
-        // Sort districts alphabetically
-        final sortedDistricts = districtCounts.keys.toList()..sort();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Number of Water Refilling Station per District",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            // Center the card list and limit width
-            Expanded(
-              child: ListView(
-                children: sortedDistricts.map((district) {
-                  return _buildDistrictStationCount(district, districtCounts[district] ?? 0);
-                }).toList(),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildStatisticCard(String title, String value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 2,
-              blurRadius: 5,
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-            ),
-          ],
-        ),
+  Widget _legendDot(Color color) {
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.grey.shade300, width: 1),
       ),
     );
   }
 
-  Widget _buildDistrictStationCount(String district, int count) {
+  Widget _complianceOverviewItem(String title, String status, Color color, String description) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              spreadRadius: 2,
-              blurRadius: 5,
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 2, top: 2),
+            child: Text(
+              description,
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(district, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
-            Text(count.toString(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -584,77 +732,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: const Color(0xFFE3F2FD),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.local_drink, color: Colors.blueAccent, size: 28),
-                      const SizedBox(width: 10),
-                      const Text(
-                        "Water Refilling Stations",
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                        onPressed: () {
-                          setState(() {
-                            _showSettingsPage = true;
-                            _showNotificationsPage = false;
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Colors.blueAccent),
-                            onPressed: () {
-                              setState(() {
-                                _showNotificationsPage = true;
-                                _showSettingsPage = false;
-                              });
-                            },
-                          ),
-                          Positioned(
-                            right: 8,
-                            top: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 5,
-                                minHeight: 2,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
             // Map Section with shadow and rounded corners
             Container(
               height: 280,
@@ -743,70 +820,114 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
             ),
-            // Search Bar
+            // --- Replace search and filter UI ---
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.toLowerCase();
-                  });
-                },
-                decoration: InputDecoration(
-                  hintText: "Search Water Stations...",
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.blue[50],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                ),
-              ),
-            ),
-            // --- Add district filter dropdown here ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance.collection('districts').get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
-                  }
-                  if (snapshot.hasError) {
-                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: Text('Error loading districts')));
-                  }
-                  final docs = snapshot.data?.docs ?? [];
-                  final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
-                  return Row(
-                    children: [
-                      const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                      const SizedBox(width: 12),
-                      DropdownButton<String>(
-                        value: _registeredStationsDistrictFilter,
-                        hint: const Text("All Districts"),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text("All Districts"),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Search pill (left)
+                  SizedBox(
+                    width: 700,
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 170), // <-- Reduced left margin from 222 to 170
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          ...districts.map((district) => DropdownMenuItem<String>(
-                                value: district,
-                                child: Text(district),
-                              )),
                         ],
-                        onChanged: (value) {
-                          setState(() {
-                            _registeredStationsDistrictFilter = value;
-                            _registeredStationsCurrentPage = 0; // Reset to first page on filter change
-                          });
-                        },
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                    ],
-                  );
-                },
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: (value) {
+                                setState(() {
+                                  _searchQuery = value.toLowerCase();
+                                });
+                              },
+                              decoration: const InputDecoration(
+                                hintText: "Search",
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Filter pill (right)
+                  SizedBox(
+                    width: 200,
+                    child: FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance.collection('districts').get(),
+                      builder: (context, snapshot) {
+                        final docs = snapshot.data?.docs ?? [];
+                        final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
+                        return Container(
+                          margin: const EdgeInsets.only(right: 40), // <-- Added right margin to move filter left
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _registeredStationsDistrictFilter,
+                                    hint: const Text("Filter"),
+                                    isExpanded: true,
+                                    items: [
+                                      const DropdownMenuItem<String>(
+                                        value: null,
+                                        child: Text("Filter"),
+                                      ),
+                                      ...districts.map((district) => DropdownMenuItem<String>(
+                                            value: district,
+                                            child: Text(district),
+                                          )),
+                                    ],
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _registeredStationsDistrictFilter = value;
+                                        _registeredStationsCurrentPage = 0;
+                                      });
+                                    },
+                                    style: const TextStyle(fontSize: 15, color: Colors.black87),
+                                    icon: const SizedBox.shrink(), // Remove default icon
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 16),
+                                child: Icon(Icons.filter_alt, color: Colors.blue[800]),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             // Table-based Station List
@@ -857,78 +978,187 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         Expanded(
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                              ],
-                              rows: pageDocs.map((doc) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                final stationName = data['stationName'] ?? '';
-                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                                final district = data['districtName'] ?? '';
-                                final address = data['address'] ?? '';
-                                double? lat, lng;
-                                if (data['geopoint'] != null) {
-                                  final geo = data['geopoint'];
-                                  lat = geo.latitude?.toDouble();
-                                  lng = geo.longitude?.toDouble();
-                                } else if (data['location'] != null && data['location'] is Map) {
-                                  lat = (data['location']['latitude'] as num?)?.toDouble();
-                                  lng = (data['location']['longitude'] as num?)?.toDouble();
-                                } else {
-                                  lat = (data['latitude'] as num?)?.toDouble();
-                                  lng = (data['longitude'] as num?)?.toDouble();
-                                }
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                                    DataCell(Text(ownerName)),
-                                    DataCell(Text(district)),
-                                    DataCell(
-                                      SizedBox(
-                                        width: 220, // Set your desired max width here
-                                        child: Text(
-                                          address,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                            child: Container(
+                              width: 1200, // <-- Increase table container width for more space
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: DataTable(
+                                headingRowColor: MaterialStateProperty.all(const Color(0xFFD6E8FD)),
+                                dataRowColor: MaterialStateProperty.resolveWith<Color?>(
+                                  (Set<MaterialState> states) {
+                                    if (states.contains(MaterialState.selected)) {
+                                      return Colors.blueAccent.withOpacity(0.08);
+                                    }
+                                    return Colors.white;
+                                  },
+                                ),
+                                columnSpacing: 64, // <-- Increase column spacing for wider columns
+                                horizontalMargin: 32, // <-- Increase horizontal margin for more padding
+                                dividerThickness: 1.2,
+                                columns: const [
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Text(
+                                        'Name of Station',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1976D2),
+                                          fontSize: 15,
                                         ),
                                       ),
                                     ),
-                                    DataCell(Row(
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent),
-                                          tooltip: "View on Map",
-                                          onPressed: () {
-                                            if (lat != null && lng != null) {
-                                              setState(() {
-                                                _mapSelectedLocation = LatLng(lat as double, lng as double);
-                                              });
-                                              _mapController.move(LatLng(lat, lng), 16.0);
-                                            }
-                                          },
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Text(
+                                        'Owner',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1976D2),
+                                          fontSize: 15,
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.description, color: Colors.blueAccent),
-                                          tooltip: "View Compliance Report",
-                                          onPressed: () {
-                                            setState(() {
-                                              _showComplianceReportDetails = true;
-                                              _selectedComplianceStationData = data;
-                                              _selectedComplianceStationDocId = doc.id;
-                                              _complianceReportTitle = stationName;
-                                            });
-                                          },
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Text(
+                                        'District',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1976D2),
+                                          fontSize: 15,
                                         ),
-                                      ],
-                                    )),
-                                  ],
-                                );
-                              }).toList(),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Text(
+                                        'Address',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1976D2),
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8),
+                                      child: Text(
+                                        'Actions',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1976D2),
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                rows: pageDocs.map((doc) {
+                                  final data = doc.data() as Map<String, dynamic>;
+                                  final stationName = data['stationName'] ?? '';
+                                  final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                                  final district = data['districtName'] ?? '';
+                                  final address = data['address'] ?? '';
+                                  double? lat, lng;
+                                  if (data['geopoint'] != null) {
+                                    final geo = data['geopoint'];
+                                    lat = geo.latitude?.toDouble();
+                                    lng = geo.longitude?.toDouble();
+                                  } else if (data['location'] != null && data['location'] is Map) {
+                                    lat = (data['location']['latitude'] as num?)?.toDouble();
+                                    lng = (data['location']['longitude'] as num?)?.toDouble();
+                                  } else {
+                                    lat = (data['latitude'] as num?)?.toDouble();
+                                    lng = (data['longitude'] as num?)?.toDouble();
+                                  }
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12), // <-- More horizontal padding
+                                          child: Text(
+                                            stationName,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          child: Text(ownerName, style: const TextStyle(fontSize: 14)),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          child: Text(district, style: const TextStyle(fontSize: 14)),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          width: 320, // <-- Make address column wider
+                                          child: Text(
+                                            address,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Row(
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                              tooltip: "View on Map",
+                                              onPressed: () {
+                                                if (lat != null && lng != null) {
+                                                  setState(() {
+                                                    _mapSelectedLocation = LatLng(lat as double, lng as double);
+                                                  });
+                                                  _mapController.move(LatLng(lat, lng), 16.0);
+                                                }
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                              tooltip: "View Compliance Report",
+                                              onPressed: () {
+                                                setState(() {
+                                                  _showComplianceReportDetails = true;
+                                                  _selectedComplianceStationData = data;
+                                                  _selectedComplianceStationDocId = doc.id;
+                                                  _complianceReportTitle = stationName;
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
                         ),
@@ -975,568 +1205,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildDistrictManagementPage() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: const Color(0xFFE3F2FD),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "Districts",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                    onPressed: () {
-                      setState(() {
-                        _showSettingsPage = true;
-                        _showNotificationsPage = false;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications, color: Colors.blueAccent),
-                        onPressed: () {
-                          setState(() {
-                            _showNotificationsPage = true;
-                            _showSettingsPage = false;
-                          });
-                        },
-                      ),
-                      Positioned(
-                        right: 8,
-                        top: 2,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 5,
-                            minHeight: 2,
-                          ),
-                          child: const Text(
-                            '3',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Center(
-            child: Container(
-              width: 950,
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4FAFF),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "District Association Presidents",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.blueAccent,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  // Table format for districts
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance.collection('districts').snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return const Center(child: Text('Error loading districts'));
-                        }
-                        final docs = snapshot.data?.docs ?? [];
-                        if (docs.isEmpty) {
-                          return const Center(child: Text('No districts found.'));
-                        }
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('District Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                              DataColumn(label: Text('President', style: TextStyle(fontWeight: FontWeight.bold))),
-                              DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                            ],
-                            rows: docs.map((doc) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final districtName = data['districtName'] ?? 'Unknown';
-                              final customUID = data['customUID'];
-                              return DataRow(
-                                cells: [
-                                  DataCell(Text(districtName)),
-                                  DataCell(
-                                    FutureBuilder<DocumentSnapshot?>(
-                                      future: (customUID != null && customUID.isNotEmpty)
-                                          ? FirebaseFirestore.instance.collection('station_owners').doc(customUID).get()
-                                          : Future.value(null),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState == ConnectionState.waiting) {
-                                          return const SizedBox(
-                                            width: 80,
-                                            height: 16,
-                                            child: LinearProgressIndicator(minHeight: 2),
-                                          );
-                                        }
-                                        String ownerDisplay = "Not assigned";
-                                        if (customUID != null && customUID.isNotEmpty && snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-                                          final ownerData = snapshot.data!.data() as Map<String, dynamic>?;
-                                          if (ownerData != null) {
-                                            final firstName = ownerData['firstName'] ?? '';
-                                            final lastName = ownerData['lastName'] ?? '';
-                                            ownerDisplay = ('$firstName $lastName').trim();
-                                            if (ownerDisplay.isEmpty) ownerDisplay = "Not assigned";
-                                          }
-                                        }
-                                        return Text(
-                                          ownerDisplay,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: ownerDisplay == "Not assigned" ? Colors.grey : Colors.blue[900],
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  DataCell(
-                                    ElevatedButton.icon(
-                                      icon: const Icon(Icons.people, size: 18),
-                                      label: const Text("Owners", style: TextStyle(fontSize: 13)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent,
-                                        foregroundColor: Colors.white,
-                                        minimumSize: const Size(0, 36),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        textStyle: const TextStyle(fontSize: 13),
-                                      ),
-                                      onPressed: () async {
-                                        setState(() {
-                                        });
-                                        await showDialog(
-                                          context: context,
-                                          builder: (context) => StationOwnersDialog(districtName: districtName),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
-                          ));
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCompliancePage() {
-    bool showComplianceReport = false;
-    String complianceTitle = "";
-    bool isLoading = false;
-    Map<String, dynamic>? selectedStationData;
-    String complianceStatusFilter = 'approved'; // Add this line
-    String? selectedStationOwnerDocId; // Track docId for details
-
-    // --- Add state for district filter ---
-    String? selectedDistrictFilter;
-
-    // --- Pagination state ---
-    int complianceCurrentPage = 0;
-    const int complianceRowsPerPage = 6;
-
-    return StatefulBuilder(
-      builder: (context, setState) {
-        if (isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (showComplianceReport && selectedStationData != null && selectedStationOwnerDocId != null) {
-          return Column(
-            children: [
-              // Header Section
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: const Color(0xFFE3F2FD),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    // Move back button to the left of the station name
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
-                      onPressed: () {
-                        setState(() {
-                          showComplianceReport = false;
-                          selectedStationData = null;
-                          selectedStationOwnerDocId = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      complianceTitle,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // --- Remove View Files button and display files beside details ---
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Details (left)
-                      Expanded(
-                        flex: 1,
-                        child: _buildComplianceReportDetailsFromData(selectedStationData!),
-                      ),
-                      const SizedBox(width: 24),
-                      // Files (right)
-                      Expanded(
-                        flex: 1,
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ComplianceFilesViewer(
-                              stationOwnerDocId: selectedStationOwnerDocId!,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          children: [
-            // Header Section
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: const Color(0xFFE3F2FD),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Compliance",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                  ),
-                  Row(
-                    children: [
-                      // --- Replace DropdownButton with 2 filter buttons ---
-                      ToggleButtons(
-                        isSelected: [
-                          complianceStatusFilter == 'approved',
-                          complianceStatusFilter == 'district_approved',
-                        ],
-                        onPressed: (int idx) {
-                          setState(() {
-                            if (idx == 0) {
-                              complianceStatusFilter = 'approved';
-                            } else if (idx == 1) {
-                              complianceStatusFilter = 'district_approved';
-                            }
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        selectedColor: Colors.white,
-                        fillColor: Colors.blueAccent,
-                        color: Colors.blueAccent,
-                        constraints: const BoxConstraints(minWidth: 120, minHeight: 40),
-                        children: const [
-                          Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                        onPressed: () {
-                          // Handle settings
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // --- Add district filter dropdown here ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance.collection('districts').get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
-                  }
-                  if (snapshot.hasError) {
-                    return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: Text('Error loading districts')));
-                  }
-                  final docs = snapshot.data?.docs ?? [];
-                  final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
-                  return Row(
-                    children: [
-                      const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                      const SizedBox(width: 12),
-                      DropdownButton<String>(
-                        value: selectedDistrictFilter,
-                        hint: const Text("All Districts"),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: null,
-                            child: Text("All Districts"),
-                          ),
-                          ...districts.map((district) => DropdownMenuItem<String>(
-                                value: district,
-                                child: Text(district),
-                              )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedDistrictFilter = value;
-                          });
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            // --- Table-based Station List ---
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('station_owners')
-                      .where('status', isEqualTo: complianceStatusFilter)
-                      .get(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error loading stations: ${snapshot.error}'));
-                    }
-                    final docs = snapshot.data?.docs ?? [];
-                    // --- Filter by selected district ---
-                    final filteredDocs = selectedDistrictFilter == null || selectedDistrictFilter!.isEmpty
-                        ? docs
-                        : docs.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final district = (data['districtName'] ?? '').toString();
-                            return district == selectedDistrictFilter;
-                          }).toList();
-
-                    // --- Pagination logic ---
-                    final totalRows = filteredDocs.length;
-                    final totalPages = (totalRows / complianceRowsPerPage).ceil();
-                    final startIdx = complianceCurrentPage * complianceRowsPerPage;
-                    final endIdx = (startIdx + complianceRowsPerPage) > totalRows ? totalRows : (startIdx + complianceRowsPerPage);
-                    final pageDocs = filteredDocs.sublist(
-                      startIdx < totalRows ? startIdx : 0,
-                      endIdx < totalRows ? endIdx : totalRows,
-                    );
-
-                    if (filteredDocs.isEmpty) {
-                      return Center(
-                        child: Text(
-                          complianceStatusFilter == 'approved'
-                              ? 'No approved stations found.'
-                              : 'No pending approval stations found.',
-                        ),
-                      );
-                    }
-                    // --- Table format ---
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                              ],
-                              rows: pageDocs.map((doc) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                final stationName = data['stationName'] ?? '';
-                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                                final district = data['districtName'] ?? '';
-                                final address = data['address'] ?? '';
-                                final status = data['status'] ?? '';
-                                final stationOwnerDocId = doc.id;
-                                Color statusColor;
-                                switch ((status ?? '').toString().toLowerCase()) {
-                                  case 'approved':
-                                    statusColor = Colors.green;
-                                    break;
-                                  case 'district_approved':
-                                    statusColor = Colors.orange;
-                                    break;
-                                  default:
-                                    statusColor = Colors.grey;
-                                }
-                                return DataRow(
-                                  cells: [
-                                    DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                                    DataCell(Text(ownerName)),
-                                    DataCell(Text(district)),
-                                    DataCell(
-                                      SizedBox(
-                                        width: 220, // Set your desired max width here
-                                        child: Text(
-                                          address,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
-                                      decoration: BoxDecoration(
-                                        color: statusColor,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        (status ?? '').toString().toUpperCase(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    )),
-                                    DataCell(
-                                      ElevatedButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            isLoading = true;
-                                          });
-                                          Future.delayed(const Duration(milliseconds: 300), () {
-                                            setState(() {
-                                              isLoading = false;
-                                              showComplianceReport = true;
-                                              complianceTitle = stationName;
-                                              selectedStationData = data;
-                                              selectedStationOwnerDocId = stationOwnerDocId;
-                                            });
-                                          });
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: statusColor,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        child: const Text(
-                                          "View Details",
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                        // --- Pagination controls ---
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left),
-                                onPressed: complianceCurrentPage > 0
-                                    ? () => setState(() {
-                                        complianceCurrentPage--;
-                                      })
-                                    : null,
-                              ),
-                              Text(
-                                'Page ${totalPages == 0 ? 0 : (complianceCurrentPage + 1)} of $totalPages',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right),
-                                onPressed: (complianceCurrentPage < totalPages - 1)
-                                    ? () => setState(() {
-                                        complianceCurrentPage++;
-                                      })
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
+    return DistrictManagementPage(
+      setState: setState,
+      onHeaderAction: (showSettings, showNotifications) {
+        setState(() {
+          _showSettingsPage = showSettings;
+          _showNotificationsPage = showNotifications;
+        });
       },
     );
   }
+
+  // ...existing code...
 
   // New: Build compliance report details from Firestore data
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
@@ -1847,7 +1527,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   onPressed: () {
                                     showDialog(
                                       context: context,
-                                      builder: (context) => _ChangePasswordDialog(),
+                                      builder: (context) => ChangePasswordDialog(), // <-- Use new class
                                     );
                                   },
                                 ),
@@ -2244,1179 +1924,6 @@ class _ChartPlaceholder extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// --- Compliance Files Viewer Widget ---
-class ComplianceFilesViewer extends StatefulWidget {
-  final String stationOwnerDocId;
-  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId});
-
-  @override
-  State<ComplianceFilesViewer> createState() => _ComplianceFilesViewerState();
-}
-
-class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
-  List<FileObject> uploadedFiles = [];
-  bool isLoading = true;
-  // ignore: unused_field
-  final Set<int> _expandedIndexes = {};
-  Map<String, dynamic> complianceStatuses = {};
-  Map<String, String> statusEdits = {}; // Track dropdown edits
-
-  @override
-  void initState() {
-    super.initState();
-    fetchComplianceFiles(widget.stationOwnerDocId);
-    fetchComplianceStatuses(widget.stationOwnerDocId);
-  }
-
-  Future<void> fetchComplianceFiles(String docId) async {
-    try {
-      final response = await Supabase.instance.client.storage
-          .from('compliance_docs')
-          .list(path: 'uploads/$docId');
-      setState(() {
-        uploadedFiles = response;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> fetchComplianceStatuses(String docId) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(docId)
-          .get();
-      if (doc.exists) {
-        setState(() {
-          complianceStatuses = doc.data() ?? {};
-        });
-      }
-    } catch (e) {
-      // ignore error, just leave complianceStatuses empty
-    }
-  }
-
-  Future<void> updateStatus(String statusKey, String newStatus) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(widget.stationOwnerDocId)
-          .set({statusKey: newStatus}, SetOptions(merge: true));
-      setState(() {
-        complianceStatuses[statusKey] = newStatus;
-        statusEdits.remove(statusKey);
-      });
-
-      // After updating, check if all statuses are "partially"
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(widget.stationOwnerDocId)
-          .get();
-      final data = doc.data() ?? {};
-      // Get all status fields (ending with _status)
-      final statusValues = data.entries
-          .where((e) => e.key.endsWith('_status'))
-          .map((e) => (e.value ?? '').toString().toLowerCase())
-          .toList();
-      if (statusValues.isNotEmpty &&
-          statusValues.every((s) => s == 'passed')) {
-        // Update station_owners status to "district_approved"
-        await FirebaseFirestore.instance
-            .collection('station_owners')
-            .doc(widget.stationOwnerDocId)
-            .update({'status': 'approved'});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All statuses are "partially". Station marked as approved.')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status updated')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update status')),
-      );
-    }
-  }
-
-  /// Returns a tuple: (categoryKey, displayLabel)
-  (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
-    final prefix = '${docId}_';
-    if (fileName.startsWith(prefix)) {
-      final rest = fileName.substring(prefix.length);
-      final categoryKey = rest.split('.').first.toLowerCase();
-      final displayLabel = categoryKey
-          .replaceAll('_', ' ')
-          .split(' ')
-          .map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
-          .join(' ');
-      return (categoryKey, displayLabel);
-    }
-    return ('unknown', 'Unknown Category');
-  }
-
-  void _showFileDialog(FileObject file, String fileUrl, bool isImage, bool isPdf, bool isWord) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.all(24),
-          child: Container(
-            width: 600,
-            height: 600,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        file.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Center(
-                    child: isImage
-                        ? Image.network(
-                            fileUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: Text('Failed to load image'),
-                                ),
-                          )
-                        : isPdf
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.picture_as_pdf, color: Colors.red, size: 64),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text('Open PDF'),
-                                    onPressed: () async {
-                                      if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                        await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Could not open file')),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ],
-                              )
-                            : isWord
-                                ? Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.description, color: Colors.blue, size: 64),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton.icon(
-                                        icon: const Icon(Icons.open_in_new),
-                                        label: const Text('Open Document'),
-                                        onPressed: () async {
-                                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
-                                          } else {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Could not open file')),
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  )
-                                : const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
-                  ),
-                ),
-              ],
-            ),
-          ));
-        },
-      );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : uploadedFiles.isEmpty
-              ? const Center(child: Text('No uploaded compliance files found.'))
-              : ListView.builder(
-                  itemCount: uploadedFiles.length,
-                  itemBuilder: (context, index) {
-                    final file = uploadedFiles[index];
-                    final fileUrl = Supabase.instance.client.storage
-                        .from('compliance_docs')
-                        .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
-                    final extension = file.name.split('.').last.toLowerCase();
-                    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
-                    final isPdf = extension == 'pdf';
-                    final isWord = extension == 'doc' || extension == 'docx';
-                    final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
-
-                    // Compose status key (e.g. business_permit_status)
-                    final statusKey = '${categoryKey}_status';
-                    final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Unknown').toString();
-
-                    // Status color logic
-                    Color statusColor;
-                    switch (status.toLowerCase()) {
-                      case 'pending':
-                        statusColor = Colors.orange;
-                        break;
-                      case 'passed':
-                        statusColor = Colors.green;
-                        break;
-                      case 'partially':
-                        statusColor = Colors.teal.shade300;
-                        break;
-                      case 'failed':
-                        statusColor = Colors.red;
-                        break;
-                      default:
-                        statusColor = Colors.grey;
-                    }
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  categoryLabel,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal:  10),
-                                  decoration: BoxDecoration(
-                                    color: statusColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    status,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                DropdownButton<String>(
-                                                                  value: status.toLowerCase() == 'unknown' ? null : status,
-                                                                  hint: const Text('Set Status'),
-                                                                  items: [
-                                                                    DropdownMenuItem(
-                                                                      value: 'pending',
-                                                                      child: Text('Pending'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'passed',
-                                                                      child: Text('Passed'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'partially',
-                                                                      child: Text('Partially'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'failed',
-                                                                      child: Text('Failed'),
-                                                                    ),
-                                                                  ],
-                                                                  onChanged: (value) {
-                                                                                                                                       setState(() {
-                                                                      if (value != null) {
-                                                                        statusEdits[statusKey] = value;
-                                                                      }
-                                                                    });
-                                                                  },
-                                                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                                                                  dropdownColor: Colors.white,
-                                                                  underline: Container(
-                                                                    height: 1,
-                                                                    color: Colors.blueAccent,
-                                                                  ),
-                                                                ),
-                                if (statusEdits.containsKey(statusKey))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        final newStatus = statusEdits[statusKey]!;
-                                        updateStatus(statusKey, newStatus);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      child: const Text('Update', style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              file.name,
-                              style: const TextStyle(fontSize: 13, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: const BorderSide(color: Colors.blue),
-                                ),
-                              ),
-                              child: const Text('View File', style: TextStyle(color: Colors.blue)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-    );
-  }
-}
-
-// Checklist widget with file view buttons
-class ComplianceChecklistWithFiles extends StatefulWidget {
-  final String stationOwnerDocId;
-  final Map<String, dynamic> data;
-  const ComplianceChecklistWithFiles({super.key, required this.stationOwnerDocId, required this.data});
-
-  @override
-  State<ComplianceChecklistWithFiles> createState() => _ComplianceChecklistWithFilesState();
-}
-
-class _ComplianceChecklistWithFilesState extends State<ComplianceChecklistWithFiles> {
-  List<FileObject> uploadedFiles = [];
-  bool isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchComplianceFiles(widget.stationOwnerDocId);
-  }
-
-  Future<void> fetchComplianceFiles(String docId) async {
-    try {
-      final response = await Supabase.instance.client.storage
-          .from('compliance_docs')
-          .list(path: 'uploads/$docId');
-      setState(() {
-        uploadedFiles = response;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  // Helper to find file for a given category key
-  FileObject? _findFileForCategory(String categoryKey) {
-    for (final file in uploadedFiles) {
-      final prefix = '${widget.stationOwnerDocId}_';
-      if (file.name.startsWith(prefix)) {
-        final rest = file.name.substring(prefix.length);
-        final fileCategory = rest.split('.').first.toLowerCase();
-        if (fileCategory == categoryKey) return file;
-      }
-    }
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // List of checklist items: label, statusKey, fileKey
-    final checklist = [
-      ("Bacteriological Test Result", "bacteriologicalTestStatus", "bacteriological_test_result"),
-      ("Physical-Chemical Test Result", "physicalChemicalTestStatus", "physical_chemical_test_result"),
-      ("Business Permit", "businessPermitStatus", "business_permit"),
-      ("DTI", "dtiStatus", "dti"),
-      ("Sanitary Permit", "sanitaryPermitStatus", "sanitary_permit"),
-      ("Mayor's Permit", "mayorsPermitStatus", "mayors_permit"),
-      ("Fire Safety Certificate", "fireSafetyStatus", "fire_safety_certificate"),
-      ("Other Documents", "otherDocumentsStatus", "other_documents"),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Checklist:",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-        ),
-        const SizedBox(height: 8),
-        if (isLoading)
-          const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: LinearProgressIndicator(),
-          ),
-        ...checklist.map((item) {
-          final label = item.$1;
-          final status = widget.data[item.$2] ?? 'Approved';
-          final categoryKey = item.$3;
-          final file = _findFileForCategory(categoryKey);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Text(label, style: const TextStyle(fontSize: 14)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: status == 'Approved'
-                              ? Colors.green
-                              : (status == 'Pending' ? Colors.orange : Colors.grey),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          status,
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                               if (file != null)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.remove_red_eye, size: 16),
-                    label: const Text("View File", style: TextStyle(fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.blue,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Colors.blue),
-                      ),
-                    ),
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (context) => SingleComplianceFileViewer(
-                          stationOwnerDocId: widget.stationOwnerDocId,
-                          file: file,
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-// Viewer for a single compliance file
-class SingleComplianceFileViewer extends StatelessWidget {
-  final String stationOwnerDocId;
-  final FileObject file;
-  const SingleComplianceFileViewer({super.key, required this.stationOwnerDocId, required this.file});
-
-  @override
-  Widget build(BuildContext context) {
-    final fileUrl = Supabase.instance.client.storage
-        .from('compliance_docs')
-        .getPublicUrl('uploads/$stationOwnerDocId/${file.name}');
-    final extension = file.name.split('.').last.toLowerCase();
-    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
-    final isPdf = extension == 'pdf';
-    final isWord = extension == 'doc' || extension == 'docx';
-
-    return SafeArea(
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return Container(
-            color: Colors.white,
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(24),
-              children: [
-                Text(
-                  file.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue),
-                ),
-                const SizedBox(height: 16),
-                if (isImage)
-                  Image.network(
-                    fileUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('Failed to load image'),
-                        ),
-                  )
-                else if (isPdf || isWord)
-                  Row(
-                    children: [
-                      Icon(
-                        isPdf ? Icons.picture_as_pdf : Icons.description,
-                        color: isPdf ? Colors.red : Colors.blue,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isPdf ? 'PDF Document' : 'Word Document',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.open_in_new, color: Colors.blue),
-                        onPressed: () async {
-                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Could not open file')),
-                            );
-                          }
-                        },
-                      ),
-                    ],
-                  )
-                else
-                  const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-class StationOwnersDialog extends StatefulWidget {
-  final String districtName;
-  const StationOwnersDialog({super.key, required this.districtName});
-
-  @override
-  State<StationOwnersDialog> createState() => _StationOwnersDialogState();
-}
-
-class _StationOwnersDialogState extends State<StationOwnersDialog> {
-  Map<String, dynamic>? _currentPresident;
-  String? _currentPresidentDocId;
-  String _searchQuery = "";
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentPresident();
-  }
-
-  Future<void> _loadCurrentPresident() async {
-    // Get the district doc with customUID
-    final districtQuery = await FirebaseFirestore.instance
-        .collection('districts')
-        .where('districtName', isEqualTo: widget.districtName)
-        .limit(1)
-        .get();
-    if (districtQuery.docs.isEmpty) {
-      setState(() {
-        _currentPresident = null;
-        _currentPresidentDocId = null;
-      });
-      return;
-    }
-    final districtDoc = districtQuery.docs.first;
-    final customUID = districtDoc['customUID'];
-    if (customUID == null || customUID == '') {
-      setState(() {
-        _currentPresident = null;
-        _currentPresidentDocId = null;
-      });
-      return;
-    }
-    // Get the station owner doc
-    final ownerDoc = await FirebaseFirestore.instance
-        .collection('station_owners')
-        .doc(customUID)
-        .get();
-    if (!ownerDoc.exists) {
-      setState(() {
-        _currentPresident = null;
-        _currentPresidentDocId = null;
-      });
-      return;
-    }
-    final data = ownerDoc.data();
-    if (data == null) {
-      setState(() {
-        _currentPresident = null;
-        _currentPresidentDocId = null;
-      });
-      return;
-    }
-    setState(() {
-      _currentPresident = {
-        'name': '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim(),
-        'email': data['email'] ?? '',
-        'stationName': data['stationName'] ?? '',
-      };
-      _currentPresidentDocId = ownerDoc.id;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      backgroundColor: const Color(0xFFF4FAFF),
-      child: SizedBox(
-        width: 420,
-        height: 520,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header with icon and title
-            Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF4B7ACF),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              child: Row(
-                children: [
-                  const Icon(Icons.people, color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Station Owners in ${widget.districtName}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Show current president
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFB6D6F6)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.verified_user, color: Colors.blueAccent, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _currentPresident == null
-                        ? const Text(
-                            "Current President: Not assigned",
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Current President: ${(_currentPresident!['name'] as String).isNotEmpty ? _currentPresident!['name'] : 'N/a'}",
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                              ),
-                              if ((_currentPresident!['stationName'] as String).isNotEmpty)
-                                Text(
-                                  _currentPresident!['stationName'],
-                                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                                ),
-                              if ((_currentPresident!['email'] as String).isNotEmpty)
-                                Text(
-                                  (_currentPresident!['email'] as String).isNotEmpty
-                                      ? _currentPresident!['email']
-                                      : 'N/a',
-                                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                ),
-                              // Add Remove President button
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6.0),
-                                child: ElevatedButton.icon(
-                                  icon: const Icon(Icons.remove_circle, size: 18, color: Colors.white),
-                                  label: const Text("Remove President", style: TextStyle(color: Colors.white)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent,
-                                    minimumSize: const Size(0, 32),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    textStyle: const TextStyle(fontSize: 13),
-                                  ),
-                                  onPressed: () async {
-                                    final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text('Remove District President'),
-                                        content: const Text('Are you sure you want to remove the current District Association President?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.of(context).pop(false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () => Navigator.of(context).pop(true),
-                                            child: const Text('Remove'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirm == true) {
-                                      // Remove president in district
-                                      final districtQuery = await FirebaseFirestore.instance
-                                          .collection('districts')
-                                          .where('districtName', isEqualTo: widget.districtName)
-                                          .limit(1)
-                                          .get();
-                                      if (districtQuery.docs.isNotEmpty) {
-                                        final districtDoc = districtQuery.docs.first;
-                                        await districtDoc.reference.update({'customUID': ''});
-                                      }
-                                      // Remove president flag and role in users
-                                      if (_currentPresidentDocId != null) {
-                                        final userQuery = await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .where('customUID', isEqualTo: _currentPresidentDocId)
-                                            .limit(1)
-                                            .get();
-                                        if (userQuery.docs.isNotEmpty) {
-                                          final userDoc = userQuery.docs.first;
-                                          final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-                                          final isFederatedPresident = userData['federated_president'] == true;
-                                          await userDoc.reference.update({
-                                            'district_president': false,
-                                            if (!isFederatedPresident) 'role': 'owner',
-                                            // If federated_president is true, do not change role
-                                          });
-                                        }
-                                      }
-                                      setState(() {
-                                        _currentPresident = null;
-                                        _currentPresidentDocId = null;
-                                      });
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('District president removed.'),
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                ],
-              ),
-            ),
-            // Search bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: "Search station owner...",
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    _searchQuery = val.trim().toLowerCase();
-                  });
-                },
-              ),
-            ),
-            // Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('station_owners')
-                      .where('districtName', isGreaterThanOrEqualTo: '') // fetch all, filter in Dart
-                      .get(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error loading station owners: ${snapshot.error}'));
-                    }
-                    final docs = snapshot.data?.docs ?? [];
-                    // Exclude current president and filter by search
-                    final filteredDocs = docs.where((doc) {
-                      if (_currentPresidentDocId != null && doc.id == _currentPresidentDocId) {
-                        return false;
-                      }
-                      final data = doc.data() as Map<String, dynamic>;
-                      final ownerDistrict = (data['districtName'] ?? '').toString().trim().toLowerCase();
-                      final dialogDistrict = widget.districtName.trim().toLowerCase();
-                      if (ownerDistrict != dialogDistrict) return false;
-                      if (_searchQuery.isEmpty) return true;
-                      final name = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
-                      final stationName = (data['stationName'] ?? '').toString().toLowerCase();
-                      final email = (data['email'] ?? '').toString().toLowerCase();
-                      return name.contains(_searchQuery) ||
-                          stationName.contains(_searchQuery) ||
-                          email.contains(_searchQuery);
-                    }).toList();
-                    if (filteredDocs.isEmpty) {
-                      return const Center(child: Text('No station owners found.', style: TextStyle(color: Colors.black54)));
-                    }
-                    return Scrollbar(
-                      thumbVisibility: true,
-                      child: ListView.separated(
-                        itemCount: filteredDocs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, idx) {
-                          final doc = filteredDocs[idx];
-                          final data = doc.data() as Map<String, dynamic>;
-                          final stationName = data['stationName'] ?? '';
-                          final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                          final email = data['email'] ?? '';
-                          return Card(
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            color: Colors.white,
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFB6D6F6),
-                                child: Text(
-                                  ownerName.isNotEmpty ? ownerName[0].toUpperCase() : '?',
-                                  style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              title: Text(
-                                stationName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(ownerName, style: const TextStyle(fontSize: 13)),
-                                  Text(email, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-                                ],
-                              ),
-                              onTap: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Change District President'),
-                                    content: Text(
-                                      'Are you sure you want to set "$ownerName" as the District Association President for "${widget.districtName}"?',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.of(context).pop(false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed: () => Navigator.of(context).pop(true),
-                                        child: const Text('Confirm'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  // Find the district docId
-                                  final districtQuery = await FirebaseFirestore.instance
-                                      .collection('districts')
-                                      .where('districtName', isEqualTo: widget.districtName)
-                                      .limit(1)
-                                      .get();
-                                  if (districtQuery.docs.isNotEmpty) {
-                                    final districtDoc = districtQuery.docs.first;
-                                    final prevCustomUID = districtDoc['customUID'];
-                                    // Demote previous president if exists and is different from new one
-                                    if (prevCustomUID != null && prevCustomUID != '' && prevCustomUID != doc.id) {
-                                      final prevUserQuery = await FirebaseFirestore.instance
-                                          .collection('users')
-                                          .where('customUID', isEqualTo: prevCustomUID)
-                                          .limit(1)
-                                          .get();
-                                      if (prevUserQuery.docs.isNotEmpty) {
-                                        final prevUserDoc = prevUserQuery.docs.first;
-                                        await prevUserDoc.reference.update({
-                                          'district_president': false,
-                                          'role': 'owner',
-                                        });
-                                      }
-                                    }
-                                    await districtDoc.reference.update({
-                                      'customUID': doc.id,
-                                    });
-
-                                    // Set district president in users collection
-                                    final userQuery = await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .where('customUID', isEqualTo: doc.id)
-                                        .limit(1)
-                                        .get();
-                                    if (userQuery.docs.isNotEmpty) {
-                                      final userDoc = userQuery.docs.first;
-                                      await userDoc.reference.update({
-                                        'districtName': widget.districtName,
-                                        'district_president': true,
-                                        'role': 'admin', // <-- set role to admin when assigned
-                                      });
-                                    }
-
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('District president updated successfully.'),
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-                                    Navigator.of(context).pop(); // Close dialog after update
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('District not found.'),
-                                        duration: const Duration(seconds: 2),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            // Actions
-            Padding(
-              padding: const EdgeInsets.only(right: 16, bottom: 10, top: 2),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.blueAccent,
-                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  child: const Text('Close'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// --- Change Password Dialog Widget ---
-class _ChangePasswordDialog extends StatefulWidget {
-  @override
-  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
-}
-
-class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final TextEditingController _currentPassword = TextEditingController();
-  final TextEditingController _newPassword = TextEditingController();
-  final TextEditingController _confirmPassword = TextEditingController();
-  bool _isLoading = false;
-  String? _error;
-
-  Future<void> _changePassword() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() {
-          _error = "User not logged in.";
-          _isLoading = false;
-        });
-        return;
-      }
-      // Re-authenticate
-      final cred = EmailAuthProvider.credential(
-        email: user.email!,
-        password: _currentPassword.text.trim(),
-      );
-      await user.reauthenticateWithCredential(cred);
-      // Update password
-      await user.updatePassword(_newPassword.text.trim());
-      setState(() {
-        _isLoading = false;
-      });
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password changed successfully.')),
-      );
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = e.message ?? "Failed to change password.";
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = "Failed to change password.";
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          width: 400,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Change Password",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blueAccent),
-                ),
-                const SizedBox(height: 18),
-                TextFormField(
-                  controller: _currentPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Current Password",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (val) => val == null || val.isEmpty ? "Enter current password" : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _newPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "New Password",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.isEmpty) return "Enter new password";
-                    if (val.length < 6) return "Password must be at least 6 characters";
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _confirmPassword,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Confirm New Password",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.isEmpty) return "Confirm new password";
-                    if (val != _newPassword.text) return "Passwords do not match";
-                    return null;
-                  },
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 10),
-                  Text(_error!, style: const TextStyle(color: Colors.red)),
-                ],
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                      child: const Text("Cancel"),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              if (_formKey.currentState?.validate() ?? false) {
-                                _changePassword();
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text("Change Password", style: TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

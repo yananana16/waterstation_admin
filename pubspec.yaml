@@ -73,8 +73,10 @@ flutter:
     - .env
     - assets/h2ogo.png
     - assets/logo.png
+    - assets/logohori.png
     - assets/welcome_admin.png
     - assets/location_illustration.png
+    - assets/district_map.png
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
