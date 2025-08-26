@@ -828,9 +828,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   // Search pill (left)
                   SizedBox(
-                    width: 700,
+                    width: 800,
                     child: Container(
-                      margin: const EdgeInsets.only(left: 170), // <-- Reduced left margin from 222 to 170
+                      margin: const EdgeInsets.only(left: 220), // <-- Reduced left margin from 222 to 170
                       height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -867,14 +867,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   // Filter pill (right)
                   SizedBox(
-                    width: 200,
+                    width:700,
                     child: FutureBuilder<QuerySnapshot>(
                       future: FirebaseFirestore.instance.collection('districts').get(),
                       builder: (context, snapshot) {
                         final docs = snapshot.data?.docs ?? [];
                         final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
                         return Container(
-                          margin: const EdgeInsets.only(right: 40), // <-- Added right margin to move filter left
+                          margin: const EdgeInsets.only(right: 500), // <-- Added right margin to move filter left
                           height: 40,
                           decoration: BoxDecoration(
                             color: Colors.white,
