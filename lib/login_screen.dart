@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import/ Import RoleSelectionScreen
-import 'admin_dashboard.dart'; // Import Admin Dashboard
-import 'district_admin_dashboard.dart'; // Import District Admin Dashboard
-import 'lgu_dashboard.dart'; // Add this import
+import 'federated/admin_dashboard.dart'; // Import Admin Dashboard
+import 'district/district_admin_dashboard.dart'; // Import District Admin Dashboard
+import 'LGU/lgu_dashboard.dart'; // Add this import
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

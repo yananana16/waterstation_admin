@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'admin_dashboard.dart';
-import 'compliance_files_viewer.dart';
+import 'district_compliance_files_viewer.dart';
 
 class CompliancePage extends StatefulWidget {
-  const CompliancePage({Key? key}) : super(key: key);
+  final String userDistrict;
+  const CompliancePage({required this.userDistrict, Key? key}) : super(key: key);
 
   @override
   State<CompliancePage> createState() => _CompliancePageState();
@@ -17,7 +17,7 @@ class _CompliancePageState extends State<CompliancePage> {
   Map<String, dynamic>? selectedStationData;
   String complianceStatusFilter = 'approved';
   String? selectedStationOwnerDocId;
-  String? selectedDistrictFilter;
+
   int complianceCurrentPage = 0;
   static const int complianceRowsPerPage = 6;
 
@@ -26,9 +26,11 @@ class _CompliancePageState extends State<CompliancePage> {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
     if (showComplianceReport && selectedStationData != null && selectedStationOwnerDocId != null) {
       return Column(
         children: [
+          // Header Section
           Container(
             padding: const EdgeInsets.all(16),
             color: const Color(0xFFE3F2FD),
@@ -95,48 +97,25 @@ class _CompliancePageState extends State<CompliancePage> {
         ],
       );
     }
+
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: FutureBuilder<QuerySnapshot>(
-            future: FirebaseFirestore.instance.collection('districts').get(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
-              }
-              if (snapshot.hasError) {
-                return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: Text('Error loading districts')));
-              }
-              final docs = snapshot.data?.docs ?? [];
-              final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
-              return Row(
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: const Color(0xFFE3F2FD),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Compliance",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+              ),
+              Row(
                 children: [
-                  const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-
-                  DropdownButton<String>(
-                    value: selectedDistrictFilter,
-                    hint: const Text("All Districts"),
-                    items: [
-                      const DropdownMenuItem<String>(
-                        value: null,
-                        child: Text("All Districts"),
-                      ),
-                      ...districts.map((district) => DropdownMenuItem<String>(
-                            value: district,
-                            child: Text(district),
-                          )),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        selectedDistrictFilter = value;
-                      });
-                    },
-                  ),
-                    const SizedBox(width: 885),
                   ToggleButtons(
                     isSelected: [
                       complianceStatusFilter == 'approved',
+                      complianceStatusFilter == 'pending_approval',
                       complianceStatusFilter == 'district_approved',
                     ],
                     onPressed: (int idx) {
@@ -144,8 +123,11 @@ class _CompliancePageState extends State<CompliancePage> {
                         if (idx == 0) {
                           complianceStatusFilter = 'approved';
                         } else if (idx == 1) {
+                          complianceStatusFilter = 'pending_approval';
+                        } else if (idx == 2) {
                           complianceStatusFilter = 'district_approved';
                         }
+                        complianceCurrentPage = 0;
                       });
                     },
                     borderRadius: BorderRadius.circular(8),
@@ -156,14 +138,20 @@ class _CompliancePageState extends State<CompliancePage> {
                     children: const [
                       Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
                       Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('District Approved', style: TextStyle(fontWeight: FontWeight.bold)),
                     ],
                   ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: const Icon(Icons.settings, color: Colors.blueAccent),
+                    onPressed: () {},
+                  ),
                 ],
-              );
-            },
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -177,16 +165,16 @@ class _CompliancePageState extends State<CompliancePage> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error loading stations: {snapshot.error}'));
+                  return Center(child: Text('Error loading stations: ${snapshot.error}'));
                 }
                 final docs = snapshot.data?.docs ?? [];
-                final filteredDocs = selectedDistrictFilter == null || selectedDistrictFilter!.isEmpty
-                    ? docs
-                    : docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final district = (data['districtName'] ?? '').toString();
-                        return district == selectedDistrictFilter;
-                      }).toList();
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final districtName = (data['districtName'] ?? '').toString().toLowerCase();
+                  final userDistrict = widget.userDistrict.toLowerCase();
+                  return districtName == userDistrict;
+                }).toList();
+
                 final totalRows = filteredDocs.length;
                 final totalPages = (totalRows / complianceRowsPerPage).ceil();
                 final startIdx = complianceCurrentPage * complianceRowsPerPage;
@@ -195,6 +183,7 @@ class _CompliancePageState extends State<CompliancePage> {
                   startIdx < totalRows ? startIdx : 0,
                   endIdx < totalRows ? endIdx : totalRows,
                 );
+
                 if (filteredDocs.isEmpty) {
                   return Center(
                     child: Text(
@@ -234,6 +223,9 @@ class _CompliancePageState extends State<CompliancePage> {
                               case 'district_approved':
                                 statusColor = Colors.orange;
                                 break;
+                              case 'pending_approval':
+                                statusColor = Colors.teal;
+                                break;
                               default:
                                 statusColor = Colors.grey;
                             }
@@ -244,7 +236,7 @@ class _CompliancePageState extends State<CompliancePage> {
                                 DataCell(Text(district)),
                                 DataCell(
                                   SizedBox(
-                                    width: 220,
+                                    width: 180,
                                     child: Text(
                                       address,
                                       maxLines: 1,
@@ -371,7 +363,132 @@ class _CompliancePageState extends State<CompliancePage> {
                 children: [
                   Expanded(
                     child: Column(
-                      children: [],
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['stationName'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.person, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Owner: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}",
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Address: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                data['address'] ?? '',
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.phone, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Contact: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              data['phone'] ?? '',
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.email, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Email: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Expanded(
+                              child: Text(
+                                data['email'] ?? '',
+                                style: const TextStyle(color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Date of Compliance: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              data['dateOfCompliance'] ?? '',
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.verified, color: Colors.blueAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Status: ",
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: (data['status'] == 'approved')
+                                    ? Colors.green
+                                    : (data['status'] == 'pending_approval')
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                (data['status'] ?? '').toString().toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],

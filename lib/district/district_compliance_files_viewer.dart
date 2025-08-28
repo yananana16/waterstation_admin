@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
@@ -14,8 +15,6 @@ class ComplianceFilesViewer extends StatefulWidget {
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   List<FileObject> uploadedFiles = [];
   bool isLoading = true;
-  // ignore: unused_field
-  final Set<int> _expandedIndexes = {};
   Map<String, dynamic> complianceStatuses = {};
   Map<String, String> statusEdits = {}; // Track dropdown edits
 
@@ -81,14 +80,14 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
       if (statusValues.isNotEmpty &&
-          statusValues.every((s) => s == 'passed')) {
+          statusValues.every((s) => s == 'partially')) {
         // Update station_owners status to "district_approved"
         await FirebaseFirestore.instance
             .collection('station_owners')
             .doc(widget.stationOwnerDocId)
-            .update({'status': 'approved'});
+            .update({'status': 'district_approved'});
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All statuses are "partially". Station marked as approved.')),
+          const SnackBar(content: Text('All statuses are "partially". Station marked as district_approved.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -278,7 +277,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                 ),
                                 const SizedBox(width: 10),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal:  10),
+                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
                                   decoration: BoxDecoration(
                                     color: statusColor,
                                     borderRadius: BorderRadius.circular(8),
@@ -290,40 +289,38 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                 ),
                                 const SizedBox(width: 12),
                                 DropdownButton<String>(
-                                                                  value: status.toLowerCase() == 'unknown' ? null : status,
-                                                                  hint: const Text('Set Status'),
-                                                                  items: [
-                                                                    DropdownMenuItem(
-                                                                      value: 'pending',
-                                                                      child: Text('Pending'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'passed',
-                                                                      child: Text('Passed'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'partially',
-                                                                      child: Text('Partially'),
-                                                                    ),
-                                                                    DropdownMenuItem(
-                                                                      value: 'failed',
-                                                                      child: Text('Failed'),
-                                                                    ),
-                                                                  ],
-                                                                  onChanged: (value) {
-                                                                                                                                       setState(() {
-                                                                      if (value != null) {
-                                                                        statusEdits[statusKey] = value;
-                                                                      }
-                                                                    });
-                                                                  },
-                                                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                                                                  dropdownColor: Colors.white,
-                                                                  underline: Container(
-                                                                    height: 1,
-                                                                    color: Colors.blueAccent,
-                                                                  ),
-                                                                ),
+                                  value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
+                                      ? status.toLowerCase()
+                                      : null,
+                                  hint: const Text('Set Status'),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'pending',
+                                      child: Text('Pending'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'partially',
+                                      child: Text('Partially'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'failed',
+                                      child: Text('Failed'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value != null) {
+                                        statusEdits[statusKey] = value;
+                                      }
+                                    });
+                                  },
+                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+                                  dropdownColor: Colors.white,
+                                  underline: Container(
+                                    height: 1,
+                                    color: Colors.blueAccent,
+                                  ),
+                                ),
                                 if (statusEdits.containsKey(statusKey))
                                   Padding(
                                     padding: const EdgeInsets.only(left: 8.0),

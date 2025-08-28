@@ -4,8 +4,8 @@ import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'auth_service.dart';
-import 'login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
+import '../auth_service.dart';
+import '../login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_page.dart';
@@ -95,52 +95,77 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final shouldLogout = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        titlePadding: const EdgeInsets.only(top: 32, left: 24, right: 24),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        title: const Text(
-          "Logout Confirmation",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        backgroundColor: Colors.white,
+        child: SizedBox(
+          width: 340, // Make dialog width shorter
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: Colors.blueAccent.withOpacity(0.1),
+                  child: const Icon(Icons.logout, color: Colors.blueAccent, size: 38),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  "Logout Confirmation",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                    color: Colors.blueAccent,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Are you sure you want to logout?",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                          elevation: 0,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text("Logout"),
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    SizedBox(
+                      width: 120,
+                      height: 44,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blueAccent,
+                          side: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-        content: const Padding(
-          padding: EdgeInsets.only(top: 8, bottom: 8),
-          child: Text(
-            "Are you sure you want to do logout?",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: Colors.black87),
-          ),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(120, 40),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              elevation: 0,
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Confirm"),
-          ),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.blueAccent,
-              minimumSize: const Size(120, 40),
-              side: const BorderSide(color: Colors.blueAccent, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
-          ),
-        ],
       ),
     );
     if (shouldLogout == true) {
@@ -650,7 +675,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return StatefulBuilder(
       builder: (context, setState) {
         // --- Remove local state, use class fields instead ---
-        const int rowsPerPage = 6;
+        const int rowsPerPage = 8;
 
         // Show compliance report details if requested
         if (_showComplianceReportDetails &&
@@ -658,63 +683,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _selectedComplianceStationDocId != null) {
           return Column(
             children: [
-              // Header Section
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: const Color(0xFFE3F2FD),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
-                      onPressed: () {
-                        setState(() {
-                          _showComplianceReportDetails = false;
-                          _selectedComplianceStationData = null;
-                          _selectedComplianceStationDocId = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _complianceReportTitle,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // --- Remove View Files button and display files beside details ---
+              const SizedBox(height: 20),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Details (left)
+                      _buildComplianceReportDetailsFromData(_selectedComplianceStationData!),
+                      const SizedBox(height: 24),
                       Expanded(
-                        flex: 1,
-                        child: _buildComplianceReportDetailsFromData(_selectedComplianceStationData!),
-                      ),
-                      const SizedBox(width: 24),
-                      // Files (right)
-                      Expanded(
-                        flex: 1,
                         child: Container(
-                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
+                          margin: const EdgeInsets.only(top: 8, bottom: 8),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
+                                color: Colors.black.withOpacity(0.10),
+                                blurRadius: 18,
+                                offset: const Offset(0, 6),
                               ),
                             ],
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: const EdgeInsets.all(12.0),
                             child: ComplianceFilesViewer(
                               stationOwnerDocId: _selectedComplianceStationDocId!,
                             ),
@@ -993,10 +986,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 ],
                               ),
                               child: DataTable(
-                                headingRowColor: MaterialStateProperty.all(const Color(0xFFD6E8FD)),
-                                dataRowColor: MaterialStateProperty.resolveWith<Color?>(
-                                  (Set<MaterialState> states) {
-                                    if (states.contains(MaterialState.selected)) {
+                                headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
+                                dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                                  (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.selected)) {
                                       return Colors.blueAccent.withOpacity(0.08);
                                     }
                                     return Colors.white;
@@ -1216,178 +1209,112 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ...existing code...
-
-  // New: Build compliance report details from Firestore data
+  // New: Build compliance report details from Firestore data (copied from compliance_page.dart)
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(Icons.assignment_turned_in, color: Colors.blueAccent, size: 32),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Compliance Report Details",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1976D2),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.blueAccent, size: 32),
+                onPressed: () {
+                  setState(() {
+                    _showComplianceReportDetails = false;
+                    _selectedComplianceStationData = null;
+                    _selectedComplianceStationDocId = null;
+                  });
+                },
               ),
-              const SizedBox(height: 24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left Section
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          data['stationName'] ?? '',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            const Icon(Icons.person, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Owner: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Expanded(
-                              child: Text(
-                                "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}",
-                                style: const TextStyle(color: Colors.black87),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Address: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Expanded(
-                              child: Text(
-                                data['address'] ?? '',
-                                style: const TextStyle(color: Colors.black87),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.phone, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Contact: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              data['phone'] ?? '',
-                              style: const TextStyle(color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.email, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Email: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Expanded(
-                              child: Text(
-                                data['email'] ?? '',
-                                style: const TextStyle(color: Colors.black87),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Date of Compliance: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              data['dateOfCompliance'] ?? '',
-                              style: const TextStyle(color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.verified, color: Colors.blueAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Status: ",
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
-                              decoration: BoxDecoration(
-                                color: (data['status'] == 'approved')
-                                    ? Colors.green
-                                    : (data['status'] == 'pending_approval')
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                (data['status'] ?? '').toString().toUpperCase(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 8),
+              const Text(
+                "Compliance Report Details",
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1976D2),
+                  letterSpacing: 0.7,
+                ),
               ),
             ],
           ),
-        ),
-      ));
+          const SizedBox(height: 24),
+          // Station Name
+          Text(
+            data['stationName'] ?? '',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1976D2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Details Table
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black54, width: 1),
+              borderRadius: BorderRadius.circular(2),
+              color: Colors.white,
+            ),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(1),
+                1: FlexColumnWidth(1),
+              },
+              border: TableBorder.symmetric(
+                inside: BorderSide(color: Colors.black26, width: 1),
+              ),
+              children: [
+                TableRow(
+                  children: [
+                    _detailCell(Icons.person, "Store Owner", "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim()),
+                    _detailCell(Icons.home, "Address", data['address']),
+                  ],
+                ),
+                TableRow(
+                  children: [
+                    _detailCell(Icons.email, "Email", data['email']),
+                    _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
+                  ],
+                ),
+                TableRow(
+                  children: [
+                    _detailCell(Icons.phone, "Contact Number", data['phone']),
+                    _detailCell(Icons.info, "Status", data['status']),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
+
+  Widget _detailCell(IconData icon, String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blueAccent, size: 22),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value?.toString() ?? '',
+              style: const TextStyle(fontSize: 15),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfilePage() {
     final user = FirebaseAuth.instance.currentUser;
     // Fetch admin_name and contact from Firestore (users collection)
