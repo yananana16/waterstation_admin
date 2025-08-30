@@ -5,7 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
-  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId});
+  final VoidCallback? onStatusChanged; // Add this line
+  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId, this.onStatusChanged});
 
   @override
   State<ComplianceFilesViewer> createState() => _ComplianceFilesViewerState();
@@ -76,35 +77,155 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         statusEdits.remove(statusKey);
       });
 
-      // After updating, check if all statuses are "partially"
+      // After updating, check statuses
       final doc = await FirebaseFirestore.instance
           .collection('compliance_uploads')
           .doc(widget.stationOwnerDocId)
           .get();
       final data = doc.data() ?? {};
-      // Get all status fields (ending with _status)
       final statusValues = data.entries
           .where((e) => e.key.endsWith('_status'))
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
-      if (statusValues.isNotEmpty &&
-          statusValues.every((s) => s == 'passed')) {
-        // Update station_owners status to "district_approved"
-        await FirebaseFirestore.instance
-            .collection('station_owners')
-            .doc(widget.stationOwnerDocId)
-            .update({'status': 'approved'});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All statuses are "partially". Station marked as approved.')),
-        );
+
+      String stationStatus;
+      String message;
+
+      if (statusValues.isNotEmpty && statusValues.every((s) => s == 'partially')) {
+        stationStatus = 'district_approved';
+        message = 'Station marked as District Approved.';
+      } else if (statusValues.any((s) => s == 'failed')) {
+        stationStatus = 'failed';
+        message = 'Station marked as Failed.';
+      } else if (statusValues.any((s) => s == 'pending')) {
+        stationStatus = 'pending_approval';
+        message = 'Station marked as Pending Approval.';
+      } else if (statusValues.isNotEmpty && statusValues.every((s) => s == 'passed')) {
+        stationStatus = 'approved';
+        message = 'Station marked as Approved.';
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status updated')),
+        stationStatus = 'district_approved';
+        message = 'Status updated. Station marked as District Approved.';
+      }
+
+      // Fetch previous status before updating
+      final prevStationDoc = await FirebaseFirestore.instance
+          .collection('station_owners')
+          .doc(widget.stationOwnerDocId)
+          .get();
+      final prevStatus = prevStationDoc.data()?['status']?.toString() ?? '';
+
+      await FirebaseFirestore.instance
+          .collection('station_owners')
+          .doc(widget.stationOwnerDocId)
+          .update({'status': stationStatus});
+
+      // Only show dialog if status actually changed
+      if (prevStatus != stationStatus) {
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            backgroundColor: Colors.white,
+            child: SizedBox(
+              width: 340,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, color: Colors.blueAccent, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Status Updated',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: Colors.blue[900],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      style: const TextStyle(fontSize: 16, color: Colors.black87),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          if (widget.onStatusChanged != null) {
+                            widget.onStatusChanged!(); // Notify parent to refresh
+                          }
+                        },
+                        child: const Text('OK', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       }
+      // else do nothing (no dialog)
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update status')),
+      // Improved error dialog design
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          backgroundColor: Colors.white,
+          child: SizedBox(
+            width: 340,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Failed to update status',
+                    style: TextStyle(fontSize: 16, color: Colors.black87),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('OK', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       );
     }
   }
@@ -279,6 +400,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
                               return Container(
                                 width: 220,
+                                height: 370, // <-- Set fixed height for uniform card size
                                 margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
@@ -327,7 +449,6 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                         child: const Text('View File', style: TextStyle(color: Colors.blue)),
                                       ),
                                       const SizedBox(height: 8),
-                                      const SizedBox(height: 18),
                                       DropdownButtonFormField<String>(
                                         value: status == 'Unknown' ? null : status,
                                         decoration: InputDecoration(

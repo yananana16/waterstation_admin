@@ -839,6 +839,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Color _statusColor(String? status) {
+    switch (status) {
+      case "failed":
+        return const Color(0xFFFF4C4C);
+      case "pending_approval":
+        return const Color(0xFFFFA500);
+      case "district_approved":
+        return const Color(0xFF20C997);
+      case "approved":
+        return const Color(0xFF28A745);
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
   // New: Build compliance report details from Firestore data (copied from compliance_page.dart)
   Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
     return Padding(
@@ -913,7 +928,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 TableRow(
                   children: [
                     _detailCell(Icons.phone, "Contact Number", data['phone']),
-                    _detailCell(Icons.info, "Status", data['status']),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info, color: Colors.blueAccent, size: 22),
+                          const SizedBox(width: 8),
+                          const Text("Status", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              data['status']?.toString() ?? '',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: _statusColor(data['status']?.toString()),
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],

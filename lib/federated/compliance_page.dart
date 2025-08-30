@@ -20,6 +20,33 @@ class _CompliancePageState extends State<CompliancePage> {
   int complianceCurrentPage = 0;
   static const int complianceRowsPerPage = 10;
 
+  Future<void> _refreshSelectedStationData() async {
+    if (selectedStationOwnerDocId != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('station_owners')
+          .doc(selectedStationOwnerDocId)
+          .get();
+      setState(() {
+        selectedStationData = doc.data();
+      });
+    }
+  }
+
+  Color _statusColor(String? status) {
+    switch (status) {
+      case "failed":
+        return const Color(0xFFFF4C4C);
+      case "pending_approval":
+        return const Color(0xFFFFA500);
+      case "district_approved":
+        return const Color(0xFF20C997);
+      case "approved":
+        return const Color(0xFF28A745);
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -58,6 +85,7 @@ class _CompliancePageState extends State<CompliancePage> {
                             padding: const EdgeInsets.all(12.0),
                             child: ComplianceFilesViewer(
                               stationOwnerDocId: selectedStationOwnerDocId!,
+                              onStatusChanged: _refreshSelectedStationData, // Pass callback
                             ),
                           ),
                         ),
@@ -308,7 +336,15 @@ class _CompliancePageState extends State<CompliancePage> {
                                 DataCell(Text(ownerName)),
                                 DataCell(Text(district)),
                                 DataCell(Text(address)),
-                                DataCell(Text(status)),
+                                DataCell(
+                                  Text(
+                                    status,
+                                    style: TextStyle(
+                                      color: _statusColor(status),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                                 DataCell(
                                   ElevatedButton(
                                     onPressed: () {
@@ -456,7 +492,28 @@ class _CompliancePageState extends State<CompliancePage> {
                 TableRow(
                   children: [
                     _detailCell(Icons.phone, "Contact Number", data['phone']),
-                    _detailCell(Icons.info, "Status", data['status']),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info, color: Colors.blueAccent, size: 22),
+                          const SizedBox(width: 8),
+                          const Text("Status", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              data['status']?.toString() ?? '',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: _statusColor(data['status']?.toString()),
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
