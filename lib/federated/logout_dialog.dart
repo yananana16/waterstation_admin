@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import '../auth_service.dart';
-import '../login_screen.dart';
 
-Future<void> showLogoutDialog(BuildContext context, AuthService authService) async {
-  final shouldLogout = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Dialog(
+class LogoutDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       backgroundColor: Colors.white,
       child: SizedBox(
@@ -77,13 +74,6 @@ Future<void> showLogoutDialog(BuildContext context, AuthService authService) asy
           ),
         ),
       ),
-    ),
-  );
-  if (shouldLogout == true) {
-    await authService.signOut();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
 }

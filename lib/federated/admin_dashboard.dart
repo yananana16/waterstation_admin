@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthPr
 import 'package:flutter/material.dart';
 import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../auth_service.dart';
 import '../login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
@@ -9,8 +11,8 @@ import 'package:latlong2/latlong.dart';
 import 'compliance_page.dart';
 import 'change_password_dialog.dart'; // <-- Add this import
 import 'compliance_files_viewer.dart'; // <-- Add this import
-import 'registered_stations_page.dart'; // <-- Add this import
 import 'logout_dialog.dart'; // <-- Add this import
+import 'registered_stations_page.dart'; // <-- Add this import
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -31,17 +33,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
   LatLng? _mapSelectedLocation;
   final MapController _mapController = MapController(); // <-- Add this line
   final TextEditingController _searchController = TextEditingController(); // <-- Add this line
-  final String _searchQuery = ""; // <-- Add this line
+  String _searchQuery = ""; // <-- Add this line
 
   // --- Pagination and filter state ---
-  final int _registeredStationsCurrentPage = 0;
+  int _registeredStationsCurrentPage = 0;
   String? _registeredStationsDistrictFilter;
 
   // Add state for compliance report details navigation from Water Stations page
   bool _showComplianceReportDetails = false;
   Map<String, dynamic>? _selectedComplianceStationData;
   String? _selectedComplianceStationDocId;
-  final String _complianceReportTitle = "";
+  String _complianceReportTitle = "";
+
+  // Add this map to hold district counts
+  Map<String, int> _districtCounts = {};
 
   // Check if user is federated president
   Future<void> _checkIfFederatedPresident() async {
@@ -71,6 +76,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  // Add this method to fetch counts from Firestore
+  Future<Map<String, int>> _fetchDistrictCounts() async {
+    final districts = [
+      "Lapaz", "Mandurriao", "Molo", "Lapuz", "Arevalo",
+      "Jaro 1", "Jaro 2", "City Proper 1", "City Proper 2"
+    ];
+    Map<String, int> counts = {};
+    for (final district in districts) {
+      final query = await FirebaseFirestore.instance
+          .collection('station_owners')
+          .where('districtName', isEqualTo: district)
+          .get();
+      counts[district] = query.size;
+    }
+    return counts;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,9 +113,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
-  // Replace the method with a wrapper that calls the new function
-  void _logout(BuildContext context) {
-    showLogoutDialog(context, _authService);
+  void _logout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => LogoutDialog(), // <-- Use new dialog widget
+    );
+    if (shouldLogout == true) {
+      await _authService.signOut();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -344,482 +376,456 @@ class _AdminDashboardState extends State<AdminDashboard> {
       case 0:
         return _buildDashboardOverview();
       case 1:
-        return _buildRegisteredStationsPage();
-      case 2:  // Districts page
+        return RegisteredStationsPage(
+          mapSelectedLocation: _mapSelectedLocation,
+          mapController: _mapController,
+          searchController: _searchController,
+          searchQuery: _searchQuery,
+          registeredStationsCurrentPage: _registeredStationsCurrentPage,
+          registeredStationsDistrictFilter: _registeredStationsDistrictFilter,
+          showComplianceReportDetails: _showComplianceReportDetails,
+          selectedComplianceStationData: _selectedComplianceStationData,
+          selectedComplianceStationDocId: _selectedComplianceStationDocId,
+          complianceReportTitle: _complianceReportTitle,
+          setState: setState,
+          onShowComplianceReportDetails: (show, data, docId, title) {
+            setState(() {
+              _showComplianceReportDetails = show;
+              _selectedComplianceStationData = data;
+              _selectedComplianceStationDocId = docId;
+              _complianceReportTitle = title;
+            });
+          },
+          onMapSelectedLocation: (location) {
+            setState(() {
+              _mapSelectedLocation = location;
+            });
+          },
+          onSearchQueryChanged: (query) {
+            setState(() {
+              _searchQuery = query;
+            });
+          },
+          onDistrictFilterChanged: (filter) {
+            setState(() {
+              _registeredStationsDistrictFilter = filter;
+              _registeredStationsCurrentPage = 0;
+            });
+          },
+          onCurrentPageChanged: (page) {
+            setState(() {
+              _registeredStationsCurrentPage = page;
+            });
+          },
+        );
+      case 2:
         return _buildDistrictManagementPage();
       case 3:
         return const CompliancePage();
-      case 4:  // Profile page
-        return _buildProfilePage(); // Changed from _buildUsersPage to _buildProfilePage
+      case 4:
+        return _buildProfilePage();
       default:
         return const Center(child: Text("Page Not Found"));
     }
   }
 
-  // Helper: Get current formatted date and time
-  String _getFormattedDate() {
-    final now = DateTime.now();
-    // Example: Monday, May 5, 2025
-    return "${_weekdayName(now.weekday)}, ${_monthName(now.month)} ${now.day}, ${now.year}";
-  }
-  String _getFormattedTime() {
-    final now = DateTime.now();
-    // Example: 11:25 AM PST
-    final hour = now.hour > 12 ? now.hour - 12 : now.hour;
-    final ampm = now.hour >= 12 ? "PM" : "AM";
-    return "${hour == 0 ? 12 : hour}:${now.minute.toString().padLeft(2, '0')} $ampm PST";
-  }
-  String _weekdayName(int weekday) {
-    const names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    return names[weekday - 1];
-  }
-  String _monthName(int month) {
-    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return names[month - 1];
-  }
-
-  // Helper: Get admin name for welcome message
-  Future<String> _getAdminName() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return "User";
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    if (doc.exists && doc.data()?['admin_name'] != null) {
-      return doc.data()!['admin_name'];
-    }
-    return "User";
-  }
-
-  // --- Dashboard Overview with live stats ---
   Widget _buildDashboardOverview() {
-    return FutureBuilder<String>(
-      future: _getAdminName(),
-      builder: (context, adminSnapshot) {
-        final adminName = adminSnapshot.data ?? "User";
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('stations').snapshots(),
-          builder: (context, stationSnapshot) {
-            final stations = stationSnapshot.data?.docs ?? [];
-            final totalStations = stations.length;
-            final compliantStations = stations.where((doc) => doc['status'] == 'Compliant').length;
-            final nonCompliantStations = stations.where((doc) => doc['status'] == 'Non-Compliant').length;
-
-            // District stats
-            Map<String, int> districtCounts = {};
-            for (var doc in stations) {
-              final district = doc['district'] ?? 'Unknown';
-              districtCounts[district] = (districtCounts[district] ?? 0) + 1;
-            }
-
-            // Top districts
-            final sortedDistricts = districtCounts.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value));
-            final topDistricts = sortedDistricts.take(3).toList();
-            final lowDistricts = sortedDistricts.reversed.take(6).toList();
-
-            // Compliance pending approvals
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('compliance_reports').where('status', isEqualTo: 'Pending').snapshots(),
-              builder: (context, complianceSnapshot) {
-                final pendingApprovals = complianceSnapshot.data?.docs.length ?? 0;
-                final approvedToday = complianceSnapshot.data?.docs.where((doc) {
-                  final date = doc['approvedDate'];
-                  if (date is Timestamp) {
-                    final approvedDate = date.toDate();
-                    final now = DateTime.now();
-                    return approvedDate.year == now.year &&
-                        approvedDate.month == now.month &&
-                        approvedDate.day == now.day;
-                  }
-                  return false;
-                }).length ?? 0;
-
-                return Column(
-                  children: [
-                    // Top header bar (date, time)
-                    Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today, color: Colors.blueAccent),
-                          const SizedBox(width: 8),
-                          Text(
-                            _getFormattedDate(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.access_time, color: Colors.blueAccent),
-                          const SizedBox(width: 8),
-                          Text(
-                            _getFormattedTime(),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Welcome message
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.08),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        "Hello, $adminName!",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                      ),
-                    ),
-                    // Main dashboard content
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Left column: Chart and district stats
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      // Chart card
-                                      Expanded(
-                                        flex: 2,
-                                        child: Container(
-                                          height: 220,
-                                          margin: const EdgeInsets.only(right: 16),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                "Percentage of Water Refilling Stations by District",
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              // Chart placeholder
-                                              Expanded(
-                                                child: _ChartPlaceholder(title: "Line Chart Placeholder"),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      // Iloilo City stats card (dynamic)
-                                      Expanded(
-                                        flex: 1,
-                                        child: Container(
-                                          height: 260, // <-- Increased from 220 to 260 to fix overflow
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          child: SingleChildScrollView( // <-- Add this wrapper
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Text(
-                                                  "Water Refilling Stations\nIloilo City",
-                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                // --- New layout: two columns, matching image ---
-                                                Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    // Left column
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          _districtStat("La Paz", "${districtCounts["La Paz"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("Mandurriao", "${districtCounts["Mandurriao"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("Molo", "${districtCounts["Molo"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("Lapuz", "${districtCounts["Lapuz"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("Arevalo", "${districtCounts["Arevalo"] ?? 0}"),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 18),
-                                                    // Right column
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          _districtStat("Jaro 1", "${districtCounts["Jaro 1"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("Jaro 2", "${districtCounts["Jaro 2"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("City Proper 1", "${districtCounts["City Proper 1"] ?? 0}"),
-                                                          const SizedBox(height: 8),
-                                                          _districtStat("City Proper 2", "${districtCounts["City Proper 2"] ?? 0}"),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 32), // <-- Changed from 16 to 32 to move cards lower
-                                  Row(
-                                    children: [
-                                      // Top 3 districts with high WRS (fixed order)
-                                      Expanded(
-                                        child: Container(
-                                          height: 170, // <-- Increased from 140 to 170 to fix overflow
-                                          margin: const EdgeInsets.only(right: 12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                "Top 3 Districts with High Number of WRS",
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              ...[
-                                                "Lapuz",
-                                                "Arevalo",
-                                                "La Paz",
-                                              ].asMap().entries.map((entry) => Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text("${entry.key + 1}. ${entry.value}"),
-                                                  if (entry.key < 2)
-                                                    const Divider(height: 12, thickness: 1, color: Colors.black12),
-                                                ],
-                                              )),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      // Top 6 districts with low WRS (fixed order, two columns)
-                                      Expanded(
-                                        child: Container(
-                                          height: 170 // <-- Increased from 140 to 170 to fix overflow
-                                          ,
-                                          margin: const EdgeInsets.only(right: 12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                "Top 6 Districts with Low Number of WRS",
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  // Left column
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text("1. City Proper 2"),
-                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
-                                                        Text("2. Jaro 1"),
-                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
-                                                        Text("3. City Proper 1"),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  // Right column
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text("4. Molo"),
-                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
-                                                        Text("5. Jaro 2"),
-                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
-                                                        Text("6. Mandurriao"),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      // Compliance summary card
-                                      Expanded(
-                                        child: Container(
-                                          height: 170 // <-- Increased from 140 to 170 to fix overflow
-                                          ,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(16),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              const Text(
-                                                "Compliance",
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                children: [
-                                                  _complianceStat("Pending Approvals", "$pendingApprovals"),
-                                                  const SizedBox(width: 12),
-                                                  _complianceStat("Approved Today", "$approvedToday"),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Row(
-                                                children: [
-                                                  _complianceStat("Compliant Stations", "$compliantStations"),
-                                                  const SizedBox(width: 12),
-                                                  _complianceStat("Non-Compliant Stations", "$nonCompliantStations"),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Helper for district stat
-  Widget _districtStat(String district, String count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1976D2).withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(district, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Color(0xFF1976D2), width: 1),
-            ),
-            child: Text(count, style: const TextStyle(fontSize: 13, color: Color(0xFF1976D2))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper for compliance stat
-  Widget _complianceStat(String label, String value) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+        // Top header bar (date, time)
+        Container(
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            children: [
+              const Icon(Icons.calendar_today, color: Colors.blueAccent),
+              const SizedBox(width: 8),
+              Text(
+                "Monday, May 5, 2025",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Spacer(),
+              const Icon(Icons.access_time, color: Colors.blueAccent),
+              const SizedBox(width: 8),
+              Text(
+                "11:25 AM PST",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+        // Welcome message
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Text(
+            "Hello, User!",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+          ),
+        ),
+        // Main dashboard content
+        Expanded(
+          child: Container(
+            color: const Color(0xFFF5F8FE),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left column: Chart and Top Barangays
+                  Expanded(
+                    flex: 2,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          // Trends card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(18),
+                            margin: const EdgeInsets.only(bottom: 18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.08),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: const [
+                                    Text(
+                                      "Trends in Water Refilling Station Openings",
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                    ),
+                                    Spacer(),
+                                    Text("2025", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.calendar_today, color: Colors.grey, size: 18),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Container(
+                                  height: 90,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFFE3F2FD),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Icon(Icons.show_chart, size: 60, color: Colors.blueAccent.withOpacity(0.25)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Top Barangays row
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  // Remove fixed height
+                                  margin: const EdgeInsets.only(right: 18),
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.08),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: FutureBuilder<Map<String, int>>(
+                                    future: _fetchDistrictCounts(),
+                                    builder: (context, snapshot) {
+                                      final counts = snapshot.data ?? {};
+                                      // Sort districts by count descending
+                                      final sorted = counts.entries.toList()
+                                        ..sort((a, b) => b.value.compareTo(a.value));
+                                      final top3 = sorted.take(3).toList();
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            "Top 3 Districts with High Number of WRS",
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          for (int i = 0; i < top3.length; i++)
+                                            Text("${i + 1}. ${top3[i].key} (${top3[i].value})"),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.08),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: FutureBuilder<Map<String, int>>(
+                                    future: _fetchDistrictCounts(),
+                                    builder: (context, snapshot) {
+                                      final counts = snapshot.data ?? {};
+                                      // Sort districts by count ascending
+                                      final sorted = counts.entries.toList()
+                                        ..sort((a, b) => a.value.compareTo(b.value));
+                                      final top3 = sorted.take(3).toList();
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            "Top 3 Districts with Low Number of WRS",
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFD32F2F)),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          for (int i = 0; i < top3.length; i++)
+                                            Text("${i + 1}. ${top3[i].key} (${top3[i].value})"),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  // Right column: Station count and Compliance stacked
+                  Expanded(
+                    flex: 1,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          // Water Refilling Stations Iloilo City card
+                          FutureBuilder<Map<String, int>>(
+                            future: _fetchDistrictCounts(),
+                            builder: (context, snapshot) {
+                              final counts = snapshot.data ?? {};
+                              return Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(18),
+                                margin: const EdgeInsets.only(bottom: 18),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.08),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                clipBehavior: Clip.hardEdge,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      "Water Refilling Stations\nIloilo City",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                        color: Color(0xFF1976D2),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Left column
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              _DistrictStationTile("La Paz", "${counts["Lapaz"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("Mandurriao", "${counts["Mandurriao"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("Molo", "${counts["Molo"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("Lapuz", "${counts["Lapuz"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("Arevalo", "${counts["Arevalo"] ?? "-"}"),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 24),
+                                        // Right column
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              _DistrictStationTile("Jaro 1", "${counts["Jaro 1"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("Jaro 2", "${counts["Jaro 2"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("City Proper 1", "${counts["City Proper 1"] ?? "-"}"),
+                                              const SizedBox(height: 8),
+                                              _DistrictStationTile("City Proper 2", "${counts["City Proper 2"] ?? "-"}"),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          // Compliance Overview card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.08),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            clipBehavior: Clip.hardEdge,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: const [
+                                    Icon(Icons.verified, color: Color(0xFF43A047), size: 22),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      "Compliance Overview",
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const Text("Compliance Rate:", style: TextStyle(fontSize: 15, color: Colors.black87)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: LinearProgressIndicator(
+                                        value: 0.616,
+                                        minHeight: 8,
+                                        backgroundColor: Colors.grey[300],
+                                        color: Color(0xFF43A047),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text("61.6%", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF43A047))),
+                                  ],
+                                ),
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  height: 56,
+                                  child: Row(
+                                    children: const [
+                                      Expanded(
+                                        child: _ComplianceStatTile(
+                                          "Pending Approvals",
+                                          "45",
+                                          color: Color(0xFFFFECB3),
+                                          textColor: Color(0xFFF9A825),
+                                          icon: Icons.hourglass_top,
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: _ComplianceStatTile(
+                                          "Approved Today",
+                                          "5",
+                                          color: Color(0xFFE3F2FD),
+                                          textColor: Color(0xFF1976D2),
+                                          icon: Icons.check_circle,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  height: 56,
+                                  child: Row(
+                                    children: const [
+                                      Expanded(
+                                        child: _ComplianceStatTile(
+                                          "Compliant Stations",
+                                          "285",
+                                          color: Color(0xFFE8F5E9),
+                                          textColor: Color(0xFF43A047),
+                                          icon: Icons.verified,
+                                        ),
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: _ComplianceStatTile(
+                                          "Non-Compliant Stations",
+                                          "178",
+                                          color: Color(0xFFFFEBEE),
+                                          textColor: Color(0xFFD32F2F),
+                                          icon: Icons.warning,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildRegisteredStationsPage() {
-    return RegisteredStationsPage(
-      mapSelectedLocation: _mapSelectedLocation,
-      mapController: _mapController,
-      searchController: _searchController,
-      searchQuery: _searchQuery,
-      registeredStationsCurrentPage: _registeredStationsCurrentPage,
-      registeredStationsDistrictFilter: _registeredStationsDistrictFilter,
-      showComplianceReportDetails: _showComplianceReportDetails,
-      selectedComplianceStationData: _selectedComplianceStationData,
-      selectedComplianceStationDocId: _selectedComplianceStationDocId,
-      complianceReportTitle: _complianceReportTitle,
-      setStateCallback: setState,
-    );
-  }
+
 
   Widget _buildDistrictManagementPage() {
     return DistrictManagementPage(
@@ -1471,6 +1477,122 @@ class _ChartPlaceholder extends StatelessWidget {
             ),
             child: Center(
               child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withOpacity(0.4)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Station count tile widget
+class _StationCountTile extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StationCountTile(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      // Remove fixed height, let grid control height
+      decoration: BoxDecoration(
+        color: Color(0xFFE3F2FD),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10), // Slightly less vertical padding
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(label, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.bold, fontSize: 20)),
+        ],
+      ),
+    );
+  }
+}
+
+// Compliance stat tile widget
+class _ComplianceStatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final Color textColor;
+  final IconData icon;
+  const _ComplianceStatTile(this.label, this.value, {required this.color, required this.textColor, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: textColor, size: 22),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15), overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
+          Text(value, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 18)),
+        ],
+      ),
+    );
+  }
+}
+
+// Add this widget below _StationCountTile
+class _DistrictStationTile extends StatelessWidget {
+  final String district;
+  final String count;
+  const _DistrictStationTile(this.district, this.count);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                bottomLeft: Radius.circular(6),
+              ),
+              border: Border.all(color: Color(0xFF1976D2), width: 0.5),
+            ),
+            child: Text(
+              district,
+              style: const TextStyle(
+                color: Color(0xFF004687),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: 48,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: Color(0xFF004687),
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(6),
+              bottomRight: Radius.circular(6),
+            ),
+          ),
+          child: Text(
+            count,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
           ),
         ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'admin_dashboard.dart';
 import 'compliance_files_viewer.dart';
 
 class CompliancePage extends StatefulWidget {
@@ -265,7 +264,7 @@ class _CompliancePageState extends State<CompliancePage> {
                     child: Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      color: Colors.white, // changed from Colors.blue[50] to white
+                      color: Colors.white,
                       child: Padding(
                         padding: const EdgeInsets.all(24.0),
                         child: Text(
@@ -278,48 +277,39 @@ class _CompliancePageState extends State<CompliancePage> {
                     ),
                   );
                 }
+                // Table-style list
                 return Column(
                   children: [
                     Expanded(
-                      child: ListView.separated(
-                        itemCount: pageDocs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 18),
-                        itemBuilder: (context, idx) {
-                          final doc = pageDocs[idx];
-                          final data = doc.data() as Map<String, dynamic>;
-                          final stationName = data['stationName'] ?? '';
-                          final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                          final district = data['districtName'] ?? '';
-                          final address = data['address'] ?? '';
-                          final status = data['status'] ?? '';
-                          final stationOwnerDocId = doc.id;
-                          return Card(
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            color: Colors.white, // added to set card background to white
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          stationName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18,
-                                            color: Colors.blueAccent,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(ownerName, style: const TextStyle(fontSize: 15)),
-                                        Text(district, style: const TextStyle(fontSize: 15)),
-                                        Text(address, style: const TextStyle(fontSize: 15)),
-                                      ],
-                                    ),
-                                  ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: DataTable(
+                          columnSpacing: 18,
+                          headingRowColor: MaterialStateProperty.all(const Color(0xFFE3F2FD)),
+                          columns: const [
+                            DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
+                          ],
+                          rows: pageDocs.map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final stationName = data['stationName'] ?? '';
+                            final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                            final district = data['districtName'] ?? '';
+                            final address = data['address'] ?? '';
+                            final status = data['status'] ?? '';
+                            final stationOwnerDocId = doc.id;
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(stationName, style: const TextStyle(color: Colors.blueAccent))),
+                                DataCell(Text(ownerName)),
+                                DataCell(Text(district)),
+                                DataCell(Text(address)),
+                                DataCell(Text(status)),
+                                DataCell(
                                   ElevatedButton(
                                     onPressed: () {
                                       setState(() {
@@ -338,18 +328,18 @@ class _CompliancePageState extends State<CompliancePage> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blueAccent,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                     ),
                                     child: const Text(
                                       "View Details",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
                     // Pagination

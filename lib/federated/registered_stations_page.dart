@@ -15,7 +15,12 @@ class RegisteredStationsPage extends StatelessWidget {
   final Map<String, dynamic>? selectedComplianceStationData;
   final String? selectedComplianceStationDocId;
   final String complianceReportTitle;
-  final void Function(void Function()) setStateCallback;
+  final void Function(void Function()) setState;
+  final void Function(bool, Map<String, dynamic>?, String?, String) onShowComplianceReportDetails;
+  final void Function(LatLng?) onMapSelectedLocation;
+  final void Function(String) onSearchQueryChanged;
+  final void Function(String?) onDistrictFilterChanged;
+  final void Function(int) onCurrentPageChanged;
 
   const RegisteredStationsPage({
     super.key,
@@ -29,15 +34,18 @@ class RegisteredStationsPage extends StatelessWidget {
     required this.selectedComplianceStationData,
     required this.selectedComplianceStationDocId,
     required this.complianceReportTitle,
-    required this.setStateCallback,
+    required this.setState,
+    required this.onShowComplianceReportDetails,
+    required this.onMapSelectedLocation,
+    required this.onSearchQueryChanged,
+    required this.onDistrictFilterChanged,
+    required this.onCurrentPageChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    // --- Remove local state, use class fields instead ---
     const int rowsPerPage = 8;
 
-    // Show compliance report details if requested
     if (showComplianceReportDetails &&
         selectedComplianceStationData != null &&
         selectedComplianceStationDocId != null) {
@@ -50,7 +58,7 @@ class RegisteredStationsPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildComplianceReportDetailsFromData(selectedComplianceStationData!),
+                  _buildComplianceReportDetailsFromData(context, selectedComplianceStationData!),
                   const SizedBox(height: 24),
                   Expanded(
                     child: Container(
@@ -173,7 +181,7 @@ class RegisteredStationsPage extends StatelessWidget {
             ),
           ),
         ),
-        // --- Replace search and filter UI ---
+        // Search and filter UI
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Row(
@@ -183,7 +191,7 @@ class RegisteredStationsPage extends StatelessWidget {
               SizedBox(
                 width: 800,
                 child: Container(
-                  margin: const EdgeInsets.only(left: 220), // <-- Reduced left margin from 222 to 170
+                  margin: const EdgeInsets.only(left: 220),
                   height: 40,
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -202,11 +210,7 @@ class RegisteredStationsPage extends StatelessWidget {
                       Expanded(
                         child: TextField(
                           controller: searchController,
-                          onChanged: (value) {
-                            setStateCallback(() {
-                              // Update search query state
-                            });
-                          },
+                          onChanged: (value) => onSearchQueryChanged(value.toLowerCase()),
                           decoration: const InputDecoration(
                             hintText: "Search",
                             border: InputBorder.none,
@@ -220,14 +224,14 @@ class RegisteredStationsPage extends StatelessWidget {
               ),
               // Filter pill (right)
               SizedBox(
-                width:700,
+                width: 700,
                 child: FutureBuilder<QuerySnapshot>(
                   future: FirebaseFirestore.instance.collection('districts').get(),
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
                     final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
                     return Container(
-                      margin: const EdgeInsets.only(right: 500), // <-- Added right margin to move filter left
+                      margin: const EdgeInsets.only(right: 500),
                       height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -259,13 +263,9 @@ class RegisteredStationsPage extends StatelessWidget {
                                         child: Text(district),
                                       )),
                                 ],
-                                onChanged: (value) {
-                                  setStateCallback(() {
-                                    // Update district filter state
-                                  });
-                                },
+                                onChanged: (value) => onDistrictFilterChanged(value),
                                 style: const TextStyle(fontSize: 15, color: Colors.black87),
-                                icon: const SizedBox.shrink(), // Remove default icon
+                                icon: const SizedBox.shrink(),
                               ),
                             ),
                           ),
@@ -299,7 +299,6 @@ class RegisteredStationsPage extends StatelessWidget {
                 if (docs.isEmpty) {
                   return const Center(child: Text('No station owners found.'));
                 }
-                // --- Filter by selected district ---
                 final filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final stationName = (data['stationName'] ?? '').toString().toLowerCase();
@@ -315,7 +314,6 @@ class RegisteredStationsPage extends StatelessWidget {
                   return matchesSearch && matchesDistrict;
                 }).toList();
 
-                // --- Pagination logic ---
                 final totalRows = filteredDocs.length;
                 final totalPages = (totalRows / rowsPerPage).ceil();
                 final startIdx = registeredStationsCurrentPage * rowsPerPage;
@@ -331,7 +329,7 @@ class RegisteredStationsPage extends StatelessWidget {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Container(
-                          width: 1200, // <-- Increase table container width for more space
+                          width: 1200,
                           decoration: BoxDecoration(
                             color: Colors.white,
                             border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
@@ -354,8 +352,8 @@ class RegisteredStationsPage extends StatelessWidget {
                                 return Colors.white;
                               },
                             ),
-                            columnSpacing: 64, // <-- Increase column spacing for wider columns
-                            horizontalMargin: 32, // <-- Increase horizontal margin for more padding
+                            columnSpacing: 64,
+                            horizontalMargin: 32,
                             dividerThickness: 1.2,
                             columns: const [
                               DataColumn(
@@ -446,7 +444,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                 cells: [
                                   DataCell(
                                     Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12), // <-- More horizontal padding
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                                       child: Text(
                                         stationName,
                                         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -468,7 +466,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                   DataCell(
                                     Container(
                                       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                      width: 320, // <-- Make address column wider
+                                      width: 320,
                                       child: Text(
                                         address,
                                         maxLines: 1,
@@ -485,9 +483,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                           tooltip: "View on Map",
                                           onPressed: () {
                                             if (lat != null && lng != null) {
-                                              setStateCallback(() {
-                                                // Update map location state
-                                              });
+                                              onMapSelectedLocation(LatLng(lat, lng));
                                               mapController.move(LatLng(lat, lng), 16.0);
                                             }
                                           },
@@ -496,9 +492,12 @@ class RegisteredStationsPage extends StatelessWidget {
                                           icon: const Icon(Icons.description, color: Colors.blueAccent),
                                           tooltip: "View Compliance Report",
                                           onPressed: () {
-                                            setStateCallback(() {
-                                              // Show compliance report details
-                                            });
+                                            onShowComplianceReportDetails(
+                                              true,
+                                              data,
+                                              doc.id,
+                                              stationName,
+                                            );
                                           },
                                         ),
                                       ],
@@ -511,7 +510,7 @@ class RegisteredStationsPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // --- Pagination controls ---
+                    // Pagination controls
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Row(
@@ -520,9 +519,7 @@ class RegisteredStationsPage extends StatelessWidget {
                           IconButton(
                             icon: const Icon(Icons.chevron_left),
                             onPressed: registeredStationsCurrentPage > 0
-                                ? () => setStateCallback(() {
-                                    // Go to previous page
-                                  })
+                                ? () => onCurrentPageChanged(registeredStationsCurrentPage - 1)
                                 : null,
                           ),
                           Text(
@@ -532,9 +529,7 @@ class RegisteredStationsPage extends StatelessWidget {
                           IconButton(
                             icon: const Icon(Icons.chevron_right),
                             onPressed: (registeredStationsCurrentPage < totalPages - 1)
-                                ? () => setStateCallback(() {
-                                    // Go to next page
-                                  })
+                                ? () => onCurrentPageChanged(registeredStationsCurrentPage + 1)
                                 : null,
                           ),
                         ],
@@ -546,27 +541,22 @@ class RegisteredStationsPage extends StatelessWidget {
             ),
           ),
         ),
-        // ...existing code...
       ],
     );
   }
 
-  // New: Build compliance report details from Firestore data (copied from compliance_page.dart)
-  Widget _buildComplianceReportDetailsFromData(Map<String, dynamic> data) {
+  Widget _buildComplianceReportDetailsFromData(BuildContext context, Map<String, dynamic> data) {
     return Padding(
       padding: const EdgeInsets.all(0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
           Row(
             children: [
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.blueAccent, size: 32),
                 onPressed: () {
-                  setStateCallback(() {
-                    // Close compliance report details
-                  });
+                  onShowComplianceReportDetails(false, null, null, "");
                 },
               ),
               const SizedBox(width: 8),
@@ -582,7 +572,6 @@ class RegisteredStationsPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          // Station Name
           Text(
             data['stationName'] ?? '',
             style: const TextStyle(
@@ -592,7 +581,6 @@ class RegisteredStationsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Details Table
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: Colors.black54, width: 1),
