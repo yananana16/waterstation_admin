@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/services.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
@@ -218,55 +217,90 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           ? const Center(child: CircularProgressIndicator())
           : uploadedFiles.isEmpty
               ? const Center(child: Text('No uploaded compliance files found.'))
-              : ListView.builder(
-                  itemCount: uploadedFiles.length,
-                  itemBuilder: (context, index) {
-                    final file = uploadedFiles[index];
-                    final fileUrl = Supabase.instance.client.storage
-                        .from('compliance_docs')
-                        .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
-                    final extension = file.name.split('.').last.toLowerCase();
-                    final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
-                    final isPdf = extension == 'pdf';
-                    final isWord = extension == 'doc' || extension == 'docx';
-                    final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: uploadedFiles.map((file) {
+                      final fileUrl = Supabase.instance.client.storage
+                          .from('compliance_docs')
+                          .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
+                      final extension = file.name.split('.').last.toLowerCase();
+                      final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
+                      final isPdf = extension == 'pdf';
+                      final isWord = extension == 'doc' || extension == 'docx';
+                      final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
 
-                    // Compose status key (e.g. business_permit_status)
-                    final statusKey = '${categoryKey}_status';
-                    final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Unknown').toString();
+                      final statusKey = '${categoryKey}_status';
+                      final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Partially').toString();
 
-                    // Status color logic
-                    Color statusColor;
-                    switch (status.toLowerCase()) {
-                      case 'pending':
-                        statusColor = Colors.orange;
-                        break;
-                      case 'passed':
-                        statusColor = Colors.green;
-                        break;
-                      case 'partially':
-                        statusColor = Colors.teal.shade300;
-                        break;
-                      case 'failed':
-                        statusColor = Colors.red;
-                        break;
-                      default:
-                        statusColor = Colors.grey;
-                    }
+                      Color statusColor;
+                      switch (status.toLowerCase()) {
+                        case 'pending':
+                          statusColor = Colors.orange;
+                          break;
+                        case 'passed':
+                          statusColor = Colors.green;
+                          break;
+                        case 'partially':
+                          statusColor = Colors.teal.shade300;
+                          break;
+                        case 'failed':
+                          statusColor = Colors.red;
+                          break;
+                        default:
+                          statusColor = Colors.grey;
+                      }
 
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      return Container(
+                        width: 240, // Improved width for uniformity
+                        height: 320, // Fixed height for uniformity
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Card(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          elevation: 2,
+                          color: Colors.white,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
+                                // Status display at the top
+                                if (status.toLowerCase() == 'passed')
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Text(
+                                      'PASSED',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: statusColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      status.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                                  ),
                                 Text(
                                   categoryLabel,
                                   style: const TextStyle(
@@ -274,98 +308,96 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     color: Colors.blue,
                                     fontSize: 16,
                                   ),
+                                  textAlign: TextAlign.center,
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(height: 8),
+                                Text(
+                                  file.name,
+                                  style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade100,
+                                    foregroundColor: Colors.blue,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: const Text('View File', style: TextStyle(color: Colors.blue)),
+                                ),
+                                const SizedBox(height: 12),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
                                   decoration: BoxDecoration(
-                                    color: statusColor,
+                                    color: Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: Text(
-                                    status,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                DropdownButton<String>(
-                                  value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
-                                      ? status.toLowerCase()
-                                      : null,
-                                  hint: const Text('Set Status'),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'pending',
-                                      child: Text('Pending'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'partially',
-                                      child: Text('Partially'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'failed',
-                                      child: Text('Failed'),
-                                    ),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      if (value != null) {
-                                        statusEdits[statusKey] = value;
-                                      }
-                                    });
-                                  },
-                                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                                  dropdownColor: Colors.white,
-                                  underline: Container(
-                                    height: 1,
-                                    color: Colors.blueAccent,
-                                  ),
-                                ),
-                                if (statusEdits.containsKey(statusKey))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 8.0),
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        final newStatus = statusEdits[statusKey]!;
-                                        updateStatus(statusKey, newStatus);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  child: DropdownButton<String>(
+                                    value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
+                                        ? status.toLowerCase()
+                                        : 'partially',
+                                    isExpanded: true,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'pending',
+                                        child: Text('Pending'),
                                       ),
-                                      child: const Text('Update', style: TextStyle(fontSize: 12)),
-                                    ),
+                                      DropdownMenuItem(
+                                        value: 'partially',
+                                        child: Text('Partially'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'failed',
+                                        child: Text('Failed'),
+                                      ),
+                                    ],
+                                    onChanged: status.toLowerCase() == 'passed'
+                                        ? null
+                                        : (value) {
+                                            setState(() {
+                                              if (value != null) {
+                                                statusEdits[statusKey] = value;
+                                              }
+                                            });
+                                          },
+                                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+                                    dropdownColor: Colors.white,
+                                    underline: Container(),
+                                    disabledHint: const Text('Status Passed', style: TextStyle(color: Colors.grey)),
                                   ),
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: (statusEdits.containsKey(statusKey) && status.toLowerCase() != 'passed')
+                                      ? () {
+                                          final newStatus = statusEdits[statusKey]!;
+                                          updateStatus(statusKey, newStatus);
+                                        }
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade200,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('Save', style: TextStyle(fontSize: 14)),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              file.name,
-                              style: const TextStyle(fontSize: 13, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.blue,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: const BorderSide(color: Colors.blue),
-                                ),
-                              ),
-                              child: const Text('View File', style: TextStyle(color: Colors.blue)),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    }).toList(),
+                  ),
                 ),
     );
   }

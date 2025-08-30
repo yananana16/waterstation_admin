@@ -2,8 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthPr
 import 'package:flutter/material.dart';
 import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../auth_service.dart';
 import '../login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
@@ -11,6 +9,8 @@ import 'package:latlong2/latlong.dart';
 import 'compliance_page.dart';
 import 'change_password_dialog.dart'; // <-- Add this import
 import 'compliance_files_viewer.dart'; // <-- Add this import
+import 'registered_stations_page.dart'; // <-- Add this import
+import 'logout_dialog.dart'; // <-- Add this import
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -31,17 +31,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   LatLng? _mapSelectedLocation;
   final MapController _mapController = MapController(); // <-- Add this line
   final TextEditingController _searchController = TextEditingController(); // <-- Add this line
-  String _searchQuery = ""; // <-- Add this line
+  final String _searchQuery = ""; // <-- Add this line
 
   // --- Pagination and filter state ---
-  int _registeredStationsCurrentPage = 0;
+  final int _registeredStationsCurrentPage = 0;
   String? _registeredStationsDistrictFilter;
 
   // Add state for compliance report details navigation from Water Stations page
   bool _showComplianceReportDetails = false;
   Map<String, dynamic>? _selectedComplianceStationData;
   String? _selectedComplianceStationDocId;
-  String _complianceReportTitle = "";
+  final String _complianceReportTitle = "";
 
   // Check if user is federated president
   Future<void> _checkIfFederatedPresident() async {
@@ -91,90 +91,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     });
   }
 
-  void _logout(BuildContext context) async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        backgroundColor: Colors.white,
-        child: SizedBox(
-          width: 340, // Make dialog width shorter
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Colors.blueAccent.withOpacity(0.1),
-                  child: const Icon(Icons.logout, color: Colors.blueAccent, size: 38),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  "Logout Confirmation",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 22,
-                    color: Colors.blueAccent,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  "Are you sure you want to logout?",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      height: 44,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                          elevation: 0,
-                        ),
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: const Text("Logout"),
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    SizedBox(
-                      width: 120,
-                      height: 44,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blueAccent,
-                          side: const BorderSide(color: Colors.blueAccent, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text("Cancel"),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (shouldLogout == true) {
-      await _authService.signOut();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    }
+  // Replace the method with a wrapper that calls the new function
+  void _logout(BuildContext context) {
+    showLogoutDialog(context, _authService);
   }
 
   @override
@@ -437,763 +356,468 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  // Helper: Get current formatted date and time
+  String _getFormattedDate() {
+    final now = DateTime.now();
+    // Example: Monday, May 5, 2025
+    return "${_weekdayName(now.weekday)}, ${_monthName(now.month)} ${now.day}, ${now.year}";
+  }
+  String _getFormattedTime() {
+    final now = DateTime.now();
+    // Example: 11:25 AM PST
+    final hour = now.hour > 12 ? now.hour - 12 : now.hour;
+    final ampm = now.hour >= 12 ? "PM" : "AM";
+    return "${hour == 0 ? 12 : hour}:${now.minute.toString().padLeft(2, '0')} $ampm PST";
+  }
+  String _weekdayName(int weekday) {
+    const names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    return names[weekday - 1];
+  }
+  String _monthName(int month) {
+    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return names[month - 1];
+  }
+
+  // Helper: Get admin name for welcome message
+  Future<String> _getAdminName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return "User";
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    if (doc.exists && doc.data()?['admin_name'] != null) {
+      return doc.data()!['admin_name'];
+    }
+    return "User";
+  }
+
+  // --- Dashboard Overview with live stats ---
   Widget _buildDashboardOverview() {
-    return Column(
-      children: [
-        // Top header bar (date, time)
-        Container(
-          width: double.infinity,
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_today, color: Colors.blueAccent),
-              const SizedBox(width: 8),
-              Text(
-                "Monday, May 5, 2025",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const Spacer(),
-              const Icon(Icons.access_time, color: Colors.blueAccent),
-              const SizedBox(width: 8),
-              Text(
-                "11:25 AM PST",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-        // Welcome message
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: const Text(
-            "Hello, User!",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-          ),
-        ),
-        // Main content row: Map and Compliance Overview
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // District map card
-                Container(
-                  width: 480, // Increased from 340
-                  height: 520, // Increased from 370
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      // Map image (replace with your asset or widget)
-                      Expanded(
-                        child: Image.asset(
-                          'assets/district_map.png', // <-- Use your colored district map asset here
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      // Legend
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Legend:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                _legendDot(Colors.green),
-                                const SizedBox(width: 8),
-                                const Text("Good", style: TextStyle(fontSize: 13)),
-                                const SizedBox(width: 18),
-                                _legendDot(Colors.orange),
-                                const SizedBox(width: 8),
-                                const Text("Moderate Concern", style: TextStyle(fontSize: 13)),
-                                const SizedBox(width: 18),
-                                _legendDot(Colors.amber),
-                                const SizedBox(width: 8),
-                                const Text("High Concern", style: TextStyle(fontSize: 13)),
-                                const SizedBox(width: 18),
-                                _legendDot(Colors.red),
-                                const SizedBox(width: 8),
-                                const Text("Critical", style: TextStyle(fontSize: 13)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 32),
-                // Compliance Overview card with summary cards on top
-                Expanded(
-                  child: Container(
-                    height: 520, // Match map card height for alignment
-                    decoration: BoxDecoration(
+    return FutureBuilder<String>(
+      future: _getAdminName(),
+      builder: (context, adminSnapshot) {
+        final adminName = adminSnapshot.data ?? "User";
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance.collection('stations').snapshots(),
+          builder: (context, stationSnapshot) {
+            final stations = stationSnapshot.data?.docs ?? [];
+            final totalStations = stations.length;
+            final compliantStations = stations.where((doc) => doc['status'] == 'Compliant').length;
+            final nonCompliantStations = stations.where((doc) => doc['status'] == 'Non-Compliant').length;
+
+            // District stats
+            Map<String, int> districtCounts = {};
+            for (var doc in stations) {
+              final district = doc['district'] ?? 'Unknown';
+              districtCounts[district] = (districtCounts[district] ?? 0) + 1;
+            }
+
+            // Top districts
+            final sortedDistricts = districtCounts.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            final topDistricts = sortedDistricts.take(3).toList();
+            final lowDistricts = sortedDistricts.reversed.take(6).toList();
+
+            // Compliance pending approvals
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('compliance_reports').where('status', isEqualTo: 'Pending').snapshots(),
+              builder: (context, complianceSnapshot) {
+                final pendingApprovals = complianceSnapshot.data?.docs.length ?? 0;
+                final approvedToday = complianceSnapshot.data?.docs.where((doc) {
+                  final date = doc['approvedDate'];
+                  if (date is Timestamp) {
+                    final approvedDate = date.toDate();
+                    final now = DateTime.now();
+                    return approvedDate.year == now.year &&
+                        approvedDate.month == now.month &&
+                        approvedDate.day == now.day;
+                  }
+                  return false;
+                }).length ?? 0;
+
+                return Column(
+                  children: [
+                    // Top header bar (date, time)
+                    Container(
+                      width: double.infinity,
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: Row(
                         children: [
-                          // Summary cards row (moved here)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              _SummaryCard(title: "Pending Compliance Approval", value: "45"),
-                              const SizedBox(width: 24),
-                              _SummaryCard(title: "Compliant Stations", value: "285"),
-                              const SizedBox(width: 24),
-                              _SummaryCard(title: "Non-Compliant Stations", value: "178"),
-                            ],
+                          const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            _getFormattedDate(),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          const SizedBox(height: 18),
-                          _complianceOverviewItem(
-                            "Jaro 1 & 2 and City Proper 1 & 2",
-                            "Good",
-                            Colors.green,
-                            "Maintain good practices. Continue regular testing and permit renewals.",
-                          ),
-                          _complianceOverviewItem(
-                            "Mandurriao and La Paz",
-                            "Moderate Concern",
-                            Colors.orange,
-                            "Some issues detected. Do spot checks, conduct refreshers, and monitor closely.",
-                          ),
-                          _complianceOverviewItem(
-                            "Molo and Lapuz",
-                            "High Concern",
-                            Colors.amber,
-                            "Several failures. Schedule inspections, send reminders, and assist WRS with compliance.",
-                          ),
-                          _complianceOverviewItem(
-                            "Arevalo",
-                            "Critical",
-                            Colors.red,
-                            "Urgent action needed. Deploy teams, provide support, and launch a full compliance drive.",
+                          const Spacer(),
+                          const Icon(Icons.access_time, color: Colors.blueAccent),
+                          const SizedBox(width: 8),
+                          Text(
+                            _getFormattedTime(),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+                    // Welcome message
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        "Hello, $adminName!",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                      ),
+                    ),
+                    // Main dashboard content
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left column: Chart and district stats
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      // Chart card
+                                      Expanded(
+                                        flex: 2,
+                                        child: Container(
+                                          height: 220,
+                                          margin: const EdgeInsets.only(right: 16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                "Percentage of Water Refilling Stations by District",
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              // Chart placeholder
+                                              Expanded(
+                                                child: _ChartPlaceholder(title: "Line Chart Placeholder"),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      // Iloilo City stats card (dynamic)
+                                      Expanded(
+                                        flex: 1,
+                                        child: Container(
+                                          height: 260, // <-- Increased from 220 to 260 to fix overflow
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(16),
+                                          child: SingleChildScrollView( // <-- Add this wrapper
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  "Water Refilling Stations\nIloilo City",
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                // --- New layout: two columns, matching image ---
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    // Left column
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          _districtStat("La Paz", "${districtCounts["La Paz"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("Mandurriao", "${districtCounts["Mandurriao"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("Molo", "${districtCounts["Molo"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("Lapuz", "${districtCounts["Lapuz"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("Arevalo", "${districtCounts["Arevalo"] ?? 0}"),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 18),
+                                                    // Right column
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          _districtStat("Jaro 1", "${districtCounts["Jaro 1"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("Jaro 2", "${districtCounts["Jaro 2"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("City Proper 1", "${districtCounts["City Proper 1"] ?? 0}"),
+                                                          const SizedBox(height: 8),
+                                                          _districtStat("City Proper 2", "${districtCounts["City Proper 2"] ?? 0}"),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 32), // <-- Changed from 16 to 32 to move cards lower
+                                  Row(
+                                    children: [
+                                      // Top 3 districts with high WRS (fixed order)
+                                      Expanded(
+                                        child: Container(
+                                          height: 170, // <-- Increased from 140 to 170 to fix overflow
+                                          margin: const EdgeInsets.only(right: 12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                "Top 3 Districts with High Number of WRS",
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              ...[
+                                                "Lapuz",
+                                                "Arevalo",
+                                                "La Paz",
+                                              ].asMap().entries.map((entry) => Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text("${entry.key + 1}. ${entry.value}"),
+                                                  if (entry.key < 2)
+                                                    const Divider(height: 12, thickness: 1, color: Colors.black12),
+                                                ],
+                                              )),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      // Top 6 districts with low WRS (fixed order, two columns)
+                                      Expanded(
+                                        child: Container(
+                                          height: 170 // <-- Increased from 140 to 170 to fix overflow
+                                          ,
+                                          margin: const EdgeInsets.only(right: 12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                "Top 6 Districts with Low Number of WRS",
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  // Left column
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text("1. City Proper 2"),
+                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
+                                                        Text("2. Jaro 1"),
+                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
+                                                        Text("3. City Proper 1"),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  // Right column
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text("4. Molo"),
+                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
+                                                        Text("5. Jaro 2"),
+                                                        const Divider(height: 12, thickness: 1, color: Colors.black12),
+                                                        Text("6. Mandurriao"),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      // Compliance summary card
+                                      Expanded(
+                                        child: Container(
+                                          height: 170 // <-- Increased from 140 to 170 to fix overflow
+                                          ,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.08),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                "Compliance",
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  _complianceStat("Pending Approvals", "$pendingApprovals"),
+                                                  const SizedBox(width: 12),
+                                                  _complianceStat("Approved Today", "$approvedToday"),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  _complianceStat("Compliant Stations", "$compliantStations"),
+                                                  const SizedBox(width: 12),
+                                                  _complianceStat("Non-Compliant Stations", "$nonCompliantStations"),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _legendDot(Color color) {
+  // Helper for district stat
+  Widget _districtStat(String district, String count) {
     return Container(
-      width: 16,
-      height: 16,
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.grey.shade300, width: 1),
+        color: const Color(0xFF1976D2).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
       ),
-    );
-  }
-
-  Widget _complianceOverviewItem(String title, String status, Color color, String description) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 2, top: 2),
-            child: Text(
-              description,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+          Text(district, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Color(0xFF1976D2), width: 1),
             ),
+            child: Text(count, style: const TextStyle(fontSize: 13, color: Color(0xFF1976D2))),
           ),
         ],
       ),
     );
   }
 
+  // Helper for compliance stat
+  Widget _complianceStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+      ],
+    );
+  }
+
   Widget _buildRegisteredStationsPage() {
-    // --- Remove local state, use class fields instead ---
-
-    return StatefulBuilder(
-      builder: (context, setState) {
-        // --- Remove local state, use class fields instead ---
-        const int rowsPerPage = 8;
-
-        // Show compliance report details if requested
-        if (_showComplianceReportDetails &&
-            _selectedComplianceStationData != null &&
-            _selectedComplianceStationDocId != null) {
-          return Column(
-            children: [
-              const SizedBox(height: 20),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildComplianceReportDetailsFromData(_selectedComplianceStationData!),
-                      const SizedBox(height: 24),
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 8, bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.10),
-                                blurRadius: 18,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: ComplianceFilesViewer(
-                              stationOwnerDocId: _selectedComplianceStationDocId!,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Map Section with shadow and rounded corners
-            Container(
-              height: 280,
-              width: double.infinity,
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blueAccent.withOpacity(0.07),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance.collection('station_owners').get(),
-                  builder: (context, snapshot) {
-                    final center = _mapSelectedLocation ?? LatLng(10.7202, 122.5621);
-                    List<Marker> markers = [];
-                    if (snapshot.hasData) {
-                      final docs = snapshot.data!.docs;
-                      for (final doc in docs) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        double? lat, lng;
-                        if (data['geopoint'] != null) {
-                          final geo = data['geopoint'];
-                          lat = geo.latitude?.toDouble();
-                          lng = geo.longitude?.toDouble();
-                        } else if (data['location'] != null && data['location'] is Map) {
-                          lat = (data['location']['latitude'] as num?)?.toDouble();
-                          lng = (data['location']['longitude'] as num?)?.toDouble();
-                        } else {
-                          lat = (data['latitude'] as num?)?.toDouble();
-                          lng = (data['longitude'] as num?)?.toDouble();
-                        }
-                        final stationName = data['stationName'] ?? '';
-                        if (lat != null && lng != null) {
-                          markers.add(
-                            Marker(
-                              width: 44,
-                              height: 44,
-                              point: LatLng(lat, lng),
-                              child: Tooltip(
-                                message: stationName,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.blueAccent.withOpacity(0.15),
-                                        blurRadius: 6,
-                                        spreadRadius: 1,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    }
-                    return FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: center,
-                        initialZoom: _mapSelectedLocation != null ? 16.0 : 12.0,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.example.app',
-                        ),
-                        MarkerLayer(markers: markers),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-            // --- Replace search and filter UI ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Search pill (left)
-                  SizedBox(
-                    width: 800,
-                    child: Container(
-                      margin: const EdgeInsets.only(left: 220), // <-- Reduced left margin from 222 to 170
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: (value) {
-                                setState(() {
-                                  _searchQuery = value.toLowerCase();
-                                });
-                              },
-                              decoration: const InputDecoration(
-                                hintText: "Search",
-                                border: InputBorder.none,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Filter pill (right)
-                  SizedBox(
-                    width:700,
-                    child: FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance.collection('districts').get(),
-                      builder: (context, snapshot) {
-                        final docs = snapshot.data?.docs ?? [];
-                        final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
-                        return Container(
-                          margin: const EdgeInsets.only(right: 500), // <-- Added right margin to move filter left
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _registeredStationsDistrictFilter,
-                                    hint: const Text("Filter"),
-                                    isExpanded: true,
-                                    items: [
-                                      const DropdownMenuItem<String>(
-                                        value: null,
-                                        child: Text("Filter"),
-                                      ),
-                                      ...districts.map((district) => DropdownMenuItem<String>(
-                                            value: district,
-                                            child: Text(district),
-                                          )),
-                                    ],
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _registeredStationsDistrictFilter = value;
-                                        _registeredStationsCurrentPage = 0;
-                                      });
-                                    },
-                                    style: const TextStyle(fontSize: 15, color: Colors.black87),
-                                    icon: const SizedBox.shrink(), // Remove default icon
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 16),
-                                child: Icon(Icons.filter_alt, color: Colors.blue[800]),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Table-based Station List
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance.collection('station_owners').get(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error loading station owners: ${snapshot.error}'));
-                    }
-                    final docs = snapshot.data?.docs ?? [];
-                    if (docs.isEmpty) {
-                      return const Center(child: Text('No station owners found.'));
-                    }
-                    // --- Filter by selected district ---
-                    final filteredDocs = docs.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final stationName = (data['stationName'] ?? '').toString().toLowerCase();
-                      final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
-                      final district = (data['districtName'] ?? '').toString().toLowerCase();
-                      final matchesSearch = _searchQuery.isEmpty ||
-                          stationName.contains(_searchQuery) ||
-                          ownerName.contains(_searchQuery) ||
-                          district.contains(_searchQuery);
-                      final matchesDistrict = _registeredStationsDistrictFilter == null || _registeredStationsDistrictFilter!.isEmpty
-                          ? true
-                          : (data['districtName'] ?? '') == _registeredStationsDistrictFilter;
-                      return matchesSearch && matchesDistrict;
-                    }).toList();
-
-                    // --- Pagination logic ---
-                    final totalRows = filteredDocs.length;
-                    final totalPages = (totalRows / rowsPerPage).ceil();
-                    final startIdx = _registeredStationsCurrentPage * rowsPerPage;
-                    final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
-                    final pageDocs = filteredDocs.sublist(
-                      startIdx < totalRows ? startIdx : 0,
-                      endIdx < totalRows ? endIdx : totalRows,
-                    );
-
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Container(
-                              width: 1200, // <-- Increase table container width for more space
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: DataTable(
-                                headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
-                                dataRowColor: WidgetStateProperty.resolveWith<Color?>(
-                                  (Set<WidgetState> states) {
-                                    if (states.contains(WidgetState.selected)) {
-                                      return Colors.blueAccent.withOpacity(0.08);
-                                    }
-                                    return Colors.white;
-                                  },
-                                ),
-                                columnSpacing: 64, // <-- Increase column spacing for wider columns
-                                horizontalMargin: 32, // <-- Increase horizontal margin for more padding
-                                dividerThickness: 1.2,
-                                columns: const [
-                                  DataColumn(
-                                    label: Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Text(
-                                        'Name of Station',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1976D2),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Text(
-                                        'Owner',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1976D2),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Text(
-                                        'District',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1976D2),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Text(
-                                        'Address',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1976D2),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8),
-                                      child: Text(
-                                        'Actions',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1976D2),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                rows: pageDocs.map((doc) {
-                                  final data = doc.data() as Map<String, dynamic>;
-                                  final stationName = data['stationName'] ?? '';
-                                  final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                                  final district = data['districtName'] ?? '';
-                                  final address = data['address'] ?? '';
-                                  double? lat, lng;
-                                  if (data['geopoint'] != null) {
-                                    final geo = data['geopoint'];
-                                    lat = geo.latitude?.toDouble();
-                                    lng = geo.longitude?.toDouble();
-                                  } else if (data['location'] != null && data['location'] is Map) {
-                                    lat = (data['location']['latitude'] as num?)?.toDouble();
-                                    lng = (data['location']['longitude'] as num?)?.toDouble();
-                                  } else {
-                                    lat = (data['latitude'] as num?)?.toDouble();
-                                    lng = (data['longitude'] as num?)?.toDouble();
-                                  }
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12), // <-- More horizontal padding
-                                          child: Text(
-                                            stationName,
-                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                          child: Text(ownerName, style: const TextStyle(fontSize: 14)),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                          child: Text(district, style: const TextStyle(fontSize: 14)),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                          width: 320, // <-- Make address column wider
-                                          child: Text(
-                                            address,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 14),
-                                          ),
-                                        ),
-                                      ),
-                                      DataCell(
-                                        Row(
-                                          children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.location_on, color: Colors.blueAccent),
-                                              tooltip: "View on Map",
-                                              onPressed: () {
-                                                if (lat != null && lng != null) {
-                                                  setState(() {
-                                                    _mapSelectedLocation = LatLng(lat as double, lng as double);
-                                                  });
-                                                  _mapController.move(LatLng(lat, lng), 16.0);
-                                                }
-                                              },
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.description, color: Colors.blueAccent),
-                                              tooltip: "View Compliance Report",
-                                              onPressed: () {
-                                                setState(() {
-                                                  _showComplianceReportDetails = true;
-                                                  _selectedComplianceStationData = data;
-                                                  _selectedComplianceStationDocId = doc.id;
-                                                  _complianceReportTitle = stationName;
-                                                });
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                        ),
-                        // --- Pagination controls ---
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left),
-                                onPressed: _registeredStationsCurrentPage > 0
-                                    ? () => setState(() {
-                                        _registeredStationsCurrentPage--;
-                                      })
-                                    : null,
-                              ),
-                              Text(
-                                'Page ${totalPages == 0 ? 0 : (_registeredStationsCurrentPage + 1)} of $totalPages',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right),
-                                onPressed: (_registeredStationsCurrentPage < totalPages - 1)
-                                    ? () => setState(() {
-                                        _registeredStationsCurrentPage++;
-                                      })
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-            // ...existing code...
-          ],
-        );
-      },
+    return RegisteredStationsPage(
+      mapSelectedLocation: _mapSelectedLocation,
+      mapController: _mapController,
+      searchController: _searchController,
+      searchQuery: _searchQuery,
+      registeredStationsCurrentPage: _registeredStationsCurrentPage,
+      registeredStationsDistrictFilter: _registeredStationsDistrictFilter,
+      showComplianceReportDetails: _showComplianceReportDetails,
+      selectedComplianceStationData: _selectedComplianceStationData,
+      selectedComplianceStationDocId: _selectedComplianceStationDocId,
+      complianceReportTitle: _complianceReportTitle,
+      setStateCallback: setState,
     );
   }
 

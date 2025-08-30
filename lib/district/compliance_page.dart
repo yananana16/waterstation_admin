@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'district_compliance_files_viewer.dart';
+import 'package:intl/intl.dart';
 
 class CompliancePage extends StatefulWidget {
   final String userDistrict;
-  const CompliancePage({required this.userDistrict, Key? key}) : super(key: key);
+  const CompliancePage({required this.userDistrict, super.key});
 
   @override
   State<CompliancePage> createState() => _CompliancePageState();
@@ -18,15 +19,13 @@ class _CompliancePageState extends State<CompliancePage> {
   String complianceStatusFilter = 'approved';
   String? selectedStationOwnerDocId;
 
-  int complianceCurrentPage = 0;
-  static const int complianceRowsPerPage = 6;
-
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Details view
     if (showComplianceReport && selectedStationData != null && selectedStationOwnerDocId != null) {
       return Column(
         children: [
@@ -64,32 +63,34 @@ class _CompliancePageState extends State<CompliancePage> {
                 children: [
                   Expanded(
                     flex: 1,
-                    child: _buildComplianceReportDetailsFromData(selectedStationData!),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
+                    child: Column(
+                      children: [
+                        _buildComplianceReportDetailsFromData(selectedStationData!),
+                        const SizedBox(height: 24),
+                        Container(
+                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: ComplianceFilesViewer(
-                          stationOwnerDocId: selectedStationOwnerDocId!,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ComplianceFilesViewer(
+                              stationOwnerDocId: selectedStationOwnerDocId!,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 24),
                 ],
               ),
             ),
@@ -98,63 +99,136 @@ class _CompliancePageState extends State<CompliancePage> {
       );
     }
 
+    // Main compliance page
+    final now = DateTime.now();
+    final formattedDate = DateFormat('EEEE, MMM d, yyyy').format(now);
+    final formattedTime = DateFormat('hh:mm a').format(now);
+
     return Column(
       children: [
+        // Header with date and time
         Container(
-          padding: const EdgeInsets.all(16),
-          color: const Color(0xFFE3F2FD),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          color: Colors.white,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "Compliance",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                  const SizedBox(width: 8),
+                  Text(
+                    formattedDate,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
               Row(
                 children: [
-                  ToggleButtons(
-                    isSelected: [
-                      complianceStatusFilter == 'approved',
-                      complianceStatusFilter == 'pending_approval',
-                      complianceStatusFilter == 'district_approved',
-                    ],
-                    onPressed: (int idx) {
-                      setState(() {
-                        if (idx == 0) {
-                          complianceStatusFilter = 'approved';
-                        } else if (idx == 1) {
-                          complianceStatusFilter = 'pending_approval';
-                        } else if (idx == 2) {
-                          complianceStatusFilter = 'district_approved';
-                        }
-                        complianceCurrentPage = 0;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    selectedColor: Colors.white,
-                    fillColor: Colors.blueAccent,
-                    color: Colors.blueAccent,
-                    constraints: const BoxConstraints(minWidth: 120, minHeight: 40),
-                    children: const [
-                      Text('Approved', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('Pending Approval', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('District Approved', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.blueAccent),
-                    onPressed: () {},
+                  const Icon(Icons.access_time, color: Colors.blueAccent),
+                  const SizedBox(width: 8),
+                  Text(
+                    "$formattedTime PST",
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
             ],
           ),
         ),
+        // Compliance Report title
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Text(
+            "Compliance Report",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+          ),
+        ),
+        // Tab selector
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      complianceStatusFilter = 'pending_approval';
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: complianceStatusFilter == 'pending_approval'
+                          ? const Color(0xFFE3EAFD)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "Pending Approval",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: complianceStatusFilter == 'pending_approval'
+                              ? Colors.blueAccent
+                              : Colors.black54,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      complianceStatusFilter = 'approved';
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: complianceStatusFilter == 'approved'
+                          ? const Color(0xFFE3EAFD)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "Approved",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: complianceStatusFilter == 'approved'
+                              ? Colors.blueAccent
+                              : Colors.black54,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 16),
+        // List of store cards
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: FutureBuilder<QuerySnapshot>(
               future: FirebaseFirestore.instance
                   .collection('station_owners')
@@ -175,15 +249,6 @@ class _CompliancePageState extends State<CompliancePage> {
                   return districtName == userDistrict;
                 }).toList();
 
-                final totalRows = filteredDocs.length;
-                final totalPages = (totalRows / complianceRowsPerPage).ceil();
-                final startIdx = complianceCurrentPage * complianceRowsPerPage;
-                final endIdx = (startIdx + complianceRowsPerPage) > totalRows ? totalRows : (startIdx + complianceRowsPerPage);
-                final pageDocs = filteredDocs.sublist(
-                  startIdx < totalRows ? startIdx : 0,
-                  endIdx < totalRows ? endIdx : totalRows,
-                );
-
                 if (filteredDocs.isEmpty) {
                   return Center(
                     child: Text(
@@ -193,134 +258,97 @@ class _CompliancePageState extends State<CompliancePage> {
                     ),
                   );
                 }
-                return Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                          ],
-                          rows: pageDocs.map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final stationName = data['stationName'] ?? '';
-                            final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                            final district = data['districtName'] ?? '';
-                            final address = data['address'] ?? '';
-                            final status = data['status'] ?? '';
-                            final stationOwnerDocId = doc.id;
-                            Color statusColor;
-                            switch ((status ?? '').toString().toLowerCase()) {
-                              case 'approved':
-                                statusColor = Colors.green;
-                                break;
-                              case 'district_approved':
-                                statusColor = Colors.orange;
-                                break;
-                              case 'pending_approval':
-                                statusColor = Colors.teal;
-                                break;
-                              default:
-                                statusColor = Colors.grey;
-                            }
-                            return DataRow(
-                              cells: [
-                                DataCell(Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                                DataCell(Text(ownerName)),
-                                DataCell(Text(district)),
-                                DataCell(
-                                  SizedBox(
-                                    width: 180,
-                                    child: Text(
-                                      address,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: statusColor,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    (status ?? '').toString().toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                )),
-                                DataCell(
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        isLoading = true;
-                                      });
-                                      Future.delayed(const Duration(milliseconds: 300), () {
-                                        setState(() {
-                                          isLoading = false;
-                                          showComplianceReport = true;
-                                          complianceTitle = stationName;
-                                          selectedStationData = data;
-                                          selectedStationOwnerDocId = stationOwnerDocId;
-                                        });
-                                      });
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: statusColor,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    child: const Text(
-                                      "View Details",
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed: complianceCurrentPage > 0
-                                ? () => setState(() {
-                                    complianceCurrentPage--;
-                                  })
-                                : null,
-                          ),
-                          Text(
-                            'Page ${totalPages == 0 ? 0 : (complianceCurrentPage + 1)} of $totalPages',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed: (complianceCurrentPage < totalPages - 1)
-                                ? () => setState(() {
-                                    complianceCurrentPage++;
-                                  })
-                                : null,
+
+                return ListView.separated(
+                  itemCount: filteredDocs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (context, idx) {
+                    final doc = filteredDocs[idx];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final stationName = data['stationName'] ?? '';
+                    final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                    final district = data['districtName'] ?? '';
+                    final address = data['address'] ?? '';
+                    final stationOwnerDocId = doc.id;
+                    final isSelected = selectedStationOwnerDocId == stationOwnerDocId && showComplianceReport;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.12),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
+                        border: isSelected
+                            ? Border.all(color: Colors.blueAccent, width: 2)
+                            : Border.all(color: Colors.transparent),
                       ),
-                    ),
-                  ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    stationName,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    ownerName,
+                                    style: const TextStyle(fontSize: 15, color: Colors.black54),
+                                  ),
+                                  Text(
+                                    district,
+                                    style: const TextStyle(fontSize: 15, color: Colors.black54),
+                                  ),
+                                  Text(
+                                    address,
+                                    style: const TextStyle(fontSize: 15, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  isLoading = true;
+                                });
+                                Future.delayed(const Duration(milliseconds: 200), () {
+                                  setState(() {
+                                    isLoading = false;
+                                    showComplianceReport = true;
+                                    complianceTitle = stationName;
+                                    selectedStationData = data;
+                                    selectedStationOwnerDocId = stationOwnerDocId;
+                                  });
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              ),
+                              child: const Text(
+                                "View Details",
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),

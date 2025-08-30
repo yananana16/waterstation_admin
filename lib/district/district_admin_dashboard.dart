@@ -483,7 +483,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                 Row(
                                   children: [
                                     Text(
-                                      "Water Refilling Stations\n${_userDistrict}",
+                                      "Water Refilling Stations\n$_userDistrict",
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
                                     ),
                                     const Spacer(),
@@ -1401,7 +1401,7 @@ class _ComplianceStatBox extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _ComplianceStatBox(this.label, this.value, {this.color = const Color(0xFF1976D2)});
+  const _ComplianceStatBox(this.label, this.value, this.color);
 
   @override
   Widget build(BuildContext context) {
