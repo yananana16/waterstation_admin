@@ -5,7 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
-  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId});
+  final VoidCallback? onStatusChanged; // optional callback for parent refresh
+  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId, this.onStatusChanged});
 
   @override
   State<ComplianceFilesViewer> createState() => _ComplianceFilesViewerState();
@@ -16,12 +17,19 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   bool isLoading = true;
   Map<String, dynamic> complianceStatuses = {};
   Map<String, String> statusEdits = {}; // Track dropdown edits
+  final ScrollController _horizontalScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     fetchComplianceFiles(widget.stationOwnerDocId);
     fetchComplianceStatuses(widget.stationOwnerDocId);
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchComplianceFiles(String docId) async {
@@ -67,130 +75,334 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         statusEdits.remove(statusKey);
       });
 
-      // After updating, check if all statuses are "partially"
+      // Derive overall station status from all *_status fields
       final doc = await FirebaseFirestore.instance
           .collection('compliance_uploads')
           .doc(widget.stationOwnerDocId)
           .get();
       final data = doc.data() ?? {};
-      // Get all status fields (ending with _status)
       final statusValues = data.entries
           .where((e) => e.key.endsWith('_status'))
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
-      if (statusValues.isNotEmpty &&
-          statusValues.every((s) => s == 'partially')) {
-        // Update station_owners status to "district_approved"
-        await FirebaseFirestore.instance
-            .collection('station_owners')
-            .doc(widget.stationOwnerDocId)
-            .update({'status': 'district_approved'});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All statuses are "partially". Station marked as district_approved.')),
-        );
+
+      String stationStatus;
+      String message;
+
+      if (statusValues.isNotEmpty && statusValues.every((s) => s == 'partially')) {
+        stationStatus = 'district_approved';
+        message = 'Station marked as District Approved.';
+      } else if (statusValues.any((s) => s == 'failed')) {
+        stationStatus = 'failed';
+        message = 'Station marked as Failed.';
+      } else if (statusValues.any((s) => s == 'pending')) {
+        stationStatus = 'pending_approval';
+        message = 'Station marked as Pending Approval.';
+      } else if (statusValues.isNotEmpty && statusValues.every((s) => s == 'passed')) {
+        stationStatus = 'approved';
+        message = 'Station marked as Approved.';
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status updated')),
-        );
+        stationStatus = 'district_approved';
+        message = 'Status updated. Station marked as District Approved.';
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update status')),
-      );
-    }
-  }
 
-  /// Returns a tuple: (categoryKey, displayLabel)
-  (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
-    final prefix = '${docId}_';
-    if (fileName.startsWith(prefix)) {
-      final rest = fileName.substring(prefix.length);
-      final categoryKey = rest.split('.').first.toLowerCase();
-      final displayLabel = categoryKey
-          .replaceAll('_', ' ')
-          .split(' ')
-          .map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
-          .join(' ');
-      return (categoryKey, displayLabel);
-    }
-    return ('unknown', 'Unknown Category');
-  }
+      // Compare with previous status
+      final prevStationDoc = await FirebaseFirestore.instance
+          .collection('station_owners')
+          .doc(widget.stationOwnerDocId)
+          .get();
+      final prevStatus = prevStationDoc.data()?['status']?.toString() ?? '';
 
-  void _showFileDialog(FileObject file, String fileUrl, bool isImage, bool isPdf, bool isWord) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.all(24),
-          child: Container(
-            width: 600,
-            height: 600,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+      await FirebaseFirestore.instance
+          .collection('station_owners')
+          .doc(widget.stationOwnerDocId)
+          .update({'status': stationStatus});
+
+      // Show success dialog only if changed
+      if (prevStatus != stationStatus) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            backgroundColor: Colors.white,
+            child: SizedBox(
+              width: 340,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        file.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue),
-                        overflow: TextOverflow.ellipsis,
+                    Icon(Icons.check_circle_outline, color: Colors.blueAccent, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Status Updated',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: Colors.blue[900],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      style: const TextStyle(fontSize: 16, color: Colors.black87),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          widget.onStatusChanged?.call();
+                        },
+                        child: const Text('OK', style: TextStyle(fontSize: 16)),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Center(
-                    child: isImage
-                        ? Image.network(
-                            fileUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Padding(
-                                  padding: EdgeInsets.all(16.0),
-                                  child: Text('Failed to load image'),
-                                ),
-                          )
-                        : isPdf
-                            ? Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.picture_as_pdf, color: Colors.red, size: 64),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text('Open PDF'),
-                                    onPressed: () async {
-                                      if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                        await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Could not open file')),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ],
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          backgroundColor: Colors.white,
+          child: SizedBox(
+            width: 340,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Failed to update status',
+                    style: TextStyle(fontSize: 16, color: Colors.black87),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('OK', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+    }
+  }
+
+  /// Returns a tuple: (canonicalCategoryKey, displayLabel)
+  /// canonicalCategoryKey is guaranteed to match Firestore fields like:
+  ///   <canonicalCategoryKey>_status (e.g., business_permit_status)
+  (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
+    // Lowercase everything for matching
+    String lower = fileName.toLowerCase();
+    final prefix = '${docId}_'.toLowerCase();
+
+    // Strip the "<docId>_" prefix if present, otherwise use the whole filename
+    String rest = lower.startsWith(prefix) ? lower.substring(prefix.length) : lower;
+
+    // Remove extension for matching
+    String base = rest.split('.').first;
+
+    const known = <String, String>{
+      'business_permit': 'Business Permit',
+      'certificate_of_association': 'Certificate Of Association',
+      'finished_bacteriological': 'Finished Bacteriological',
+      'finished_physical_chemical': 'Finished Physical Chemical',
+      'sanitary_permit': 'Sanitary Permit',
+      'source_bacteriological': 'Source Bacteriological',
+      'source_physical_chemical': 'Source Physical Chemical',
+    };
+
+    // First pass: direct contains on base
+    for (final entry in known.entries) {
+      if (base.contains(entry.key)) {
+        // Return canonical key so "<key>_status" matches Firestore fields
+        return (entry.key, entry.value);
+        }
+    }
+
+    // Normalize separators and strip leading dates/ids like "2024-09-01_" or "123_"
+    var cleaned = base
+        .replaceAll('-', '_')
+        .replaceFirst(RegExp(r'^\d{4}-\d{2}-\d{2}[_\-]'), '')
+        .replaceFirst(RegExp(r'^\d+[_\-]'), '');
+
+    // Second pass: after normalization
+    for (final entry in known.entries) {
+      if (cleaned.contains(entry.key)) {
+        return (entry.key, entry.value);
+      }
+    }
+
+    // Fallback: build a friendly label, but use cleaned as the key
+    final displayLabel = cleaned
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+
+    return (cleaned, displayLabel.isEmpty ? 'Unknown Category' : displayLabel);
+  }
+
+  void _showFileDialog(FileObject file, String fileUrl, bool isImage, bool isPdf, bool isWord, String categoryKey) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        // Local state for the date field within the dialog
+        final dateKey = '${categoryKey}_date_issued';
+        final validKey = '${categoryKey}_valid_until';
+        String dateText = (complianceStatuses[dateKey] ?? '').toString();
+        // infer from format
+        bool monthYearOnly = RegExp(r'^\d{1,2}/\d{4}$').hasMatch(dateText);
+        DateTime? selectedDate;
+        bool savingDate = false;
+
+        String fmt(DateTime d, bool monthOnly) {
+          final mm = d.month.toString().padLeft(2, '0');
+          final dd = d.day.toString().padLeft(2, '0');
+          return monthOnly ? '$mm/${d.year}' : '$mm/$dd/${d.year}';
+        }
+
+        // Helpers to parse/compute validity
+        DateTime? tryParseDate(String s) {
+          final parts = s.split('/');
+          if (parts.length == 3) {
+            // MM/DD/YYYY
+            final mm = int.tryParse(parts[0]);
+            final dd = int.tryParse(parts[1]);
+            final yy = int.tryParse(parts[2]);
+            if (mm != null && dd != null && yy != null) {
+              try {
+                return DateTime(yy, mm, dd);
+              } catch (_) {
+                return null;
+              }
+            }
+          } else if (parts.length == 2) {
+            // MM/YYYY -> use day 1
+            final mm = int.tryParse(parts[0]);
+            final yy = int.tryParse(parts[1]);
+            if (mm != null && yy != null) {
+              try {
+                return DateTime(yy, mm, 1);
+              } catch (_) {
+                return null;
+              }
+            }
+          }
+          return null;
+        }
+
+        DateTime addMonthsPreserveDay(DateTime dt, int months) {
+          int y = dt.year;
+          int m = dt.month + months;
+          y += (m - 1) ~/ 12;
+          m = ((m - 1) % 12) + 1;
+          int d = dt.day;
+          final lastDay = DateTime(y, m + 1, 0).day;
+          if (d > lastDay) d = lastDay;
+          return DateTime(y, m, d);
+        }
+
+        // Initialize selectedDate and validity text
+        selectedDate = dateText.isNotEmpty ? tryParseDate(dateText) : null;
+        String validUntilText = '';
+        if (selectedDate != null) {
+          validUntilText = _computeValidityUntil(categoryKey, selectedDate, monthYearOnly);
+        } else {
+          validUntilText = (complianceStatuses[validKey] ?? '').toString();
+        }
+
+        return StatefulBuilder(
+          builder: (context, setStateSB) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.all(24),
+              child: Container(
+                width: 600,
+                height: 600,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            file.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Center(
+                        child: isImage
+                            ? Image.network(
+                                fileUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: Text('Failed to load image'),
+                                    ),
                               )
-                            : isWord
+                            : isPdf
                                 ? Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.description, color: Colors.blue, size: 64),
+                                      const Icon(Icons.picture_as_pdf, color: Colors.red, size: 64),
                                       const SizedBox(height: 16),
                                       ElevatedButton.icon(
                                         icon: const Icon(Icons.open_in_new),
-                                        label: const Text('Open Document'),
+                                        label: const Text('Open PDF'),
                                         onPressed: () async {
-                                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                          final uri = Uri.parse(fileUrl);
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
                                           } else {
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               const SnackBar(content: Text('Could not open file')),
@@ -200,14 +412,317 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                       ),
                                     ],
                                   )
-                                : const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
-                  ),
+                                : isWord
+                                    ? Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.description, color: Colors.blue, size: 64),
+                                          const SizedBox(height: 16),
+                                          ElevatedButton.icon(
+                                            icon: const Icon(Icons.open_in_new),
+                                            label: const Text('Open Document'),
+                                            onPressed: () async {
+                                              final uri = Uri.parse(fileUrl);
+                                              if (await canLaunchUrl(uri)) {
+                                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                              } else {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Could not open file')),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      )
+                                    : const Text('Unsupported file type', style: TextStyle(color: Colors.red)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Date Reported/Issued input
+                    const Text(
+                      'Date Reported/Issued',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today),
+                      label: Text(
+                        dateText.isEmpty ? 'Select date' : dateText,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate ?? DateTime(now.year, now.month, now.day),
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(now.year + 10),
+                        );
+                        if (picked != null) {
+                          setStateSB(() {
+                            selectedDate = picked;
+                            dateText = fmt(picked, monthYearOnly);
+                            validUntilText = _computeValidityUntil(categoryKey, picked, monthYearOnly);
+                          });
+                        }
+                      },
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('Month/Year only'),
+                      value: monthYearOnly,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setStateSB(() {
+                          monthYearOnly = v;
+                          final baseDate = selectedDate ?? (dateText.isNotEmpty ? tryParseDate(dateText) : null);
+                          if (baseDate != null) {
+                            dateText = fmt(baseDate, monthYearOnly);
+                            validUntilText = _computeValidityUntil(categoryKey, baseDate, monthYearOnly);
+                          }
+                        });
+                      },
+                    ),
+
+                    // New: Validity Until (derived)
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.event_available, size: 18, color: Colors.green),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            validUntilText.isEmpty ? 'Validity Until: —' : 'Validity Until: $validUntilText',
+                            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: savingDate
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.save),
+                        label: Text(savingDate ? 'Saving...' : 'Save Date'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: savingDate
+                            ? null
+                            : () async {
+                                // Ensure we have a valid selected date (parse if needed)
+                                DateTime? baseDate = selectedDate ?? (dateText.isNotEmpty ? tryParseDate(dateText) : null);
+                                if (baseDate == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Please select a valid date')),
+                                  );
+                                  return;
+                                }
+                                final validText = _computeValidityUntil(categoryKey, baseDate, monthYearOnly);
+
+                                setStateSB(() => savingDate = true);
+                                try {
+                                  await FirebaseFirestore.instance
+                                      .collection('compliance_uploads')
+                                      .doc(widget.stationOwnerDocId)
+                                      .set({
+                                        dateKey: fmt(baseDate, monthYearOnly),
+                                        validKey: validText,
+                                      }, SetOptions(merge: true));
+
+                                  if (!mounted) return;
+                                  setState(() {
+                                    complianceStatuses[dateKey] = fmt(baseDate, monthYearOnly);
+                                    complianceStatuses[validKey] = validText;
+                                  });
+                                  setStateSB(() {
+                                    dateText = fmt(baseDate, monthYearOnly);
+                                    validUntilText = validText;
+                                  });
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Date and validity saved')),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Failed to save date')),
+                                  );
+                                } finally {
+                                  setStateSB(() => savingDate = false);
+                                }
+                              },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Download button (existing)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.download),
+                      label: const Text('Download'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () async {
+                        final uri = Uri.parse(fileUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Could not download file')),
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Add this helper function inside _ComplianceFilesViewerState
+  String _computeValidityUntil(String categoryKey, DateTime issuedDate, bool monthYearOnly) {
+    // All keys are lowercased
+    switch (categoryKey) {
+      case 'business_permit':
+        // Always January 20 of next year
+        final nextYear = issuedDate.year + 1;
+        return monthYearOnly
+            ? '01/$nextYear'
+            : '01/20/$nextYear';
+      case 'sanitary_permit':
+      case 'certificate_of_association':
+        // Always December 31 of the same year
+        return monthYearOnly
+            ? '12/${issuedDate.year}'
+            : '12/31/${issuedDate.year}';
+      case 'finished_bacteriological':
+        // Valid for 1 month
+        final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
+        return monthYearOnly
+            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
+            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+      case 'source_bacteriological':
+        // Valid for 6 months
+        final valid = DateTime(issuedDate.year, issuedDate.month + 6, issuedDate.day);
+        return monthYearOnly
+            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
+            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+      case 'source_physical_chemical':
+      case 'finished_physical_chemical':
+        // Valid for 1 year
+        final valid = DateTime(issuedDate.year + 1, issuedDate.month, issuedDate.day);
+        return monthYearOnly
+            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
+            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+      default:
+        // Default: 1 month
+        final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
+        return monthYearOnly
+            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
+            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+    }
+  }
+
+  // Visual helpers (copied design)
+  Color _statusColor(String? status) {
+    switch ((status ?? '').toLowerCase()) {
+      case 'passed':
+        return const Color(0xFF2E7D32); // green
+      case 'failed':
+        return const Color(0xFFC62828); // red
+      case 'pending':
+        return const Color(0xFFF9A825); // amber
+      case 'partially':
+      default:
+        return const Color(0xFF1565C0); // blue
+    }
+  }
+
+  IconData _fileIcon(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+        return Icons.image;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  Color _fileIconColor(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return const Color(0xFFD32F2F);
+      case 'doc':
+      case 'docx':
+        return const Color(0xFF1565C0);
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+        return const Color(0xFF2E7D32);
+      default:
+        return const Color(0xFF5E5E5E);
+    }
+  }
+
+  Widget _buildStatusChip(String? status, {bool compact = false}) {
+    final color = _statusColor(status);
+    final text = (status ?? 'Partially');
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(compact ? 0.08 : 0.10),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: color.withOpacity(compact ? 0.30 : 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: compact ? 5 : 6,
+            height: compact ? 5 : 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: compact ? 11 : 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+              letterSpacing: 0.2,
             ),
-          ));
-        },
-      );
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -217,187 +732,324 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           ? const Center(child: CircularProgressIndicator())
           : uploadedFiles.isEmpty
               ? const Center(child: Text('No uploaded compliance files found.'))
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: uploadedFiles.map((file) {
-                      final fileUrl = Supabase.instance.client.storage
-                          .from('compliance_docs')
-                          .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
-                      final extension = file.name.split('.').last.toLowerCase();
-                      final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
-                      final isPdf = extension == 'pdf';
-                      final isWord = extension == 'doc' || extension == 'docx';
-                      final (categoryKey, categoryLabel) = _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
+              : Column(
+                  children: [
+                    Expanded(
+                      child: Scrollbar(
+                        controller: _horizontalScrollController,
+                        thumbVisibility: true,
+                        trackVisibility: true,
+                        scrollbarOrientation: ScrollbarOrientation.bottom,
+                        child: SingleChildScrollView(
+                          controller: _horizontalScrollController,
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: List.generate(uploadedFiles.length, (index) {
+                              final file = uploadedFiles[index];
+                              final fileUrl = Supabase.instance.client.storage
+                                  .from('compliance_docs')
+                                  .getPublicUrl('uploads/${widget.stationOwnerDocId}/${file.name}');
+                              final extension = file.name.split('.').last.toLowerCase();
+                              final isImage = ['png', 'jpg', 'jpeg'].contains(extension);
+                              final isPdf = extension == 'pdf';
+                              final isWord = extension == 'doc' || extension == 'docx';
+                              final (categoryKey, categoryLabel) =
+                                  _extractCategoryKeyAndLabel(file.name, widget.stationOwnerDocId);
 
-                      final statusKey = '${categoryKey}_status';
-                      final status = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Partially').toString();
+                              final statusKey = '${categoryKey}_status';
+                              final rawStatus = (statusEdits[statusKey] ?? complianceStatuses[statusKey] ?? 'Partially').toString();
+                              final status = rawStatus.isNotEmpty
+                                  ? '${rawStatus[0].toUpperCase()}${rawStatus.substring(1).toLowerCase()}'
+                                  : null;
 
-                      Color statusColor;
-                      switch (status.toLowerCase()) {
-                        case 'pending':
-                          statusColor = Colors.orange;
-                          break;
-                        case 'passed':
-                          statusColor = Colors.green;
-                          break;
-                        case 'partially':
-                          statusColor = Colors.teal.shade300;
-                          break;
-                        case 'failed':
-                          statusColor = Colors.red;
-                          break;
-                        default:
-                          statusColor = Colors.grey;
-                      }
+                              final accent = _statusColor(status);
+                              final icon = _fileIcon(extension);
+                              final iconColor = _fileIconColor(extension);
 
-                      return Container(
-                        width: 240, // Improved width for uniformity
-                        height: 320, // Fixed height for uniformity
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          elevation: 2,
-                          color: Colors.white,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // Status display at the top
-                                if (status.toLowerCase() == 'passed')
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Text(
-                                      'PASSED',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      color: statusColor,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      status.toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                        letterSpacing: 1.1,
-                                      ),
-                                    ),
-                                  ),
-                                Text(
-                                  categoryLabel,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                    fontSize: 16,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  file.name,
-                                  style: const TextStyle(fontSize: 13, color: Colors.black87),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 12),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue.shade100,
-                                    foregroundColor: Colors.blue,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: const Text('View File', style: TextStyle(color: Colors.blue)),
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                              // --- Add these lines to get date issued and valid until ---
+                              final dateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
+                              final validUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              // ---------------------------------------------------------
+
+                              return Card(
+                                elevation: 4,
+                                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                child: Container(
+                                  width: 240,
+                                  height: 360,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: DropdownButton<String>(
-                                    value: (['pending', 'partially', 'failed'].contains(status.toLowerCase()))
-                                        ? status.toLowerCase()
-                                        : 'partially',
-                                    isExpanded: true,
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: 'pending',
-                                        child: Text('Pending'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'partially',
-                                        child: Text('Partially'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'failed',
-                                        child: Text('Failed'),
+                                    borderRadius: BorderRadius.circular(16),
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [Colors.white, Color(0xFFF7FAFF)],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
                                       ),
                                     ],
-                                    onChanged: status.toLowerCase() == 'passed'
-                                        ? null
-                                        : (value) {
-                                            setState(() {
-                                              if (value != null) {
-                                                statusEdits[statusKey] = value;
-                                              }
-                                            });
-                                          },
-                                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                                    dropdownColor: Colors.white,
-                                    underline: Container(),
-                                    disabledHint: const Text('Status Passed', style: TextStyle(color: Colors.grey)),
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        left: BorderSide(color: accent.withOpacity(0.85), width: 5),
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Container(
+                                                width: 36,
+                                                height: 36,
+                                                decoration: BoxDecoration(
+                                                  color: iconColor.withOpacity(0.10),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(icon, color: iconColor, size: 20),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  categoryLabel,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0D47A1),
+                                                    fontSize: 14,
+                                                    height: 1.2,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              _buildStatusChip(status),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 14),
+                                          Expanded(
+                                            child: Center(
+                                              child: Icon(
+                                                icon,
+                                                color: iconColor.withOpacity(0.35),
+                                                size: 64,
+                                              ),
+                                            ),
+                                          ),
+                                          // --- Add this block to display date issued and valid until ---
+                                          if (dateIssued.isNotEmpty || validUntil.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    dateIssued.isNotEmpty
+                                                        ? 'Date Issued: $dateIssued'
+                                                        : 'Date Issued: —',
+                                                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.event_available, size: 16, color: Colors.green),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    validUntil.isNotEmpty
+                                                        ? 'Valid Until: $validUntil'
+                                                        : 'Valid Until: —',
+                                                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                          ],
+                                          // ------------------------------------------------------------
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: OutlinedButton.icon(
+                                              onPressed: () {
+                                                _showFileDialog(file, fileUrl, isImage, isPdf, isWord, categoryKey);
+                                              },
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: const Color(0xFF1565C0),
+                                                side: const BorderSide(color: Color(0xFFBBDEFB)),
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                              ),
+                                              icon: const Icon(Icons.visibility_outlined),
+                                              label: const Text('View File'),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          DropdownButtonFormField<String>(
+                                            isExpanded: true,
+                                            alignment: Alignment.centerLeft,
+                                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: accent),
+                                            menuMaxHeight: 320,
+                                            initialValue: const ['Pending', 'Partially', 'Failed'].contains(status) ? status : null,
+                                            decoration: InputDecoration(
+                                              labelText: 'Status',
+                                              labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                              hintText: 'Select status',
+                                              filled: true,
+                                              fillColor: accent.withOpacity(0.05),
+                                              prefixIcon: Padding(
+                                                padding: const EdgeInsets.only(left: 12, right: 8),
+                                                child: Container(width: 8, height: 8, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
+                                              ),
+                                              prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(12),
+                                                borderSide: BorderSide(color: accent.withOpacity(0.30)),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(12),
+                                                borderSide: BorderSide(color: accent, width: 1.6),
+                                              ),
+                                            ),
+                                            selectedItemBuilder: (context) {
+                                              // Must match items length (header + divider + 3 options)
+                                              final opts = ['__header', '__div', 'Pending', 'Partially', 'Failed'];
+                                              return opts.map((opt) {
+                                                switch (opt) {
+                                                  case '__header':
+                                                  case '__div':
+                                                    return const SizedBox.shrink();
+                                                  default:
+                                                    return Align(
+                                                      alignment: Alignment.centerLeft,
+                                                      child: _buildStatusChip(opt, compact: true),
+                                                    );
+                                                }
+                                              }).toList();
+                                            },
+                                            items: [
+                                              // Header (not selectable)
+                                              DropdownMenuItem<String>(
+                                                value: '__header',
+                                                enabled: false,
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: const [
+                                                      Text('Select a status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.black87)),
+                                                      SizedBox(height: 2),
+                                                      Text('Choose the current evaluation result', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              // Divider (not selectable)
+                                              DropdownMenuItem<String>(
+                                                value: '__div',
+                                                enabled: false,
+                                                child: const Divider(height: 1, thickness: 1),
+                                              ),
+                                              // Options
+                                              ...['Pending', 'Partially', 'Failed'].map((opt) {
+                                                final color = _statusColor(opt);
+                                                final subtitle = {
+                                                  'Pending': 'Waiting for review',
+                                                  'Partially': 'Some requirements incomplete',
+                                                  'Failed': 'Does not meet requirements',
+                                                }[opt]!;
+                                                final isSelected = opt == status;
+                                                return DropdownMenuItem<String>(
+                                                  value: opt,
+                                                  child: Row(
+                                                    children: [
+                                                      Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                                                      const SizedBox(width: 10),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(opt, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                                            const SizedBox(height: 2),
+                                                            Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (isSelected) ...[
+                                                        const SizedBox(width: 10),
+                                                        Icon(Icons.check_rounded, size: 18, color: color),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                );
+                                              }),
+                                            ],
+                                            onChanged: (status?.toLowerCase() == 'passed')
+                                                ? null
+                                                : (value) {
+                                                    setState(() {
+                                                      if (value != null && value != '__header' && value != '__div') {
+                                                        statusEdits[statusKey] = value;
+                                                      }
+                                                    });
+                                                  },
+                                            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                                            dropdownColor: Colors.white,
+                                            disabledHint: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: _buildStatusChip(status, compact: true),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              onPressed: statusEdits.containsKey(statusKey)
+                                                  ? () {
+                                                      final newStatus = statusEdits[statusKey]!;
+                                                      updateStatus(statusKey, newStatus);
+                                                    }
+                                                  : null,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: accent,
+                                                disabledBackgroundColor: const Color(0xFFB0BEC5),
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                elevation: 0,
+                                              ),
+                                              icon: const Icon(Icons.save_outlined),
+                                              label: const Text('Save', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: (statusEdits.containsKey(statusKey) && status.toLowerCase() != 'passed')
-                                      ? () {
-                                          final newStatus = statusEdits[statusKey]!;
-                                          updateStatus(statusKey, newStatus);
-                                        }
-                                      : null,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue.shade200,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: const Text('Save', style: TextStyle(fontSize: 14)),
-                                ),
-                              ],
-                            ),
+                              );
+                            }),
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
     );
   }

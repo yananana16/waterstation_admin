@@ -46,7 +46,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _complianceReportTitle = "";
 
   // Add this map to hold district counts
-  Map<String, int> _districtCounts = {};
+  final Map<String, int> _districtCounts = {};
 
   // Check if user is federated president
   Future<void> _checkIfFederatedPresident() async {
@@ -79,8 +79,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // Add this method to fetch counts from Firestore
   Future<Map<String, int>> _fetchDistrictCounts() async {
     final districts = [
-      "Lapaz", "Mandurriao", "Molo", "Lapuz", "Arevalo",
-      "Jaro 1", "Jaro 2", "City Proper 1", "City Proper 2"
+      "La Paz", "Mandurriao", "Molo", "Lapuz", "Arevalo",
+      "Jaro", "City Proper"
     ];
     Map<String, int> counts = {};
     for (final district in districts) {
@@ -675,7 +675,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         Expanded(
                                           child: Column(
                                             children: [
-                                              _DistrictStationTile("La Paz", "${counts["Lapaz"] ?? "-"}"),
+                                              _DistrictStationTile("La Paz", "${counts["La Paz"] ?? "-"}"),
                                               const SizedBox(height: 8),
                                               _DistrictStationTile("Mandurriao", "${counts["Mandurriao"] ?? "-"}"),
                                               const SizedBox(height: 8),
@@ -692,13 +692,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         Expanded(
                                           child: Column(
                                             children: [
-                                              _DistrictStationTile("Jaro 1", "${counts["Jaro 1"] ?? "-"}"),
+                                              _DistrictStationTile("Jaro", "${counts["Jaro"] ?? "-"}"),
                                               const SizedBox(height: 8),
-                                              _DistrictStationTile("Jaro 2", "${counts["Jaro 2"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("City Proper 1", "${counts["City Proper 1"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("City Proper 2", "${counts["City Proper 2"] ?? "-"}"),
+                                              _DistrictStationTile("City Proper", "${counts["City Proper"] ?? "-"}"),
                                             ],
                                           ),
                                         ),

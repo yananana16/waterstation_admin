@@ -19,6 +19,19 @@ class _CompliancePageState extends State<CompliancePage> {
   String complianceStatusFilter = 'approved';
   String? selectedStationOwnerDocId;
 
+  Future<void> _refreshSelectedStationData() async {
+    if (selectedStationOwnerDocId == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('station_owners')
+        .doc(selectedStationOwnerDocId)
+        .get();
+    if (doc.exists) {
+      setState(() {
+        selectedStationData = doc.data() as Map<String, dynamic>?;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -66,24 +79,28 @@ class _CompliancePageState extends State<CompliancePage> {
                     child: Column(
                       children: [
                         _buildComplianceReportDetailsFromData(selectedStationData!),
-                        const SizedBox(height: 24),
-                        Container(
-                          margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
+                        const SizedBox(height: 16),
+                        // Was: fixed height 420 -> make viewer take remaining space
+                        Expanded(
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 8, bottom: 8, right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: ComplianceFilesViewer(
+                                stationOwnerDocId: selectedStationOwnerDocId!,
+                                onStatusChanged: _refreshSelectedStationData, // refresh header after updates
                               ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ComplianceFilesViewer(
-                              stationOwnerDocId: selectedStationOwnerDocId!,
                             ),
                           ),
                         ),
@@ -221,6 +238,37 @@ class _CompliancePageState extends State<CompliancePage> {
                   ),
                 ),
               ),
+              // NEW: District Approved tab
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      complianceStatusFilter = 'district_approved';
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: complianceStatusFilter == 'district_approved'
+                          ? const Color(0xFFE3EAFD)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "District Approved",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: complianceStatusFilter == 'district_approved'
+                              ? Colors.blueAccent
+                              : Colors.black54,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -250,13 +298,12 @@ class _CompliancePageState extends State<CompliancePage> {
                 }).toList();
 
                 if (filteredDocs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      complianceStatusFilter == 'approved'
-                          ? 'No approved stations found.'
-                          : 'No pending approval stations found.',
-                    ),
-                  );
+                  final msg = complianceStatusFilter == 'approved'
+                      ? 'No approved stations found.'
+                      : complianceStatusFilter == 'pending_approval'
+                          ? 'No pending approval stations found.'
+                          : 'No district-approved stations found.';
+                  return Center(child: Text(msg));
                 }
 
                 return ListView.separated(
@@ -501,7 +548,9 @@ class _CompliancePageState extends State<CompliancePage> {
                                     ? Colors.green
                                     : (data['status'] == 'pending_approval')
                                         ? Colors.orange
-                                        : Colors.grey,
+                                        : (data['status'] == 'district_approved')
+                                            ? Colors.indigo
+                                            : Colors.grey,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(

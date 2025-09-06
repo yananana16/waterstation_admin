@@ -313,7 +313,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         scrollDirection: Axis.vertical,
                         child: DataTable(
                           columnSpacing: 18,
-                          headingRowColor: MaterialStateProperty.all(const Color(0xFFE3F2FD)),
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFE3F2FD)),
                           columns: const [
                             DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),

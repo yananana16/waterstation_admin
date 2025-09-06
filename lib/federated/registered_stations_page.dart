@@ -229,7 +229,13 @@ class RegisteredStationsPage extends StatelessWidget {
                   future: FirebaseFirestore.instance.collection('districts').get(),
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
-                    final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
+                    // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
+                    final districts = docs
+                        .map((doc) => doc['districtName']?.toString() ?? '')
+                        .where((d) => d.isNotEmpty)
+                        .toSet()
+                        .toList()
+                      ..sort();
                     return Container(
                       margin: const EdgeInsets.only(right: 500),
                       height: 40,
@@ -250,19 +256,18 @@ class RegisteredStationsPage extends StatelessWidget {
                           Expanded(
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
-                                value: registeredStationsDistrictFilter,
+                                // If the selected filter is null or empty, pass null as value so the hint is shown
+                                value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
+                                    ? null
+                                    : registeredStationsDistrictFilter,
                                 hint: const Text("Filter"),
                                 isExpanded: true,
-                                items: [
-                                  const DropdownMenuItem<String>(
-                                    value: null,
-                                    child: Text("Filter"),
-                                  ),
-                                  ...districts.map((district) => DropdownMenuItem<String>(
-                                        value: district,
-                                        child: Text(district),
-                                      )),
-                                ],
+                                items: districts
+                                    .map((district) => DropdownMenuItem<String>(
+                                          value: district,
+                                          child: Text(district),
+                                        ))
+                                    .toList(),
                                 onChanged: (value) => onDistrictFilterChanged(value),
                                 style: const TextStyle(fontSize: 15, color: Colors.black87),
                                 icon: const SizedBox.shrink(),
