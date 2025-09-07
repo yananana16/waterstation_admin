@@ -2,15 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthPr
 import 'package:flutter/material.dart';
 import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../auth_service.dart';
 import '../login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_page.dart';
 import 'change_password_dialog.dart'; // <-- Add this import
-import 'compliance_files_viewer.dart'; // <-- Add this import
+// <-- Add this import
 import 'logout_dialog.dart'; // <-- Add this import
 import 'registered_stations_page.dart'; // <-- Add this import
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/email_sender.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
@@ -13,6 +15,141 @@ class ComplianceFilesViewer extends StatefulWidget {
 }
 
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
+  bool _isSendingEmail = false;
+  bool _emailSent = false;
+  bool get _hasFailedFiles => complianceStatuses.entries.any((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'));
+
+  Future<void> sendFailedFilesEmail(Map<String, dynamic> complianceStatuses) async {
+    if (_emailSent || _isSendingEmail) return;
+    setState(() {
+      _isSendingEmail = true;
+    });
+    // Fetch owner info
+    final ownerDoc = await FirebaseFirestore.instance
+        .collection('station_owners')
+        .doc(widget.stationOwnerDocId)
+        .get();
+    final ownerData = ownerDoc.data();
+    final recipientEmail = ownerData?['email']?.toString() ?? '';
+    final stationName = ownerData?['station_name']?.toString() ?? '';
+    if (recipientEmail.isEmpty) return;
+
+    // Collect failed files with details
+    final failedFiles = complianceStatuses.entries
+        .where((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'))
+        .map((e) {
+          final key = e.key.replaceAll('_status', '');
+          final category = key.replaceAll('_', ' ').replaceFirst(key[0], key[0].toUpperCase());
+          final dateIssued = complianceStatuses['${key}_date_issued'] ?? '';
+          final validUntil = complianceStatuses['${key}_valid_until'] ?? '';
+          return {
+            'category': category,
+            'dateIssued': dateIssued,
+            'validUntil': validUntil,
+          };
+        })
+        .toList();
+    if (failedFiles.isEmpty) return;
+
+    // Build HTML table rows
+    final rows = failedFiles.map((f) =>
+      '<tr>'
+        '<td style="padding:8px 12px;border:1px solid #e0e0e0;">${f['category']}</td>'
+        '<td style="padding:8px 12px;border:1px solid #e0e0e0;">${f['dateIssued']}</td>'
+        '<td style="padding:8px 12px;border:1px solid #e0e0e0;">${f['validUntil']}</td>'
+      '</tr>'
+    ).join();
+
+    final body = '''
+    <div style="font-family: Arial, sans-serif; background: #f4f8fb; padding: 32px;">
+      <div style="max-width: 520px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 32px 24px;">
+        <div style="text-align: center; margin-bottom: 18px;">
+          <div style="font-size: 48px; color: #c62828;">⚠️</div>
+          <h2 style="color: #c62828; margin: 0 0 8px 0;">Compliance File(s) Failed</h2>
+        </div>
+        <p style="font-size: 16px; color: #222; margin-bottom: 18px;">Dear Station Owner,</p>
+        <p style="font-size: 15px; color: #444; margin-bottom: 18px;">
+          The following compliance file(s) for your station <b>${stationName.isNotEmpty ? stationName : ''}</b> did not meet the necessary requirements. Please check the validity and the date issued, and re-upload the correct documents.
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+          <thead>
+            <tr style="background:#fbe9e7;">
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Category</th>
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Date Issued</th>
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Valid Until</th>
+            </tr>
+          </thead>
+          <tbody>
+            $rows
+          </tbody>
+        </table>
+        <p style="font-size: 15px; color: #555; margin-bottom: 0;">
+          Thank you for your attention.<br>
+          <b>From the District President</b><br>
+          <b>H2OGO Compliance Team</b>
+        </p>
+      </div>
+    </div>
+    ''';
+    await sendApprovalEmail(
+      recipientEmail,
+      stationName,
+      customBody: body,
+      customSubject: 'Some Compliance Files Failed Requirements',
+    );
+    setState(() {
+      _emailSent = true;
+      _isSendingEmail = false;
+    });
+    // Improved dialog design
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        backgroundColor: Colors.white,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.mark_email_read_rounded, color: Colors.green, size: 48),
+                const SizedBox(height: 14),
+                const Text(
+                  'Email Sent Successfully!',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'The station owner has been notified about the failed compliance files.',
+                  style: TextStyle(fontSize: 14, color: Colors.black87),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    icon: const Icon(Icons.check),
+                    label: const Text('OK', style: TextStyle(fontSize: 15)),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   List<FileObject> uploadedFiles = [];
   bool isLoading = true;
   Map<String, dynamic> complianceStatuses = {};
@@ -93,7 +230,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         stationStatus = 'district_approved';
         message = 'Station marked as District Approved.';
       } else if (statusValues.any((s) => s == 'failed')) {
-        stationStatus = 'failed';
+        stationStatus = 'submitreq'; // Backend status for failed
         message = 'Station marked as Failed.';
       } else if (statusValues.any((s) => s == 'pending')) {
         stationStatus = 'pending_approval';
@@ -621,27 +758,27 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         // Valid for 1 month
         final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
         return monthYearOnly
-            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
-            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
+            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
       case 'source_bacteriological':
         // Valid for 6 months
         final valid = DateTime(issuedDate.year, issuedDate.month + 6, issuedDate.day);
         return monthYearOnly
-            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
-            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
+            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
       case 'source_physical_chemical':
       case 'finished_physical_chemical':
         // Valid for 1 year
         final valid = DateTime(issuedDate.year + 1, issuedDate.month, issuedDate.day);
         return monthYearOnly
-            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
-            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
+            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
       default:
         // Default: 1 month
         final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
         return monthYearOnly
-            ? valid.month.toString().padLeft(2, '0') + '/${valid.year}'
-            : valid.month.toString().padLeft(2, '0') + '/' + valid.day.toString().padLeft(2, '0') + '/${valid.year}';
+            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
+            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
     }
   }
 
@@ -693,8 +830,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   }
 
   Widget _buildStatusChip(String? status, {bool compact = false}) {
-    final color = _statusColor(status);
-    final text = (status ?? 'Partially');
+    // If backend status is 'submitreq', display as 'Failed' in UI
+    String displayStatus = status ?? 'Partially';
+    if (displayStatus.toLowerCase() == 'submitreq') {
+      displayStatus = 'Failed';
+    }
+    final color = _statusColor(displayStatus);
+    final text = displayStatus;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 4),
       decoration: BoxDecoration(
@@ -734,6 +876,34 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
               ? const Center(child: Text('No uploaded compliance files found.'))
               : Column(
                   children: [
+                    if (_hasFailedFiles && !_emailSent)
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: SizedBox(
+                          width: 180,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            icon: _isSendingEmail
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.email),
+                            label: Text(_isSendingEmail ? 'Sending...' : 'Send Email'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              foregroundColor: Colors.white,
+                              textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: _isSendingEmail ? null : () => sendFailedFilesEmail(complianceStatuses),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: Scrollbar(
                         controller: _horizontalScrollController,
@@ -745,6 +915,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: List.generate(uploadedFiles.length, (index) {
+                              // ...existing code...
                               final file = uploadedFiles[index];
                               final fileUrl = Supabase.instance.client.storage
                                   .from('compliance_docs')
@@ -769,7 +940,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                               // --- Add these lines to get date issued and valid until ---
                               final dateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
                               final validUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
-                              // ---------------------------------------------------------
+                              // --------------------------------------------------------- 
 
                               return Card(
                                 elevation: 4,
