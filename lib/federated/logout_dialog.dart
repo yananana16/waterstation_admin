@@ -79,3 +79,4 @@ class LogoutDialog extends StatelessWidget {
     );
   }
 }
+

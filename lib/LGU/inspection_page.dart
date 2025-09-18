@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class InspectionPage extends StatefulWidget {
   final VoidCallback? onClose;
-  const InspectionPage({Key? key, this.onClose}) : super(key: key);
+  const InspectionPage({super.key, this.onClose});
 
   @override
   State<InspectionPage> createState() => _InspectionPageState();
@@ -228,3 +228,4 @@ class _InspectionPageState extends State<InspectionPage> {
     );
   }
 }
+

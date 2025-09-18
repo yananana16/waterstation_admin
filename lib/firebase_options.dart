@@ -84,3 +84,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'waterstation-3464b.firebasestorage.app',
   );
 }
+

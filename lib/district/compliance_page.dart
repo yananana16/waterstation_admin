@@ -27,7 +27,7 @@ class _CompliancePageState extends State<CompliancePage> {
         .get();
     if (doc.exists) {
       setState(() {
-        selectedStationData = doc.data() as Map<String, dynamic>?;
+        selectedStationData = doc.data();
       });
     }
   }
@@ -577,3 +577,4 @@ class _CompliancePageState extends State<CompliancePage> {
     );
   }
 }
+

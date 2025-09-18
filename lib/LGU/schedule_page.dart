@@ -320,7 +320,7 @@ class _ScheduleCalendar extends StatelessWidget {
   final double scale;
   final double? availableWidth;
   final double? availableHeight; // added
-  const _ScheduleCalendar({this.scale = 1.0, this.availableWidth, this.availableHeight, Key? key}) : super(key: key);
+  const _ScheduleCalendar({this.scale = 1.0, this.availableWidth, this.availableHeight, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -467,7 +467,7 @@ class _ScheduleActionButton extends StatelessWidget {
 // AddScheduleSubscreen: use responsive label width.
 class AddScheduleSubscreen extends StatelessWidget {
   final VoidCallback? onClose;
-  const AddScheduleSubscreen({Key? key, this.onClose}) : super(key: key);
+  const AddScheduleSubscreen({super.key, this.onClose});
 
   Widget _fieldRow(String label, Widget right, double labelWidth, double scale) {
     return Container(
@@ -637,7 +637,7 @@ class AddScheduleSubscreen extends StatelessWidget {
 // AssignmentSubscreen: use flexible left width and responsive paddings/sizes.
 class AssignmentSubscreen extends StatefulWidget {
   final VoidCallback? onClose;
-  const AssignmentSubscreen({Key? key, this.onClose}) : super(key: key);
+  const AssignmentSubscreen({super.key, this.onClose});
 
   @override
   State<AssignmentSubscreen> createState() => _AssignmentSubscreenState();
@@ -872,3 +872,4 @@ class _AssignmentSubscreenState extends State<AssignmentSubscreen> {
     );
   }
 }
+
