@@ -1,5 +1,6 @@
 // import 'package:cloud_firestore/cloud_firestore.dart'; // unused - removed
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // added to fetch real count
 import 'package:waterstation_admin/LGU/water_stations_page.dart'; // moved Water Stations page to separate file
 import 'package:waterstation_admin/LGU/schedule_page.dart';
 
@@ -12,6 +13,16 @@ class LguDashboard extends StatefulWidget {
 
 class _LguDashboardState extends State<LguDashboard> {
   int selectedIndex = 0; // 0: Dashboard, 1: Water Stations, 2: Schedule, 3: Profile
+
+  // new: real count of station_owners
+  int totalOwners = 0;
+
+  // new: counts per district
+  Map<String, int> areaCounts = {};
+
+  // new: approved / failed counts
+  int approvedCount = 0;
+  int failedCount = 0;
 
   // Add logout method
   void _logout() async {
@@ -34,6 +45,46 @@ class _LguDashboardState extends State<LguDashboard> {
     );
     if (shouldLogout == true) {
       Navigator.of(context).pop(); // or pushReplacement to login page if available
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTotalOwners();
+  }
+
+  // fetch real count of station_owners from Firestore
+  Future<void> _fetchTotalOwners() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('station_owners').get();
+      // compute total and counts per district
+      final Map<String, int> counts = {};
+      int approved = 0;
+      int failed = 0;
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final district = (data['districtName'] ?? '').toString().trim();
+        if (district.isNotEmpty) {
+          counts[district] = (counts[district] ?? 0) + 1;
+        }
+        // count status == 'approved' (case-insensitive)
+        final status = (data['status'] ?? '').toString().toLowerCase();
+        if (status == 'approved') {
+          approved++;
+        } else {
+          failed++;
+        }
+      }
+      setState(() {
+        totalOwners = snapshot.size;
+        areaCounts = counts;
+        approvedCount = approved;
+        failedCount = failed;
+      });
+    } catch (e) {
+      // fail silently; keep totalOwners as 0 (optionally log)
+      // print('Failed to fetch station_owners count: $e');
     }
   }
 
@@ -306,7 +357,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                         children: [
                                           _SummaryCard(
                                             label: 'Total\nWater Refilling Stations',
-                                            value: '398',
+                                            value: totalOwners.toString(),
                                             color: Colors.white,
                                             valueColor: const Color(0xFF0B63B7),
                                             labelColor: const Color(0xFF0B63B7),
@@ -314,7 +365,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                           const SizedBox(height: 12),
                                           _SummaryCard(
                                             label: 'Passed',
-                                            value: '360',
+                                            value: approvedCount.toString(),
                                             color: Colors.white,
                                             valueColor: const Color(0xFF0B63B7),
                                             labelColor: const Color(0xFF0B63B7),
@@ -322,7 +373,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                           const SizedBox(height: 12),
                                           _SummaryCard(
                                             label: 'Failed',
-                                            value: '38',
+                                            value: failedCount.toString(),
                                             color: Colors.white,
                                             valueColor: const Color(0xFF0B63B7),
                                             labelColor: const Color(0xFF0B63B7),
@@ -347,23 +398,19 @@ class _LguDashboardState extends State<LguDashboard> {
                                             const Text("Water Refilling Stations\nIloilo City", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
                                             const SizedBox(height: 12),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "La Paz", value: 24, maxValue: 30),
+                                            _AreaStatRow(label: "La Paz", value: areaCounts['La Paz'] ?? 6, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Mandurriao", value: 24, maxValue: 30),
+                                            _AreaStatRow(label: "Mandurriao", value: areaCounts['Mandurriao'] ?? 0, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Molo", value: 17, maxValue: 30),
+                                            _AreaStatRow(label: "Molo", value: areaCounts['Molo'] ?? 0, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Lapuz", value: 30, maxValue: 30),
+                                            _AreaStatRow(label: "Lapuz", value: areaCounts['Lapuz'] ?? 0, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Arevalo", value: 26, maxValue: 30),
+                                            _AreaStatRow(label: "Arevalo", value: areaCounts['Arevalo'] ?? 0, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Jaro 1", value: 14, maxValue: 30),
+                                            _AreaStatRow(label: "Jaro", value: areaCounts['Jaro'] ?? 0, maxValue: 30),
                                             const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Jaro 2", value: 19, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "City Proper 1", value: 15, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "City Proper 2", value: 9, maxValue: 30),
+                                            _AreaStatRow(label: "City Proper", value: areaCounts['City Proper'] ?? 0, maxValue: 30),
                                           ],
                                         ),
                                       ),
@@ -498,22 +545,45 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// Calendar widget (static for May 2025)
+// Calendar widget (dynamic to current month/day)
 class _CalendarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // larger cell size for better readability
     const double cellSize = 44.0;
-    // Days of the week
     final days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    // May 2025 starts on Thursday
-    final weeks = [
-      ['', '', '', '', '1', '2', '3'],
-      ['4', '5', '6', '7', '8', '9', '10'],
-      ['11', '12', '13', '14', '15', '16', '17'],
-      ['18', '19', '20', '21', '22', '23', '24'],
-      ['25', '26', '27', '28', '29', '30', '31'],
+
+    final now = DateTime.now();
+    final monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
+    final monthName = monthNames[now.month - 1];
+    final year = now.year;
+
+    final firstDayOfMonth = DateTime(year, now.month, 1);
+    // start index where Sunday=0
+    final startIndex = firstDayOfMonth.weekday % 7;
+    // number of days in current month
+    final daysInMonth = DateTime(year, now.month + 1, 0).day;
+
+    // build weeks as List<List<String>>
+    final List<List<String>> weeks = [];
+    int day = 1;
+    while (day <= daysInMonth) {
+      final week = List<String>.filled(7, '');
+      for (int i = 0; i < 7 && day <= daysInMonth; i++) {
+        if (weeks.isEmpty && i < startIndex) {
+          // leading empty cells for first week
+          continue;
+        }
+        if (day <= daysInMonth) {
+          week[i] = day.toString();
+          day++;
+        }
+      }
+      weeks.add(week);
+    }
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 480),
       padding: const EdgeInsets.all(18),
@@ -526,19 +596,19 @@ class _CalendarWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
+            children: [
               Text(
-                'May',
-                style: TextStyle(
+                monthName,
+                style: const TextStyle(
                   color: Color(0xFF0B63B7),
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
                 ),
               ),
-              Spacer(),
+              const Spacer(),
               Text(
-                '2025',
-                style: TextStyle(
+                year.toString(),
+                style: const TextStyle(
                   color: Color(0xFF0B63B7),
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
@@ -565,30 +635,33 @@ class _CalendarWidget extends StatelessWidget {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          // Calendar days
+          // Calendar weeks
           ...weeks.map(
             (week) => Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: week
                   .map(
-                    (day) => Container(
-                      width: cellSize,
-                      height: cellSize,
-                      alignment: Alignment.center,
-                      decoration: day == '5'
-                          ? BoxDecoration(
-                              color: const Color(0xFF0B63B7),
-                              borderRadius: BorderRadius.circular(10),
-                            )
-                          : null,
-                      child: Text(
-                        day,
-                        style: TextStyle(
-                          color: day == '5' ? Colors.white : Colors.black87,
-                          fontWeight: day == '5' ? FontWeight.bold : FontWeight.normal,
+                    (dayStr) {
+                      final isToday = dayStr.isNotEmpty && int.tryParse(dayStr) == now.day;
+                      return Container(
+                        width: cellSize,
+                        height: cellSize,
+                        alignment: Alignment.center,
+                        decoration: isToday
+                            ? BoxDecoration(
+                                color: const Color(0xFF0B63B7),
+                                borderRadius: BorderRadius.circular(10),
+                              )
+                            : null,
+                        child: Text(
+                          dayStr,
+                          style: TextStyle(
+                            color: isToday ? Colors.white : (dayStr.isEmpty ? Colors.black38 : Colors.black87),
+                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   )
                   .toList(),
             ),

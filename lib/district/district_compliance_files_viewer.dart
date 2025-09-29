@@ -15,6 +15,63 @@ class ComplianceFilesViewer extends StatefulWidget {
 }
 
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
+  // Parse flexible date inputs used across the widget and return DateTime or null.
+  DateTime? _tryParseFlexibleDate(String s) {
+    s = s.trim();
+    if (s.isEmpty) return null;
+    // ISO YYYY-MM-DD
+    final isoMatch = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(s);
+    if (isoMatch != null) {
+      final y = int.tryParse(isoMatch.group(1)!);
+      final m = int.tryParse(isoMatch.group(2)!);
+      final d = int.tryParse(isoMatch.group(3)!);
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    // MM/DD/YYYY or MM/YYYY
+    final parts = s.split('/');
+    if (parts.length == 3) {
+      final mm = int.tryParse(parts[0]);
+      final dd = int.tryParse(parts[1]);
+      final yy = int.tryParse(parts[2]);
+      if (mm != null && dd != null && yy != null) {
+        try {
+          return DateTime(yy, mm, dd);
+        } catch (_) {}
+      }
+    } else if (parts.length == 2) {
+      final mm = int.tryParse(parts[0]);
+      final yy = int.tryParse(parts[1]);
+      if (mm != null && yy != null) {
+        try {
+          return DateTime(yy, mm, 1);
+        } catch (_) {}
+      }
+    }
+    // YYYYMMDD
+    final rawDigits = RegExp(r'^(\d{8})$').firstMatch(s);
+    if (rawDigits != null) {
+      final str = rawDigits.group(1)!;
+      final y = int.tryParse(str.substring(0, 4));
+      final m = int.tryParse(str.substring(4, 6));
+      final d = int.tryParse(str.substring(6, 8));
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    return null;
+  }
+
+  String _formatIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  DateTime addMonthsPreserveDay(DateTime dt, int months) {
+    int y = dt.year;
+    int m = dt.month + months;
+    y += (m - 1) ~/ 12;
+    m = ((m - 1) % 12) + 1;
+    int d = dt.day;
+    final lastDay = DateTime(y, m + 1, 0).day;
+    if (d > lastDay) d = lastDay;
+    return DateTime(y, m, d);
+  }
+
   bool _isSendingEmail = false;
   bool _emailSent = false;
   bool get _hasFailedFiles => complianceStatuses.entries.any((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'));
@@ -432,59 +489,28 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         bool savingDate = false;
 
         String fmt(DateTime d, bool monthOnly) {
+          // keep legacy display for the picker button, but saving will use ISO
           final mm = d.month.toString().padLeft(2, '0');
           final dd = d.day.toString().padLeft(2, '0');
           return monthOnly ? '$mm/${d.year}' : '$mm/$dd/${d.year}';
         }
 
-        // Helpers to parse/compute validity
-        DateTime? tryParseDate(String s) {
-          final parts = s.split('/');
-          if (parts.length == 3) {
-            // MM/DD/YYYY
-            final mm = int.tryParse(parts[0]);
-            final dd = int.tryParse(parts[1]);
-            final yy = int.tryParse(parts[2]);
-            if (mm != null && dd != null && yy != null) {
-              try {
-                return DateTime(yy, mm, dd);
-              } catch (_) {
-                return null;
-              }
-            }
-          } else if (parts.length == 2) {
-            // MM/YYYY -> use day 1
-            final mm = int.tryParse(parts[0]);
-            final yy = int.tryParse(parts[1]);
-            if (mm != null && yy != null) {
-              try {
-                return DateTime(yy, mm, 1);
-              } catch (_) {
-                return null;
-              }
-            }
-          }
-          return null;
-        }
+        // Use class-level parser/formatter
 
-        DateTime addMonthsPreserveDay(DateTime dt, int months) {
-          int y = dt.year;
-          int m = dt.month + months;
-          y += (m - 1) ~/ 12;
-          m = ((m - 1) % 12) + 1;
-          int d = dt.day;
-          final lastDay = DateTime(y, m + 1, 0).day;
-          if (d > lastDay) d = lastDay;
-          return DateTime(y, m, d);
-        }
+        // use class-level addMonthsPreserveDay if needed
 
         // Initialize selectedDate and validity text
-        selectedDate = dateText.isNotEmpty ? tryParseDate(dateText) : null;
+  selectedDate = dateText.isNotEmpty ? _tryParseFlexibleDate(dateText) : null;
         String validUntilText = '';
         if (selectedDate != null) {
-          validUntilText = _computeValidityUntil(categoryKey, selectedDate, monthYearOnly);
+          // compute then format as ISO YYYY-MM-DD
+          final raw = _computeValidityUntil(categoryKey, selectedDate, monthYearOnly);
+          validUntilText = raw; // _computeValidityUntil now returns ISO
         } else {
-          validUntilText = (complianceStatuses[validKey] ?? '').toString();
+          // ensure existing stored string is normalized to ISO when possible
+          final rawStored = (complianceStatuses[validKey] ?? '').toString();
+          final parsed = _tryParseFlexibleDate(rawStored);
+          validUntilText = parsed != null ? _formatIso(parsed) : rawStored;
         }
 
         return StatefulBuilder(
@@ -619,7 +645,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                         if (v == null) return;
                         setStateSB(() {
                           monthYearOnly = v;
-                          final baseDate = selectedDate ?? (dateText.isNotEmpty ? tryParseDate(dateText) : null);
+                          final baseDate = selectedDate ?? (dateText.isNotEmpty ? _tryParseFlexibleDate(dateText) : null);
                           if (baseDate != null) {
                             dateText = fmt(baseDate, monthYearOnly);
                             validUntilText = _computeValidityUntil(categoryKey, baseDate, monthYearOnly);
@@ -661,7 +687,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                             ? null
                             : () async {
                                 // Ensure we have a valid selected date (parse if needed)
-                                DateTime? baseDate = selectedDate ?? (dateText.isNotEmpty ? tryParseDate(dateText) : null);
+                                DateTime? baseDate = selectedDate ?? (dateText.isNotEmpty ? _tryParseFlexibleDate(dateText) : null);
                                 if (baseDate == null) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(content: Text('Please select a valid date')),
@@ -672,20 +698,23 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
                                 setStateSB(() => savingDate = true);
                                 try {
+                                  // Save dateIssued and validUntil in canonical ISO YYYY-MM-DD format
+                                  final isoDate = '${baseDate.year.toString().padLeft(4,'0')}-${baseDate.month.toString().padLeft(2,'0')}-${baseDate.day.toString().padLeft(2,'0')}';
                                   await FirebaseFirestore.instance
                                       .collection('compliance_uploads')
                                       .doc(widget.stationOwnerDocId)
                                       .set({
-                                        dateKey: fmt(baseDate, monthYearOnly),
+                                        dateKey: isoDate,
                                         validKey: validText,
                                       }, SetOptions(merge: true));
 
                                   if (!mounted) return;
                                   setState(() {
-                                    complianceStatuses[dateKey] = fmt(baseDate, monthYearOnly);
+                                    complianceStatuses[dateKey] = isoDate;
                                     complianceStatuses[validKey] = validText;
                                   });
                                   setStateSB(() {
+                                    // keep button showing legacy format, but underlying stored value is ISO
                                     dateText = fmt(baseDate, monthYearOnly);
                                     validUntilText = validText;
                                   });
@@ -740,46 +769,44 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   // Add this helper function inside _ComplianceFilesViewerState
   String _computeValidityUntil(String categoryKey, DateTime issuedDate, bool monthYearOnly) {
-    // All keys are lowercased
+    // Normalize validity to ISO YYYY-MM-DD for storage/display.
+    // Assumption: when only Month/Year is provided we canonicalize the stored date to the first day of that month (YYYY-MM-01).
+    // This keeps a consistent, unambiguous ISO date while preserving the intended month granularity.
+    DateTime valid;
     switch (categoryKey) {
       case 'business_permit':
-        // Always January 20 of next year
+        // Always January 20 of next year (full-date), or Jan 1 next year if month/year only
         final nextYear = issuedDate.year + 1;
-        return monthYearOnly
-            ? '01/$nextYear'
-            : '01/20/$nextYear';
+        valid = monthYearOnly ? DateTime(nextYear, 1, 1) : DateTime(nextYear, 1, 20);
+        break;
       case 'sanitary_permit':
       case 'certificate_of_association':
-        // Always December 31 of the same year
-        return monthYearOnly
-            ? '12/${issuedDate.year}'
-            : '12/31/${issuedDate.year}';
+        // Always December 31 of the same year (full-date), or Dec 1 if month/year only
+        valid = monthYearOnly ? DateTime(issuedDate.year, 12, 1) : DateTime(issuedDate.year, 12, 31);
+        break;
       case 'finished_bacteriological':
-        // Valid for 1 month
-        final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
-        return monthYearOnly
-            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
-            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
+        // Valid for ~1 month
+        valid = addMonthsPreserveDay(issuedDate, 1);
+        if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
+        break;
       case 'source_bacteriological':
-        // Valid for 6 months
-        final valid = DateTime(issuedDate.year, issuedDate.month + 6, issuedDate.day);
-        return monthYearOnly
-            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
-            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
+        // Valid for ~6 months
+        valid = addMonthsPreserveDay(issuedDate, 6);
+        if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
+        break;
       case 'source_physical_chemical':
       case 'finished_physical_chemical':
-        // Valid for 1 year
-        final valid = DateTime(issuedDate.year + 1, issuedDate.month, issuedDate.day);
-        return monthYearOnly
-            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
-            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
+        // Valid for ~1 year
+        valid = addMonthsPreserveDay(issuedDate, 12);
+        if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
+        break;
       default:
         // Default: 1 month
-        final valid = DateTime(issuedDate.year, issuedDate.month + 1, issuedDate.day);
-        return monthYearOnly
-            ? '${valid.month.toString().padLeft(2, '0')}/${valid.year}'
-            : '${valid.month.toString().padLeft(2, '0')}/${valid.day.toString().padLeft(2, '0')}/${valid.year}';
+        valid = addMonthsPreserveDay(issuedDate, 1);
+        if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
+        break;
     }
+    return _formatIso(valid);
   }
 
   // Visual helpers (copied design)

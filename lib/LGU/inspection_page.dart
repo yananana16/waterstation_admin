@@ -20,7 +20,7 @@ class _InspectionPageState extends State<InspectionPage> {
   String _query = '';
   String _statusFilter = 'All';
   int _page = 0;
-  final int _perPage = 3;
+  final int _perPage = 10;
 
   List<Map<String, String>> get _filtered {
     final q = _query.toLowerCase().trim();

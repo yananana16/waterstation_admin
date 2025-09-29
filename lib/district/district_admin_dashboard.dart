@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:waterstation_admin/login_screen.dart';
 import 'package:waterstation_admin/district/district_compliance_files_viewer.dart';
 import 'package:waterstation_admin/district/compliance_page.dart'; // Add this import
+import 'package:waterstation_admin/district/recommendations_page.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
   const DistrictAdminDashboard({super.key});
@@ -128,6 +129,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 _sidebarNavItem("Dashboard", 0),
                 _sidebarNavItem("Water Stations", 1),
                 _sidebarNavItem("Compliance", 2),
+                _sidebarNavItem("Recommendations", 4),
                 _sidebarNavItem("Profile", 3),
                 const Spacer(),
                 // Log out button
@@ -618,6 +620,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
         );
       case 1:
         return _buildWaterStationsPage();
+      case 4:
+        return const RecommendationsPage();
       case 2:
         // Use the new CompliancePage widget
         return FutureBuilder<void>(
@@ -1235,6 +1239,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     );
   }
 }
+
+// ...existing code...
 
 // Sidebar button widget
 // ignore: unused_element

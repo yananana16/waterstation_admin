@@ -4,42 +4,50 @@ from firebase_admin import credentials, firestore
 import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
-from sklearn.ensemble import RandomForestRegressor
-from geopy.distance import geodesic, great_circle
 import folium
 from folium.plugins import MarkerCluster, HeatMap
-from sklearn.metrics import silhouette_score
-from sklearn.preprocessing import StandardScaler
+import argparse
 
+# -------------------------------
 # Initialize Firebase Admin SDK
+# -------------------------------
 def init_firestore():
     cred = credentials.Certificate('serviceAccountKey.json')
     firebase_admin.initialize_app(cred)
     return firestore.client()
 
+# -------------------------------
 # Fetch sales and station data from Firestore
-def fetch_data(db):
+# -------------------------------
+def fetch_data_firestore(db):
     stations_ref = db.collection('station_owners')
     stations_data = []
 
     for station in stations_ref.stream():
+        station_dict = station.to_dict()
         station_id = station.id
-        district_id = station.to_dict().get('districtID')
-        district_name = station.to_dict().get('districtName')
-        lat = station.to_dict().get('location', {}).get('latitude')
-        lng = station.to_dict().get('location', {}).get('longitude')
-        
+        district_id = station_dict.get('districtID')
+        district_name = station_dict.get('districtName')
+        lat = station_dict.get('location', {}).get('latitude')
+        lng = station_dict.get('location', {}).get('longitude')
+        water_type = station_dict.get('waterType')
+
         # Aggregate total sales for this station
         sales_ref = station.reference.collection('sales')
-        total_sales = sum([sale.to_dict().get('totalsales', 0) for sale in sales_ref.stream()])
-        
-        # Handle missing or invalid sales
-        if pd.isna(total_sales) or total_sales < 0:
-            total_sales = np.nanmedian([sale.to_dict().get('totalsales', 0) for sale in sales_ref.stream()])
+        sales_values = []
+        for sale in sales_ref.stream():
+            sale_dict = sale.to_dict()
+            raw_value = sale_dict.get('totalPrice') or sale_dict.get('total_amount') or 0
+            try:
+                sales_values.append(float(raw_value))
+            except (ValueError, TypeError):
+                continue
 
-        # Handle invalid lat/lng
+        total_sales = sum(sales_values) if sales_values else 0
+
+        # Skip invalid coordinates
         if pd.isna(lat) or pd.isna(lng):
-            continue  # Skip invalid entries
+            continue
 
         stations_data.append({
             'station_id': station_id,
@@ -47,89 +55,72 @@ def fetch_data(db):
             'district_name': district_name,
             'lat': lat,
             'lng': lng,
+            'water_type': water_type,
             'total_sales': total_sales
         })
     
+    print(f"Fetched {len(stations_data)} stations from Firestore.")
     return pd.DataFrame(stations_data)
 
-# Dynamic Clustering with DBSCAN (Density-Based)
+# -------------------------------
+# Fetch data from CSV (for testing)
+# -------------------------------
+def fetch_data_csv(csv_path):
+    df = pd.read_csv(csv_path)
+    print(f"Loaded {len(df)} stations from CSV: {csv_path}")
+    return df
+
+# -------------------------------
+# Dynamic Clustering (DBSCAN)
+# -------------------------------
 def dynamic_clustering(stations_df):
     locations = stations_df[['lat', 'lng']].values
-    sales = stations_df['total_sales'].values
-    
-    # Standardize sales to prevent any one feature from dominating
-    scaler = StandardScaler()
-    scaled_sales = scaler.fit_transform(sales.reshape(-1, 1))
-    
-    # DBSCAN clustering
     clustering = DBSCAN(eps=0.01, min_samples=2, metric='haversine').fit(np.radians(locations))
-    stations_df.loc[:, 'cluster'] = clustering.labels_  # Fixed warning by using .loc to assign values
-    
+    stations_df.loc[:, 'cluster'] = clustering.labels_
     return stations_df
 
-# Predict sales using a Random Forest model
-def predict_sales(stations_df):
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    features = stations_df[['lat', 'lng']]  # Adding more features is possible here
-    model.fit(features, stations_df['total_sales'])
-    
-    return model
+# -------------------------------
+# Recommendation for a district
+# -------------------------------
+def recommend_best_location_for_district(stations_df, district_name, range_radius=50):
+    district_df = stations_df[stations_df['district_name'] == district_name].copy()
 
-def recommend_best_location_for_jaro(stations_df, range_radius=50):
-    # Create a copy to avoid the SettingWithCopyWarning
-    jaro_stations_df = stations_df[stations_df['district_name'] == 'Jaro'].copy()
-
-    if len(jaro_stations_df) < 2:
-        print("Not enough stations in Jaro to perform clustering.")
+    if len(district_df) < 2:
+        print(f"Not enough stations in {district_name} to perform clustering.")
         return None
 
-    # Use dynamic clustering to segment the stations (DBSCAN or KMeans can be used)
-    jaro_stations_df = dynamic_clustering(jaro_stations_df)
+    district_df = dynamic_clustering(district_df)
 
-    # Find the highest density cluster
-    cluster_sales = jaro_stations_df.groupby('cluster')['total_sales'].sum()
+    cluster_sales = district_df.groupby('cluster')['total_sales'].sum()
     highest_density_cluster = cluster_sales.idxmax()
 
-    recommended_stations = jaro_stations_df[jaro_stations_df['cluster'] == highest_density_cluster]
-    
-    # Calculate sales-weighted centroid
+    recommended_stations = district_df[district_df['cluster'] == highest_density_cluster]
+
     weighted_lat = np.average(recommended_stations['lat'], weights=recommended_stations['total_sales'])
     weighted_lng = np.average(recommended_stations['lng'], weights=recommended_stations['total_sales'])
-    
-    recommended_location = {'lat': weighted_lat, 'lng': weighted_lng}
 
-    # Find the station with the highest sales in the cluster for a more personalized explanation
     top_station = recommended_stations.loc[recommended_stations['total_sales'].idxmax()]
 
-    # Generate dynamic explanation with fixed 50 meter range
     explanation = (
-        f"The recommended station location is based on the clustering of existing stations within the Jaro district. "
-        f"The DBSCAN clustering algorithm identified a cluster of stations with the highest sales concentration. "
-        f"Within this cluster, the station with the highest sales is {top_station['station_id']} "
-        f"with {top_station['total_sales']} total sales. This indicates that this area has strong demand and "
-        f"the new station is likely to replicate the success of existing stations in the region.\n"
-        f"Furthermore, the recommended location is positioned to maximize coverage in a high-density area, avoiding market saturation. "
-        f"It is strategically located based on proximity to key amenities and customer demand.\n"
-        f"The ideal location is within a fixed 50-meter radius from the recommended centroid at ({recommended_location['lat']}, {recommended_location['lng']})."
+        f"The recommended location for {district_name} is based on clustering existing stations. "
+        f"The cluster with the highest sales concentration was selected. "
+        f"The top-performing station is {top_station['station_id']} "
+        f"with {top_station['total_sales']} sales. "
+        f"The new recommended location is within {range_radius} meters of "
+        f"({weighted_lat}, {weighted_lng})."
     )
-    
-    print(explanation)
 
     return {
-        'district': 'Jaro',
-        'lat': recommended_location['lat'],
-        'lng': recommended_location['lng'],
+        'district': district_name,
+        'lat': weighted_lat,
+        'lng': weighted_lng,
         'range_radius': range_radius,
         'explanation': explanation
     }
 
-# Save recommendations to Firestore
-def save_recommendations(db, recommendations):
-    recommendations_ref = db.collection('station_recommendations')
-    for rec in recommendations:
-        recommendations_ref.add(rec)
-
-# Visualize stations and recommended new locations
+# -------------------------------
+# Visualization
+# -------------------------------
 def visualize_stations(stations_df, recommendations, map_filename='recommendations_map.html'):
     center_lat, center_lng = stations_df[['lat', 'lng']].mean()
     m = folium.Map(location=[center_lat, center_lng], zoom_start=12)
@@ -138,7 +129,7 @@ def visualize_stations(stations_df, recommendations, map_filename='recommendatio
     for _, row in stations_df.iterrows():
         folium.Marker(
             location=[row['lat'], row['lng']],
-            popup=row['station_id'],
+            popup=f"{row['station_id']} ({row['water_type']})",
             icon=folium.Icon(color='blue')
         ).add_to(marker_cluster)
     
@@ -148,11 +139,9 @@ def visualize_stations(stations_df, recommendations, map_filename='recommendatio
             popup=f"Recommended {rec['district']}",
             icon=folium.Icon(color='red', icon='star')
         ).add_to(m)
-        
-        # Add a circle to represent the 50-meter range
         folium.Circle(
             location=[rec['lat'], rec['lng']],
-            radius=rec['range_radius'],  # 50 meters in radius
+            radius=rec['range_radius'],
             color='green',
             fill=True,
             fill_opacity=0.2
@@ -166,27 +155,39 @@ def add_heatmap(map_object, stations_df):
     heat_data = [[row['lat'], row['lng'], row['total_sales']] for _, row in stations_df.iterrows()]
     HeatMap(heat_data).add_to(map_object)
 
-# Main function to run the entire process
-def main():
-    db = init_firestore()
-    
-    # Fetch data from Firestore
-    stations_df = fetch_data(db)
-    print("Fetched stations data.")
-    
-    # Get the best recommendation for Jaro district only
-    recommended_location = recommend_best_location_for_jaro(stations_df, range_radius=50)
-    
-    if recommended_location:
-        print(f"Recommended location for Jaro: ({recommended_location['lat']}, {recommended_location['lng']})")
-    
-    # Save recommendations to Firestore
-    save_recommendations(db, [recommended_location] if recommended_location else [])
-    print("New station recommendation saved to Firestore.")
-    
-    # Visualize the results on a map
-    visualize_stations(stations_df, [recommended_location] if recommended_location else [])
-    print("Map generated and saved.")
+# -------------------------------
+# Main
+# -------------------------------
+def main(mode="csv", csv_path="synthetic_stations.csv"):
+    if mode == "firestore":
+        db = init_firestore()
+        stations_df = fetch_data_firestore(db)
+    else:
+        stations_df = fetch_data_csv(csv_path)
 
+    recommendations = []
+
+    for district_name in stations_df['district_name'].dropna().unique():
+        rec = recommend_best_location_for_district(stations_df, district_name, range_radius=50)
+        if rec:
+            recommendations.append(rec)
+            print(f"Recommendation for {district_name}: ({rec['lat']}, {rec['lng']})")
+
+    if recommendations:
+        if mode == "firestore":
+            save_recommendations(db, recommendations)  # only save if Firestore mode
+            print("All recommendations saved to Firestore.")
+        visualize_stations(stations_df, recommendations)
+    else:
+        print("No recommendations generated.")
+
+# -------------------------------
+# Run
+# -------------------------------
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["firestore", "csv"], default="csv")
+    parser.add_argument("--csv_path", type=str, default="synthetic_stations.csv")
+    args = parser.parse_args()
+
+    main(mode=args.mode, csv_path=args.csv_path)

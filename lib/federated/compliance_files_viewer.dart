@@ -16,6 +16,47 @@ class ComplianceFilesViewer extends StatefulWidget {
 }
 
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
+  DateTime? _tryParseFlexibleDate(String s) {
+    s = s.trim();
+    if (s.isEmpty) return null;
+    final isoMatch = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(s);
+    if (isoMatch != null) {
+      final y = int.tryParse(isoMatch.group(1)!);
+      final m = int.tryParse(isoMatch.group(2)!);
+      final d = int.tryParse(isoMatch.group(3)!);
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    final parts = s.split('/');
+    if (parts.length == 3) {
+      final mm = int.tryParse(parts[0]);
+      final dd = int.tryParse(parts[1]);
+      final yy = int.tryParse(parts[2]);
+      if (mm != null && dd != null && yy != null) {
+        try {
+          return DateTime(yy, mm, dd);
+        } catch (_) {}
+      }
+    } else if (parts.length == 2) {
+      final mm = int.tryParse(parts[0]);
+      final yy = int.tryParse(parts[1]);
+      if (mm != null && yy != null) {
+        try {
+          return DateTime(yy, mm, 1);
+        } catch (_) {}
+      }
+    }
+    final rawDigits = RegExp(r'^(\d{8})$').firstMatch(s);
+    if (rawDigits != null) {
+      final str = rawDigits.group(1)!;
+      final y = int.tryParse(str.substring(0, 4));
+      final m = int.tryParse(str.substring(4, 6));
+      final d = int.tryParse(str.substring(6, 8));
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    return null;
+  }
+
+  String _formatIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> sendFailedFilesEmail(Map<String, dynamic> complianceStatuses) async {
     // Fetch owner info
@@ -28,18 +69,20 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     final stationName = ownerData?['stationName']?.toString() ?? '';
     if (recipientEmail.isEmpty) return;
 
-    // Collect failed files with details
+    // Collect failed files with details (normalize dates to ISO where possible)
     final failedFiles = complianceStatuses.entries
         .where((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'))
         .map((e) {
           final key = e.key.replaceAll('_status', '');
           final category = key.replaceAll('_', ' ').replaceFirst(key[0], key[0].toUpperCase());
-          final dateIssued = complianceStatuses['${key}_date_issued'] ?? '';
-          final validUntil = complianceStatuses['${key}_valid_until'] ?? '';
+          final rawDate = (complianceStatuses['${key}_date_issued'] ?? '').toString();
+          final rawValid = (complianceStatuses['${key}_valid_until'] ?? '').toString();
+          final parsedDate = _tryParseFlexibleDate(rawDate);
+          final parsedValid = _tryParseFlexibleDate(rawValid);
           return {
             'category': category,
-            'dateIssued': dateIssued,
-            'validUntil': validUntil,
+            'dateIssued': parsedDate != null ? _formatIso(parsedDate) : rawDate,
+            'validUntil': parsedValid != null ? _formatIso(parsedValid) : rawValid,
           };
         })
         .toList();
@@ -632,9 +675,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                               final icon = _fileIcon(extension);
                               final iconColor = _fileIconColor(extension);
 
-                              // New: read-only date fields
-                              final dateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
-                              final validUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              // New: read-only date fields (normalize to ISO if possible)
+                              final rawDateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
+                              final rawValidUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              final parsedDateIssued = _tryParseFlexibleDate(rawDateIssued);
+                              final parsedValidUntil = _tryParseFlexibleDate(rawValidUntil);
+                              final dateIssued = parsedDateIssued != null ? _formatIso(parsedDateIssued) : rawDateIssued;
+                              final validUntil = parsedValidUntil != null ? _formatIso(parsedValidUntil) : rawValidUntil;
 
                               return Card(
                                 elevation: 4,

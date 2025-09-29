@@ -275,8 +275,33 @@ class RegisteredStationsPage extends StatelessWidget {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.only(right: 16),
+                            padding: const EdgeInsets.only(right: 8),
                             child: Icon(Icons.filter_alt, color: Colors.blue[800]),
+                          ),
+                          // Clear filters button
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: TextButton.icon(
+                              onPressed: () {
+                                // Clear the search input and district filter, then refresh parent state
+                                searchController.clear();
+                                onSearchQueryChanged('');
+                                onDistrictFilterChanged(null);
+                                try {
+                                  setState(() {});
+                                } catch (_) {}
+                              },
+                              icon: const Icon(Icons.clear, size: 18, color: Colors.blueAccent),
+                              label: const Text(
+                                'Clear',
+                                style: TextStyle(color: Colors.blueAccent, fontSize: 13),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                minimumSize: const Size(0, 0),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -331,22 +356,23 @@ class RegisteredStationsPage extends StatelessWidget {
                 return Column(
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Container(
-                          width: 1200,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                      child: ConstrainedBox(
+  constraints: BoxConstraints(
+    minWidth: MediaQuery.of(context).size.width * 0.9, // at least 90% of screen
+  ),
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.06),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
                           child: DataTable(
                             headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
                             dataRowColor: WidgetStateProperty.resolveWith<Color?>(
@@ -417,6 +443,19 @@ class RegisteredStationsPage extends StatelessWidget {
                                 label: Padding(
                                   padding: EdgeInsets.symmetric(vertical: 8),
                                   child: Text(
+                                    'CHO inspection Status',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1976D2),
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Text(
                                     'Actions',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -445,6 +484,14 @@ class RegisteredStationsPage extends StatelessWidget {
                                 lat = (data['latitude'] as num?)?.toDouble();
                                 lng = (data['longitude'] as num?)?.toDouble();
                               }
+                // Normalize status to only show 'Done' or 'Pending'.
+                // Any value equal to 'done' (case-insensitive) => 'Done', otherwise => 'Pending'.
+                final rawStatus = (data['status'] ?? '').toString();
+                final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                final statusColor = statusNormalized == 'Done'
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFFFFC107);
+
                               return DataRow(
                                 cells: [
                                   DataCell(
@@ -477,6 +524,19 @@ class RegisteredStationsPage extends StatelessWidget {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontSize: 14),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(6)),
+                                        child: Text(
+                                          statusNormalized,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -586,41 +646,48 @@ class RegisteredStationsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black54, width: 1),
-              borderRadius: BorderRadius.circular(2),
-              color: Colors.white,
-            ),
-            child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(1),
-                1: FlexColumnWidth(1),
-              },
-              border: TableBorder.symmetric(
-                inside: BorderSide(color: Colors.black26, width: 1),
-              ),
-              children: [
-                TableRow(
+          // Normalize status for display in details view (Done or Pending only)
+          Builder(
+            builder: (ctx) {
+              final rawStatus = (data['status'] ?? '').toString();
+              final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black54, width: 1),
+                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.white,
+                ),
+                child: Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(1),
+                    1: FlexColumnWidth(1),
+                  },
+                  border: TableBorder.symmetric(
+                    inside: BorderSide(color: Colors.black26, width: 1),
+                  ),
                   children: [
-                    _detailCell(Icons.person, "Store Owner", "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim()),
-                    _detailCell(Icons.home, "Address", data['address']),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.person, "Store Owner", "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim()),
+                        _detailCell(Icons.home, "Address", data['address']),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.email, "Email", data['email']),
+                        _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.phone, "Contact Number", data['phone']),
+                        _detailCell(Icons.info, "Status", statusNormalized),
+                      ],
+                    ),
                   ],
                 ),
-                TableRow(
-                  children: [
-                    _detailCell(Icons.email, "Email", data['email']),
-                    _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
-                  ],
-                ),
-                TableRow(
-                  children: [
-                    _detailCell(Icons.phone, "Contact Number", data['phone']),
-                    _detailCell(Icons.info, "Status", data['status']),
-                  ],
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),

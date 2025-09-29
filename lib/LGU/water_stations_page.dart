@@ -12,7 +12,7 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
   int currentPage = 0; // Track current page
   String searchQuery = ""; // Track search query
   String selectedDistrict = 'All Districts'; // Track selected district for filtering
-  static const int rowsPerPage = 6;
+  static const int rowsPerPage = 14;
 
   @override
   Widget build(BuildContext context) {

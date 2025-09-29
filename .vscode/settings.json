@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/Thesis/waterstation_admin/linux"
+    "cmake.sourceDirectory": "D:/Thesis/waterstation_admin/linux",
+    "git.ignoreLimitWarning": true
 }
