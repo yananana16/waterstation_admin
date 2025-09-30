@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'compliance_files_viewer.dart';
+import '../services/firestore_repository.dart';
 
 class CompliancePage extends StatefulWidget {
   const CompliancePage({super.key});
@@ -22,12 +23,12 @@ class _CompliancePageState extends State<CompliancePage> {
 
   Future<void> _refreshSelectedStationData() async {
     if (selectedStationOwnerDocId != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('station_owners')
-          .doc(selectedStationOwnerDocId)
-          .get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'station_owners/${selectedStationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('station_owners').doc(selectedStationOwnerDocId),
+      );
       setState(() {
-        selectedStationData = doc.data();
+        selectedStationData = doc.data() as Map<String, dynamic>?;
       });
     }
   }
@@ -204,7 +205,10 @@ class _CompliancePageState extends State<CompliancePage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: FutureBuilder<QuerySnapshot>(
-            future: FirebaseFirestore.instance.collection('districts').get(),
+            future: FirestoreRepository.instance.getCollectionOnce(
+              'districts',
+              () => FirebaseFirestore.instance.collection('districts'),
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
@@ -260,10 +264,10 @@ class _CompliancePageState extends State<CompliancePage> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('station_owners')
-                  .where('status', isEqualTo: complianceStatusFilter)
-                  .get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners_status_$complianceStatusFilter',
+                () => FirebaseFirestore.instance.collection('station_owners').where('status', isEqualTo: complianceStatusFilter),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'inspection_page.dart'; // added import
 import 'add_schedule_subscreen.dart';
+import 'staff_subscreen.dart';
 
 class SchedulePage extends StatefulWidget {
   const SchedulePage({super.key});
@@ -13,28 +15,57 @@ enum _ActiveSubscreen { none, inspection, addSchedule, assignment, staff } // ad
 
 class _SchedulePageState extends State<SchedulePage> {
   _ActiveSubscreen _activeSubscreen = _ActiveSubscreen.none;
-  // Monthly inspection state: sample stations and per-station per-month schedule
-  DateTime _selectedMonth = DateTime(2025, 9); // example: September 2025
+  // Monthly inspection state
+  DateTime _selectedMonth = DateTime.now();
 
-  final List<Map<String, String>> _stations = [
-    {'id': 'station_001', 'name': 'Crystal Clear Refills', 'location': 'La Paz'},
-    {'id': 'station_002', 'name': 'HydroPure Station', 'location': 'Lapuz'},
-    {'id': 'station_003', 'name': 'EverFresh Water Refilling', 'location': 'City Proper 1'},
-  ];
-
-  // schedule[stationId][monthKey] => { 'date': '2025-09-05', 'officer': 'T. Andres', 'status': 'Pending' }
-  final Map<String, Map<String, Map<String, String>>> _schedule = {};
+  // We'll load stations from Firestore (collection: 'station_owners').
+  // Cache per-station month-inspection status to reduce queries on rebuilds.
+  final Map<String, String> _monthStatusCache = {}; // key: stationId::YYYY-MM -> 'Done'|'Pending'
 
   String _monthKey(DateTime m) => '${m.year}-${m.month.toString().padLeft(2, '0')}';
 
-  Map<String, String> _getScheduleFor(String stationId, DateTime month) {
-    final mk = _monthKey(month);
-    _schedule.putIfAbsent(stationId, () => {});
-    return _schedule[stationId]!.putIfAbsent(mk, () => {
-      'date': '${month.year}-${month.month.toString().padLeft(2, '0')}-05',
-      'officer': '',
-      'status': 'Pending',
-    });
+  // Query Firestore to determine if a station has an inspection for the given month.
+  // This supports both a subcollection 'inspections' under station doc, or a top-level
+  // collection 'inspections' with a field 'stationId'. We try subcollection first for efficiency.
+  Future<String> _getMonthStatus(String stationId, DateTime month) async {
+  final mk = _monthKey(month);
+  final cacheKey = '$stationId::$mk';
+    if (_monthStatusCache.containsKey(cacheKey)) return _monthStatusCache[cacheKey]!;
+
+    final monthStart = DateTime(month.year, month.month, 1);
+    final monthEnd = DateTime(month.year, month.month + 1, 1).subtract(const Duration(milliseconds: 1));
+
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      // 1) Try station subcollection: station_owners/{stationId}/inspections
+      final subRef = firestore.collection('station_owners').doc(stationId).collection('inspections')
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+          .limit(1);
+      final subSnap = await subRef.get();
+      if (subSnap.docs.isNotEmpty) {
+        _monthStatusCache[cacheKey] = 'Done';
+        return 'Done';
+      }
+
+      // 2) Try top-level collection 'inspections' with stationId field
+      final topRef = firestore.collection('inspections')
+          .where('stationId', isEqualTo: stationId)
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+          .limit(1);
+      final topSnap = await topRef.get();
+      if (topSnap.docs.isNotEmpty) {
+        _monthStatusCache[cacheKey] = 'Done';
+        return 'Done';
+      }
+    } catch (e) {
+      // on error, default to Pending but do not crash UI
+      debugPrint('Error checking inspections for station: $stationId -> $e');
+    }
+    _monthStatusCache[cacheKey] = 'Pending';
+    return 'Pending';
   }
 
   void _openInspection() => setState(() => _activeSubscreen = _ActiveSubscreen.inspection);
@@ -197,85 +228,55 @@ class _SchedulePageState extends State<SchedulePage> {
                                                           ),
                                                           // rows (scrollable) - build from _stations & _schedule for selected month
                                                           Expanded(
-                                                            child: ListView.separated(
-                                                              physics: const AlwaysScrollableScrollPhysics(),
-                                                              padding: EdgeInsets.zero,
-                                                              itemCount: _stations.length,
-                                                              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF0B63B7)),
-                                                              itemBuilder: (context, idx) {
-                                                                final s = _stations[idx];
-                                                                final sched = _getScheduleFor(s['id']!, _selectedMonth);
-                                                                return Padding(
-                                                                  padding: EdgeInsets.symmetric(vertical: 14 * scale, horizontal: 8 * scale),
-                                                                  child: Row(
-                                                                    children: [
-                                                                      SizedBox(width: 28 * scale, child: Text('${idx + 1}', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
-                                                                      Expanded(child: Text(s['name'] ?? '', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
-                                                                      Expanded(child: Text(s['location'] ?? '', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
-                                                                      Expanded(child: Text(sched['date'] ?? '', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
-                                                                      Expanded(child: Text(sched['officer'] ?? '', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
-                                                                      SizedBox(
-                                                                        width: 80 * scale,
-                                                                        child: Center(
-                                                                          child: GestureDetector(
-                                                                            onTap: () async {
-                                                                              // open assign dialog
-                                                                              final res = await showDialog<Map<String, String>>(
-                                                                                context: context,
-                                                                                builder: (context) {
-                                                                                  final officerCtrl = TextEditingController(text: sched['officer']);
-                                                                                  var status = sched['status'] ?? 'Pending';
-                                                                                  return AlertDialog(
-                                                                                    title: const Text('Assign / Update'),
-                                                                                    content: Column(
-                                                                                      mainAxisSize: MainAxisSize.min,
-                                                                                      children: [
-                                                                                        TextField(controller: officerCtrl, decoration: const InputDecoration(labelText: 'Officer')),
-                                                                                        const SizedBox(height: 8),
-                                                                                        DropdownButton<String>(
-                                                                                          value: status,
-                                                                                          items: const [DropdownMenuItem(value: 'Pending', child: Text('Pending')), DropdownMenuItem(value: 'Done', child: Text('Done'))],
-                                                                                          onChanged: (v) {
-                                                                                            if (v != null) status = v;
-                                                                                          },
-                                                                                        ),
-                                                                                      ],
+                                                            child: StreamBuilder<QuerySnapshot>(
+                                                              stream: FirebaseFirestore.instance.collection('station_owners').orderBy('districtName').snapshots(),
+                                                              builder: (context, snap) {
+                                                                if (snap.hasError) return Center(child: Text('Error loading stations'));
+                                                                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                                                                final docs = snap.data!.docs;
+                                                                if (docs.isEmpty) return const Center(child: Text('No stations'));
+                                                                return ListView.separated(
+                                                                  physics: const AlwaysScrollableScrollPhysics(),
+                                                                  padding: EdgeInsets.zero,
+                                                                  itemCount: docs.length,
+                                                                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF0B63B7)),
+                                                                  itemBuilder: (context, idx) {
+                                                                    final doc = docs[idx];
+                                                                    final sId = doc.id;
+                                                                    final sName = (doc.data() as Map<String, dynamic>)['stationName'] ?? (doc.data() as Map<String, dynamic>)['displayName'] ?? 'Unknown';
+                                                                    final sLoc = (doc.data() as Map<String, dynamic>)['districtName'] ?? '';
+                                                                    return Padding(
+                                                                      padding: EdgeInsets.symmetric(vertical: 14 * scale, horizontal: 8 * scale),
+                                                                      child: Row(
+                                                                        children: [
+                                                                          SizedBox(width: 28 * scale, child: Text('${idx + 1}', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
+                                                                          Expanded(child: Text(sName.toString(), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
+                                                                          Expanded(child: Text(sLoc.toString(), style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
+                                                                          Expanded(child: Text('${_selectedMonth.year}-${_selectedMonth.month.toString().padLeft(2, '0')}-01', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
+                                                                          Expanded(child: Text('', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
+                                                                          SizedBox(
+                                                                            width: 80 * scale,
+                                                                            child: Center(
+                                                                              child: FutureBuilder<String>(
+                                                                                future: _getMonthStatus(sId, _selectedMonth),
+                                                                                builder: (context, statusSnap) {
+                                                                                  final status = statusSnap.data ?? 'Pending';
+                                                                                  return Container(
+                                                                                    padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
+                                                                                    decoration: BoxDecoration(
+                                                                                      color: (status == 'Done') ? const Color(0xFF4CAF50) : const Color(0xFFFFC107),
+                                                                                      borderRadius: BorderRadius.circular(6 * scale),
                                                                                     ),
-                                                                                    actions: [
-                                                                                      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-                                                                                      ElevatedButton(
-                                                                                        onPressed: () {
-                                                                                          Navigator.of(context).pop({'officer': officerCtrl.text, 'status': status});
-                                                                                        },
-                                                                                        child: const Text('Save'),
-                                                                                      ),
-                                                                                    ],
+                                                                                    child: Text(status, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * scale)),
                                                                                   );
                                                                                 },
-                                                                              );
-                                                                              if (res != null) {
-                                                                                setState(() {
-                                                                                  sched['officer'] = res['officer'] ?? '';
-                                                                                  sched['status'] = res['status'] ?? 'Pending';
-                                                                                });
-                                                                              }
-                                                                            },
-                                                                            child: Container(
-                                                                              padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
-                                                                              decoration: BoxDecoration(
-                                                                                color: (sched['status'] == 'Done') ? const Color(0xFF4CAF50) : const Color(0xFFFFC107),
-                                                                                borderRadius: BorderRadius.circular(6 * scale),
-                                                                              ),
-                                                                              child: Text(
-                                                                                sched['status'] ?? 'Pending',
-                                                                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * scale),
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                        ),
+                                                                        ],
                                                                       ),
-                                                                    ],
-                                                                  ),
+                                                                    );
+                                                                  },
                                                                 );
                                                               },
                                                             ),
@@ -663,205 +664,5 @@ class _AssignmentSubscreenState extends State<AssignmentSubscreen> {
   }
 }
 
-// New: StaffSubscreen widget
-class StaffSubscreen extends StatefulWidget {
-  final VoidCallback? onClose;
-  const StaffSubscreen({super.key, this.onClose});
-
-  @override
-  State<StaffSubscreen> createState() => _StaffSubscreenState();
-}
-
-class _StaffSubscreenState extends State<StaffSubscreen> {
-  final List<Map<String, String>> _rows = [
-    {'id': '0001', 'first': 'Maria', 'last': 'Santos', 'phone': '(+63) 912 3456 789', 'email': 'email@email.com', 'role': 'Sanitary Inspector'},
-    {'id': '0002', 'first': 'Luis', 'last': 'Dela Cruz', 'phone': '(+63) 912 3456 789', 'email': 'email@email.com', 'role': 'Sanitary Inspector'},
-    {'id': '0003', 'first': 'Ramon', 'last': 'Garcia', 'phone': '(+63) 912 3456 789', 'email': 'email@email.com', 'role': 'Sanitary Inspector'},
-    {'id': '0004', 'first': 'Teresa', 'last': 'Mendoza', 'phone': '(+63) 912 3456 789', 'email': 'email@email.com', 'role': 'Sanitary Inspector'},
-    {'id': '0005', 'first': 'Elena', 'last': 'Villanueva', 'phone': '(+63) 912 3456 789', 'email': 'email@email.com', 'role': 'Sanitary Inspector'},
-    // ...add more sample rows if desired...
-  ];
-
-  int _page = 0;
-  final int _perPage = 10; // limit to 10 per page
-
-  List<Map<String, String>> get _paged {
-    final start = _page * _perPage;
-    final end = (start + _perPage).clamp(0, _rows.length);
-    if (start >= _rows.length) return [];
-    return _rows.sublist(start, end);
-  }
-
-  void _nextPage() {
-    final maxPage = ((_rows.length - 1) / _perPage).floor();
-    setState(() {
-      if (_page < maxPage) _page++;
-    });
-  }
-
-  void _prevPage() {
-    setState(() {
-      if (_page > 0) _page--;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final paged = _paged;
-    final totalPages = ((_rows.length - 1) / _perPage).floor() + 1;
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFFEAF6FF),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Color(0xFF0B63B7)),
-                  onPressed: () {
-                    if (widget.onClose != null) widget.onClose!();
-                  },
-                ),
-                const SizedBox(width: 8),
-                const Text('Staff', style: TextStyle(color: Color(0xFF0B63B7), fontSize: 18, fontWeight: FontWeight.bold)),
-                const Spacer(),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  // Search/filter row (kept minimal)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search',
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                          ),
-                          onChanged: (_) {
-                            setState(() {
-                              _page = 0;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
-                        child: const Text('Filter'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // table
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: const Color(0xFF0B63B7)),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            color: const Color(0xFFF7FBFF),
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            child: Row(
-                              children: const [
-                                SizedBox(width: 80, child: Text('ID No.', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                Expanded(child: Text('First Name', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                Expanded(child: Text('Last Name', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                Expanded(child: Text('Phone Number', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                Expanded(child: Text('Email', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                SizedBox(width: 140, child: Text('Role', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                                SizedBox(width: 70, child: Text('Edit', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0B63B7)))),
-                              ],
-                            ),
-                          ),
-                          if (paged.isEmpty)
-                            const Expanded(child: Center(child: Text('No records found', style: TextStyle(color: Colors.black54))))
-                          else
-                            Expanded(
-                              child: ListView.separated(
-                                padding: EdgeInsets.zero,
-                                itemCount: paged.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                                itemBuilder: (context, idx) {
-                                  final r = paged[idx];
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                                    child: Row(
-                                      children: [
-                                        SizedBox(width: 80, child: Text(r['id'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
-                                        Expanded(child: Text(r['first'] ?? '')),
-                                        Expanded(child: Text(r['last'] ?? '')),
-                                        Expanded(child: Text(r['phone'] ?? '', style: const TextStyle(color: Colors.black54))),
-                                        Expanded(child: Text(r['email'] ?? '', style: const TextStyle(color: Colors.black54))),
-                                        SizedBox(width: 140, child: Text(r['role'] ?? '', textAlign: TextAlign.center)),
-                                        SizedBox(
-                                          width: 70,
-                                          child: Center(
-                                            child: OutlinedButton(
-                                              onPressed: () {},
-                                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF0B63B7))),
-                                              child: const Text('Edit', style: TextStyle(color: Color(0xFF0B63B7))),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Page ${_page + 1} of ${_rows.isEmpty ? 0 : totalPages}', style: const TextStyle(color: Colors.black54)),
-                      Row(
-                        children: [
-                          ElevatedButton(
-                            onPressed: _page > 0 ? _prevPage : null,
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
-                            child: const Text('Back'),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: (_page + 1) < totalPages ? _nextPage : null,
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
-                            child: const Text('Next'),
-                          ),
-                        ],
-                      )
-                    ],
-                  )
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// StaffSubscreen moved to `lib/LGU/staff_subscreen.dart`
 

@@ -1,0 +1,1043 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+
+class InspectorDashboard extends StatefulWidget {
+  const InspectorDashboard({super.key});
+
+  @override
+  State<InspectorDashboard> createState() => _InspectorDashboardState();
+}
+
+class _InspectorDashboardState extends State<InspectorDashboard> with SingleTickerProviderStateMixin {
+  int _selectedIndex = 0; // 0: Home, 1: Schedule, 2: Profile
+  // Assigned stations will be loaded from Firestore (inspections assigned to the current inspector)
+  List<Map<String, dynamic>> _assignedStations = [];
+  bool _loadingAssigned = true;
+  bool _showAllInspections = false;
+
+  String _currentTime = DateFormat.jm().format(DateTime.now());
+  late TabController _tabController;
+  int _currentTab = 0; // 0: Today, 1: This Week, 2: This Month
+  // Reusable color palette for the inspector dashboard
+  static const Color _primary = Color(0xFF0B63B7);
+  static const Color _doneColor = Color(0xFF2E8B57);
+  static const Color _pendingColor = Color(0xFFF39C12);
+  static const Color _missedColor = Color(0xFFEF4444);
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) return;
+      setState(() {
+        _currentTab = _tabController.index;
+      });
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tick();
+      _loadAssignedInspections();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /// Convert various stored date formats into a DateTime (if possible)
+  DateTime? _toDateTime(dynamic raw) {
+    if (raw == null) return null;
+    try {
+      if (raw is Timestamp) return raw.toDate();
+      if (raw is DateTime) return raw;
+      if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
+      if (raw is String) return DateTime.tryParse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Filter inspections based on the selected tab (today/this week/this month)
+  List<Map<String, dynamic>> _filteredInspections() {
+    final all = _assignedStations;
+    final now = DateTime.now();
+    DateTime start, end;
+    if (_currentTab == 0) {
+      start = DateTime(now.year, now.month, now.day);
+      end = start.add(const Duration(days: 1));
+    } else if (_currentTab == 1) {
+      // Week range (start = Monday)
+      final weekday = now.weekday; // 1 = Monday
+      start = DateTime(now.year, now.month, now.day).subtract(Duration(days: weekday - 1));
+      end = start.add(const Duration(days: 7));
+    } else {
+      // Month range
+      start = DateTime(now.year, now.month, 1);
+      end = DateTime(now.year, now.month + 1, 1);
+    }
+
+    return all.where((s) {
+      final raw = s['date'];
+      final dt = _toDateTime(raw);
+      if (dt == null) return false;
+      return (dt.isAtSameMomentAs(start) || (dt.isAfter(start) && dt.isBefore(end))) || (dt.isAfter(start) && dt.isBefore(end));
+    }).toList();
+  }
+
+  /// Load inspections assigned to the current inspector.
+  /// If [all] is true, list all inspections for that inspector, otherwise only upcoming (date >= today).
+  Future<void> _loadAssignedInspections({bool all = false}) async {
+    setState(() {
+      _loadingAssigned = true;
+    });
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      // Find inspector document by uid and read its 'id' field (preferred) to match inspections.officerId
+      String inspectorLookupId = uid; // fallback to uid if inspector doc not found
+      try {
+        final inspSnap = await FirebaseFirestore.instance.collection('inspectors').where('uid', isEqualTo: uid).limit(1).get();
+        if (inspSnap.docs.isNotEmpty) {
+          final inspDoc = inspSnap.docs.first;
+          // Use the inspector document id as the canonical lookup value. This
+          // must match how inspections.officerId is stored in the DB so the
+          // security rules can resolve /inspectors/{officerId}.
+          inspectorLookupId = inspDoc.id;
+        }
+      } catch (err) {
+        debugPrint('Error resolving inspector id by uid: $err');
+      }
+
+      final now = DateTime.now();
+      // Build query: officerId == inspectorLookupId and optionally date >= today
+      Query q = FirebaseFirestore.instance.collectionGroup('inspections').where('officerId', isEqualTo: inspectorLookupId).orderBy('date');
+      if (!all) {
+        q = q.where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(now.year, now.month, now.day)));
+      }
+      final snap = await q.limit(all ? 200 : 20).get();
+
+      // Deduplicate collectionGroup results: some inspections are written
+      // twice (top-level `inspections` and under `station_owners/{id}/inspections`).
+      // We'll prefer the station-owner-scoped document when both exist for the
+      // same station/month. Use a canonicalKey of '<stationId>::<monthlyInspectionMonth>' when available,
+      // otherwise fall back to document path to dedupe.
+      // First, collect raw inspection docs and determine any station_owner ids we
+      // should fetch so we can enrich the UI with authoritative station/owner data.
+      final raw = <Map<String, dynamic>>[];
+      final ownerIds = <String>{};
+      for (final d in snap.docs) {
+        final data = d.data() as Map<String, dynamic>?;
+        final pathParts = d.reference.path.split('/');
+        final isStationScoped = pathParts.length >= 4 && pathParts[pathParts.length - 3] != 'inspections';
+
+        String candidateOwnerId = '';
+        if (isStationScoped) {
+          // path like 'station_owners/{ownerId}/inspections/{insId}'
+          candidateOwnerId = pathParts[pathParts.length - 3];
+        } else {
+          candidateOwnerId = (data?['stationOwnerId'] ?? data?['ownerId'] ?? data?['stationOwner'] ?? '') as String? ?? '';
+        }
+
+  if (candidateOwnerId.isNotEmpty) ownerIds.add(candidateOwnerId);
+
+        raw.add({'doc': d, 'data': data, 'pathParts': pathParts, 'isStationScoped': isStationScoped, 'ownerId': candidateOwnerId});
+      }
+
+      // Fetch owner documents in parallel (cache results)
+      final Map<String, Map<String, dynamic>> ownerDocs = {};
+      if (ownerIds.isNotEmpty) {
+        await Future.wait(ownerIds.map((id) async {
+          try {
+            final snapOwner = await FirebaseFirestore.instance.collection('station_owners').doc(id).get();
+            if (snapOwner.exists) ownerDocs[id] = snapOwner.data() as Map<String, dynamic>;
+          } catch (err) {
+            debugPrint('Error loading station_owner $id: $err');
+          }
+        }));
+      }
+
+      final Map<String, Map<String, dynamic>> keyed = {};
+      for (final item in raw) {
+        final d = item['doc'] as QueryDocumentSnapshot;
+        final data = item['data'] as Map<String, dynamic>?;
+  final isStationScoped = item['isStationScoped'] as bool;
+        final candidateOwnerId = item['ownerId'] as String? ?? '';
+
+        final stationId = (data?['stationId'] ?? data?['station'] ?? '') as String? ?? '';
+        final monthKey = (data?['monthlyInspectionMonth'] ?? data?['month'] ?? '') as String? ?? '';
+        final canonicalKey = (stationId != '' && monthKey != '') ? '$stationId::$monthKey' : d.reference.path;
+
+        // Owner doc (if available)
+        final ownerDoc = (candidateOwnerId.isNotEmpty && ownerDocs.containsKey(candidateOwnerId)) ? ownerDocs[candidateOwnerId] : null;
+
+        // Build owner full name, preferring owner doc fields when present
+        String ownerFirst = '';
+        String ownerLast = '';
+        if (ownerDoc != null) {
+          ownerFirst = (ownerDoc['firstName'] ?? ownerDoc['stationOwnerFirstName'] ?? ownerDoc['ownerFirstName'] ?? '') as String? ?? '';
+          ownerLast = (ownerDoc['lastName'] ?? ownerDoc['stationOwnerLastName'] ?? ownerDoc['ownerLastName'] ?? '') as String? ?? '';
+        } else {
+          ownerFirst = (data?['stationOwnerFirstName'] ?? data?['firstName'] ?? '') as String? ?? '';
+          ownerLast = (data?['stationOwnerLastName'] ?? data?['lastName'] ?? '') as String? ?? '';
+        }
+  final ownerFull = (ownerFirst + ' ' + ownerLast).trim();
+        final ownerFallback = (data?['stationOwnerName'] ?? data?['ownerName'] ?? '') as String? ?? '';
+
+        // Station name/address: prefer ownerDoc values when available
+        final stationName = (ownerDoc != null ? (ownerDoc['stationName'] ?? ownerDoc['name']) : null) as String? ?? (data?['stationName'] ?? data?['stationNameOverride'] ?? data?['station'] ?? data?['stationId'] ?? 'Unknown Station');
+        final address = (ownerDoc != null ? (ownerDoc['address'] ?? ownerDoc['location']) : null) as String? ?? (data?['address'] ?? data?['location'] ?? '');
+
+        final entry = {
+          'id': d.id,
+          'stationName': stationName,
+          'address': address,
+          'location': data?['address'] ?? data?['location'] ?? '',
+          'status': data?['status'] ?? 'Pending',
+          'owner': ownerFull.isNotEmpty ? ownerFull : ownerFallback,
+          'date': data?['date'],
+          '__path': d.reference.path,
+          '__isStationScoped': isStationScoped,
+        };
+
+        if (!keyed.containsKey(canonicalKey)) {
+          keyed[canonicalKey] = entry;
+        } else {
+          final existing = keyed[canonicalKey]!;
+          final existingScoped = existing['__isStationScoped'] as bool? ?? false;
+          if (!existingScoped && isStationScoped) {
+            keyed[canonicalKey] = entry;
+          }
+        }
+      }
+
+      // Convert keyed map to list
+      final list = keyed.values.map((e) {
+        // remove internal helpers before returning
+        final copy = Map<String, dynamic>.from(e);
+        copy.remove('__path');
+        copy.remove('__isStationScoped');
+        return copy;
+      }).toList();
+
+      if (mounted) setState(() {
+        _assignedStations = list;
+        _loadingAssigned = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading assigned inspections: $e');
+      if (mounted) setState(() {
+        _assignedStations = [];
+        _loadingAssigned = false;
+      });
+    }
+  }
+
+  void _tick() async {
+    while (mounted) {
+      await Future.delayed(const Duration(seconds: 30));
+      if (!mounted) break;
+      setState(() {
+        _currentTime = DateFormat.jm().format(DateTime.now());
+      });
+    }
+
+  }
+
+  // (removed unused modal helper to keep code focused on tabbed UI)
+
+  // detail row helper removed (was used by a modal that's no longer present)
+
+  @override
+  Widget build(BuildContext context) {
+  final isWide = MediaQuery.of(context).size.width > 800;
+  // Color palette for consistent UI (use shared constants)
+  final Color primary = _primary;
+  final Color sidebarBg = const Color(0xFFF1F6FB); // softer, neutral sidebar
+  // Softer backgrounds for lists and items - updated for better contrast
+  final Color listBg = const Color(0xFFF8FAFB); // very light neutral tint for assigned-stations area
+  final Color contentBg = const Color(0xFFF4F7F9); // page background slightly off-white
+  final Color cardBg = const Color(0xFFFFFFFF); // card background (white)
+
+    /// Sidebar
+    Widget leftNav = Container(
+      width: isWide ? 250 : null,
+      decoration: BoxDecoration(
+        color: sidebarBg,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Top spacer to match screenshot padding
+            const SizedBox(height: 18),
+            // Centered user info (avatar + labels)
+            Container(
+              width: double.infinity,
+              color: Colors.transparent,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(radius: 28, backgroundColor: primary, child: const Icon(Icons.person, color: Colors.white, size: 28)),
+                  const SizedBox(height: 8),
+                  Text('Admin', style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(FirebaseAuth.instance.currentUser?.email ?? '', style: const TextStyle(color: Color(0xFF7A93B4), fontSize: 11)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(color: Color(0xFFE8F0FA), thickness: 1, height: 20),
+            // Navigation centered
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  InkWell(onTap: () { setState(() => _selectedIndex = 0); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Text('Home', style: TextStyle(color: _selectedIndex == 0 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4), fontWeight: _selectedIndex == 0 ? FontWeight.bold : FontWeight.normal)),
+                  )),
+                  InkWell(onTap: () { setState(() => _selectedIndex = 1); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Text('Schedule', style: TextStyle(color: _selectedIndex == 1 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4))),
+                  )),
+                  InkWell(onTap: () { setState(() => _selectedIndex = 2); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Text('Profile', style: TextStyle(color: _selectedIndex == 2 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4))),
+                  )),
+                ],
+              ),
+            ),
+            const Spacer(),
+            // Logout rounded pill
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18.0),
+              child: SizedBox(
+                width: 140,
+                child: ElevatedButton.icon(
+                  onPressed: () => _signOut(context),
+                  icon: const Icon(Icons.logout, color: Color(0xFF0B63B7)),
+                  label: const Text('Log out', style: TextStyle(color: Color(0xFF0B63B7))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    elevation: 4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    /// Header bar (styled similar to LGU dashboard top bar)
+    Widget header = Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          if (!isWide)
+              Builder(builder: (context) {
+              return IconButton(
+                icon: Icon(Icons.menu, color: primary),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              );
+            }),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, color: primary),
+                const SizedBox(width: 8),
+                Text(
+                  DateFormat.yMMMMEEEEd().format(DateTime.now()),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: primary),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              // place date/time strip look similar to LGU dashboard (small rounded container)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                ),
+                child: Row(
+                  children: [
+                    Text(_currentTime, style: TextStyle(fontWeight: FontWeight.w600, color: primary)),
+                    const SizedBox(width: 12),
+                    IconButton(onPressed: () {}, icon: Icon(Icons.settings, color: primary)),
+                    IconButton(onPressed: () {}, icon: Icon(Icons.notifications_none, color: primary)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              CircleAvatar(radius: 16, backgroundColor: primary, child: const Icon(Icons.person, color: Colors.white, size: 16)),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    /// Main content
+    Widget mainContent = Container(
+      color: contentBg, // updated page background for softer contrast
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            if (_selectedIndex == 0) ...[
+              // Date strip / greeting
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today, color: primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text('Hello, Inspector!', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ),
+                    Text(DateFormat.yMMMMd().format(DateTime.now()), style: const TextStyle(color: Colors.black54)),
+                  ],
+                ),
+              ),
+
+              // Main two-column layout
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left: Assigned stations + reminders
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        children: [
+                          // Assigned Stations card with date header
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(0),
+                            decoration: BoxDecoration(
+                              color: listBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE6EDF2)),
+                            ),
+                            child: Column(
+                              children: [
+                                // header row (search + count + toggle)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.assignment_turned_in, color: primary),
+                                            const SizedBox(width: 8),
+                                            Text('Assigned Stations', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                                            const SizedBox(width: 12),
+                                            // small count badge
+                                            if (!_loadingAssigned) Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(color: primary.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                                              child: Text('${_assignedStations.length} items', style: TextStyle(fontSize: 12, color: primary)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      // inline search (small)
+                                      Container(
+                                        width: 220,
+                                        padding: const EdgeInsets.only(left: 8),
+                                        child: TextField(
+                                          decoration: InputDecoration(
+                                            hintText: 'Search station',
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                            prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF0B63B7)),
+                                          ),
+                                          onChanged: (v) {
+                                            // client-side filter; simple approach — re-filter list
+                                            // (keeps original list in-state if you want server search later)
+                                            setState(() {
+                                              if (v.trim().isEmpty) {
+                                                // reload to reset; could cache original list instead
+                                                _loadAssignedInspections(all: _showAllInspections);
+                                              } else {
+                                                _assignedStations = _assignedStations.where((s) => (s['stationName'] ?? '').toString().toLowerCase().contains(v.toLowerCase())).toList();
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Toggle to show all inspections or only upcoming
+                                      IconButton(
+                                        tooltip: 'Toggle show all inspections',
+                                        onPressed: () {
+                                          setState(() => _showAllInspections = !_showAllInspections);
+                                          _loadAssignedInspections(all: _showAllInspections);
+                                        },
+                                        icon: Icon(_showAllInspections ? Icons.list : Icons.filter_list, color: primary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(height: 1, color: Color(0xFFECECEC)),
+                                // TabBar for Today / This Week / This Month
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: TabBar(
+                                    controller: _tabController,
+                                    labelColor: _primary,
+                                    unselectedLabelColor: Colors.black54,
+                                    indicatorColor: _primary,
+                                    tabs: const [
+                                      Tab(text: 'Today'),
+                                      Tab(text: 'This Week'),
+                                      Tab(text: 'This Month'),
+                                    ],
+                                  ),
+                                ),
+                                // Animated content area
+                                SizedBox(
+                                  height: 320,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 400),
+                                    transitionBuilder: (child, animation) {
+                                      final inAnim = Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation);
+                                      return FadeTransition(opacity: animation, child: SlideTransition(position: inAnim, child: child));
+                                    },
+                                    child: _loadingAssigned
+                                        ? Center(key: const ValueKey('loading'), child: Padding(padding: const EdgeInsets.all(24.0), child: CircularProgressIndicator(color: _primary)))
+                                        : _buildInspectionsView(_filteredInspections(), key: ValueKey('list_${_currentTab}_${_assignedStations.length}')),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Reminders card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE6EDF2))),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Reminders', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
+                                SizedBox(height: 8),
+                                Text('• Ten (10) inspections scheduled this week'),
+                                Text('• Submit inspection reports for five (5) stations'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // Right: Calendar + Profile summary
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        children: [
+                          // Summary cards row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Card(
+                                  color: cardBg,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('This Week', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
+                                        const SizedBox(height: 8),
+                                        Text('10', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue[800])),
+                                        const SizedBox(height: 4),
+                                        Text('Scheduled', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Card(
+                                  color: Colors.white,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Pending', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
+                                        const SizedBox(height: 8),
+                                        Text('3', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange[800])),
+                                        const SizedBox(height: 4),
+                                        Text('Needs action', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Card(
+                                  color: Colors.white,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Completed', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
+                                        const SizedBox(height: 8),
+                                        Text('7', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                                        const SizedBox(height: 4),
+                                        Text('This month', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Calendar card (simple placeholder like LGU)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(DateFormat.MMMM().format(DateTime.now()), style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
+                                    const Spacer(),
+                                    Text(DateTime.now().year.toString(), style: const TextStyle(color: Colors.black54)),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(height: 160, child: Center(child: Text('📅 Calendar placeholder', style: TextStyle(color: Colors.black54)))),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Profile summary
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+                                SizedBox(height: 8),
+                                Text('Name: Inspector'),
+                                Text('Role: Sanitary Inspector'),
+                                Text('Contact Number: (+63) 912 345 6789'),
+                                Text('Email: inspector@example.com'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_selectedIndex == 1) ...[
+              _whiteCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    SizedBox(height: 12),
+                    Text('Calendar and scheduled inspections will show here.'),
+                  ],
+                ),
+              ),
+            ] else ...[
+              _whiteCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    SizedBox(height: 12),
+                    Text('Name: Inspector'),
+                    Text('Role: Sanitary Inspector'),
+                    Text('Contact Number: (+63) 912 345 6789'),
+                    Text('Email: inspector@example.com'),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    return Scaffold(
+      drawer: isWide ? null : Drawer(child: leftNav),
+      body: SafeArea(
+        child: Row(
+          children: [
+            if (isWide) leftNav,
+            Expanded(
+              child: Column(
+                children: [
+                  header,
+                  Expanded(child: mainContent),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _whiteCard({required Widget child}) {
+    return Card(
+      color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
+    );
+  }
+
+  /// Sign out the current user and navigate to the first route
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e) {
+      debugPrint('Error signing out: $e');
+    }
+    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+
+  /// Build inspections view: responsive layout and empty state
+  Widget _buildInspectionsView(List<Map<String, dynamic>> items, {Key? key}) {
+    final isWide = MediaQuery.of(context).size.width > 900;
+    if (items.isEmpty) {
+      return Container(
+        key: key,
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 120, child: Image.asset('assets/location_illustration.png', fit: BoxFit.contain)),
+              const SizedBox(height: 16),
+              Text('No inspections found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _primary)),
+              const SizedBox(height: 8),
+              const Text('You have no inspections for the selected period. Enjoy your free time!'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Responsive: list on narrow, grid on wide
+    if (!isWide) {
+      return ListView.separated(
+        key: key,
+        padding: const EdgeInsets.all(12),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, i) => _inspectionCard(items[i], onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InspectionDetailPage(data: items[i])))),
+      );
+    }
+
+    // Grid for wide screens
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.all(12),
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 3),
+        itemCount: items.length,
+        itemBuilder: (context, i) => _inspectionCard(items[i], onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InspectionDetailPage(data: items[i])))),
+      ),
+    );
+  }
+
+  Widget _inspectionCard(Map<String, dynamic> s, {required VoidCallback onTap}) {
+    final stationName = s['stationName'] ?? 'Unknown Station';
+    final owner = s['owner'] ?? '';
+    final status = (s['status'] ?? 'Pending') as String;
+    final dt = _toDateTime(s['date']);
+    final datetimeStr = _formatDateTime(dt);
+
+    Color badgeColor = _statusColor(status);
+  // improved colors: use neutral white card background by default
+  final Color cardTint = Colors.white;
+    final Color avatarBg = _primary; // keep primary blue for avatar
+    final Color nameColor = const Color(0xFF0F1724); // dark slate for title
+    final Color ownerColor = Colors.blueGrey.shade600;
+
+    return GestureDetector(
+      onTap: () => _showInspectionModal(s),
+      child: Card(
+        color: cardTint,
+        shadowColor: Colors.black.withOpacity(0.06),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(radius: 26, backgroundColor: avatarBg, child: Text(_initials(stationName), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(stationName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: nameColor)),
+                    const SizedBox(height: 4),
+                    Text(owner, style: TextStyle(color: ownerColor, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule, size: 14, color: Colors.blueGrey.shade300),
+                        const SizedBox(width: 6),
+                        Text(datetimeStr, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: badgeColor.withOpacity(0.20)),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    color: HSLColor.fromColor(badgeColor).withLightness((HSLColor.fromColor(badgeColor).lightness - 0.08).clamp(0.0, 1.0)).toColor(),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showInspectionModal(Map<String, dynamic> inspection) {
+    final id = inspection['id'] as String? ?? '';
+    final stationName = inspection['stationName'] ?? 'Unknown Station';
+    final owner = inspection['owner'] ?? '';
+    final status = (inspection['status'] ?? 'Pending').toString();
+    final dt = _toDateTime(inspection['date']);
+    final datetimeStr = _formatDateTime(dt);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Inspection details',
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (context, anim1, anim2) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6, maxHeight: MediaQuery.of(context).size.height * 0.8),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24)]),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  // header strip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    decoration: const BoxDecoration(borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)), color: Color(0xFFF3F7FB)),
+                    child: Row(children: [
+                      CircleAvatar(radius: 22, backgroundColor: _primary, child: Text(_initials(stationName), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(stationName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1724)))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: _statusColor(status).withOpacity(0.12), borderRadius: BorderRadius.circular(18)), child: Text(status, style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.w700))),
+                      const SizedBox(width: 8),
+                      IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, color: Color(0xFF6B7280))),
+                    ]),
+                  ),
+
+                  // body
+                  Padding(
+                    padding: const EdgeInsets.all(18.0),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Icon(Icons.person_outline, size: 18, color: Colors.blueGrey.shade300),
+                        const SizedBox(width: 8),
+                        Text(owner, style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
+                      ]),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Icon(Icons.schedule, size: 18, color: Colors.blueGrey.shade300),
+                        const SizedBox(width: 8),
+                        Text(datetimeStr, style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
+                      ]),
+                      const SizedBox(height: 18),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      // Placeholder for extra details — keep minimal and readable
+                      Text('Inspection details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade800)),
+                      const SizedBox(height: 8),
+                      Text(inspection['notes'] ?? 'No additional notes available.', style: const TextStyle(color: Color(0xFF6B7280))),
+                      const SizedBox(height: 18),
+                      // actions
+                      Row(children: [
+                        OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                          child: const Text('Close', style: TextStyle(color: Color(0xFF0B63B7))),
+                        ),
+                        const Spacer(),
+                        ElevatedButton.icon(
+                          onPressed: status.toLowerCase().contains('done')
+                              ? null
+                              : () {
+                                  // optimistic UI: mark done locally
+                                  setState(() {
+                                    for (var i = 0; i < _assignedStations.length; i++) {
+                                      if ((_assignedStations[i]['id'] ?? '') == id) {
+                                        _assignedStations[i]['status'] = 'Done';
+                                        break;
+                                      }
+                                    }
+                                  });
+                                  Navigator.of(context).pop();
+                                  final snack = SnackBar(
+                                    content: Text('Marked "$stationName" as done.'),
+                                    action: SnackBarAction(label: 'Undo', onPressed: () {
+                                      // revert locally
+                                      setState(() {
+                                        for (var i = 0; i < _assignedStations.length; i++) {
+                                          if ((_assignedStations[i]['id'] ?? '') == id) {
+                                            _assignedStations[i]['status'] = status;
+                                            break;
+                                          }
+                                        }
+                                      });
+                                    }),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(snack);
+                                },
+                          icon: const Icon(Icons.check, size: 18),
+                          label: const Text('Mark as Done'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _doneColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ])
+                    ]),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim, secAnim, child) {
+        final tween = Tween(begin: const Offset(0, 0.03), end: Offset.zero).chain(CurveTween(curve: Curves.easeOut));
+        return FadeTransition(opacity: anim, child: SlideTransition(position: anim.drive(tween), child: child));
+      },
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.split(' ');
+    if (parts.isEmpty) return 'S';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+  }
+
+  String _formatDateTime(DateTime? dt) {
+    if (dt == null) return 'TBD';
+    return DateFormat.yMMMd().add_jm().format(dt);
+  }
+
+  Color _statusColor(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('done') || s.contains('completed')) return _doneColor;
+    if (s.contains('miss') || s.contains('missed')) return _missedColor;
+    // default pending
+    return _pendingColor;
+  }
+
+}
+
+/// Placeholder detail page for an inspection
+class InspectionDetailPage extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const InspectionDetailPage({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = data['date'];
+    String datetimeStr = '';
+    try {
+      if (dt is Timestamp) datetimeStr = DateFormat.yMMMd().add_jm().format(dt.toDate());
+      else if (dt is DateTime) datetimeStr = DateFormat.yMMMd().add_jm().format(dt);
+      else if (dt is String) datetimeStr = dt;
+    } catch (_) {}
+
+    return Scaffold(
+      appBar: AppBar(title: Text(data['stationName'] ?? 'Inspection')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(data['stationName'] ?? 'Unknown', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Owner: ${data['owner'] ?? ''}'),
+          const SizedBox(height: 8),
+          Text('Scheduled: $datetimeStr'),
+          const SizedBox(height: 12),
+          Text('Status: ${data['status'] ?? 'Pending'}'),
+          const SizedBox(height: 20),
+          const Text('Details placeholder — implement inspection details here.'),
+        ]),
+      ),
+    );
+  }
+
+// Sidebar button widget removed — sidebar now uses centered InkWell text items to match design.
+}

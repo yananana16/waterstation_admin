@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 import 'package:flutter/material.dart';
 
 class WaterStationsPage extends StatefulWidget {
@@ -51,7 +52,7 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
               Expanded(
                 flex: 1,
                 child: DropdownButtonFormField<String>(
-                  value: selectedDistrict,
+                  initialValue: selectedDistrict,
                   items: ['All Districts', 'La Paz', 'Mandurriao', 'Molo', 'Lapuz', 'Arevalo', 'Jaro', 'City Proper']
                       .map((district) => DropdownMenuItem(
                             value: district,
@@ -84,7 +85,10 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -122,10 +126,10 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
-                          headingRowColor: MaterialStateProperty.all(const Color(0xFFEAF6FF)),
-                          dataRowColor: MaterialStateProperty.resolveWith<Color?>(
-                            (Set<MaterialState> states) {
-                              if (states.contains(MaterialState.selected)) {
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFEAF6FF)),
+                          dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                            (Set<WidgetState> states) {
+                              if (states.contains(WidgetState.selected)) {
                                 return const Color(0xFFE0F7FA);
                               }
                               return null; // Use default color

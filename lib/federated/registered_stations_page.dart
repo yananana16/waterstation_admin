@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_files_viewer.dart';
@@ -113,7 +114,10 @@ class RegisteredStationsPage extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
               builder: (context, snapshot) {
                 final center = mapSelectedLocation ?? LatLng(10.7202, 122.5621);
                 List<Marker> markers = [];
@@ -226,7 +230,10 @@ class RegisteredStationsPage extends StatelessWidget {
               SizedBox(
                 width: 700,
                 child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance.collection('districts').get(),
+                  future: FirestoreRepository.instance.getCollectionOnce(
+                    'districts',
+                    () => FirebaseFirestore.instance.collection('districts'),
+                  ),
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
                     // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
@@ -317,7 +324,10 @@ class RegisteredStationsPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -528,16 +538,63 @@ class RegisteredStationsPage extends StatelessWidget {
                                     ),
                                   ),
                                   DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(6)),
-                                        child: Text(
-                                          statusNormalized,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
+                                    // Show CHO inspection status by querying the inspections subcollection for the latest inspection
+                                    FutureBuilder<QuerySnapshot>(
+                                      future: () async {
+                                        final now = DateTime.now();
+                                        final ym = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+                                        return FirebaseFirestore.instance
+                                            .collection('station_owners')
+                                            .doc(doc.id)
+                                            .collection('inspections')
+                                            .where('monthlyInspectionMonth', isEqualTo: ym)
+                                            .limit(1)
+                                            .get();
+                                      }(),
+                                      builder: (ctx, inspSnap) {
+                                        String displayStatus = statusNormalized; // fallback to owner doc status
+                                        Color displayColor = statusColor;
+                                        if (inspSnap.connectionState == ConnectionState.waiting) {
+                                          return SizedBox(
+                                            width: 90,
+                                            child: Row(
+                                              children: const [
+                                                SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text('Loading', style: TextStyle(fontSize: 12)),
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        if (inspSnap.hasError) {
+                                          // on error, fallback to owner status
+                                          displayStatus = statusNormalized;
+                                          displayColor = statusColor;
+                                        } else if (inspSnap.hasData && inspSnap.data!.docs.isNotEmpty) {
+                                          final inspDoc = inspSnap.data!.docs.first;
+                                          final inspData = inspDoc.data() as Map<String, dynamic>;
+                                          final rawInspStatus = (inspData['status'] ?? '').toString();
+                                          final inspNormalized = rawInspStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                                          displayStatus = inspNormalized;
+                                          displayColor = inspNormalized == 'Done' ? const Color(0xFF4CAF50) : const Color(0xFFFFC107);
+                                        }
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(color: displayColor, borderRadius: BorderRadius.circular(6)),
+                                            child: Text(
+                                              displayStatus,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
                                   DataCell(

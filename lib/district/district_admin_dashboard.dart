@@ -8,6 +8,7 @@ import 'package:waterstation_admin/login_screen.dart';
 import 'package:waterstation_admin/district/district_compliance_files_viewer.dart';
 import 'package:waterstation_admin/district/compliance_page.dart'; // Add this import
 import 'package:waterstation_admin/district/recommendations_page.dart';
+import 'package:waterstation_admin/services/firestore_repository.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
   const DistrictAdminDashboard({super.key});
@@ -50,16 +51,22 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
   // Fetch districts from Firestore
   Future<List<Map<String, dynamic>>> _fetchDistricts() async {
-    final snapshot = await FirebaseFirestore.instance.collection('districts').get();
-    return snapshot.docs.map((doc) => doc.data()).toList();
+    final snapshot = await FirestoreRepository.instance.getCollectionOnce(
+      'districts',
+      () => FirebaseFirestore.instance.collection('districts'),
+    );
+    return snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
   }
 
   Future<void> _fetchUserDistrict() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'users/${user.uid}',
+        () => FirebaseFirestore.instance.collection('users').doc(user.uid),
+      );
       setState(() {
-        _userDistrict = doc.data()?['districtName']?.toString();
+        _userDistrict = (doc.data() as Map<String, dynamic>?)?['districtName']?.toString();
       });
     }
   }
@@ -810,7 +817,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance.collection('station_owners').get(),
+                      future: FirestoreRepository.instance.getCollectionOnce(
+                        'station_owners',
+                        () => FirebaseFirestore.instance.collection('station_owners'),
+                      ),
                       builder: (context, snapshot) {
                         final center = _mapSelectedLocation ?? LatLng(10.7202, 122.5621); // Iloilo City
                         List<Marker> markers = [];
@@ -895,10 +905,12 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
                     child: FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('station_owners')
-                          .where('status', isEqualTo: 'approved')
-                          .get(),
+                      future: FirestoreRepository.instance.getCollectionOnce(
+                        'station_owners_approved_${_userDistrict}',
+                        () => FirebaseFirestore.instance
+                            .collection('station_owners')
+                            .where('status', isEqualTo: 'approved'),
+                      ),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator());

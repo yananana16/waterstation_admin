@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import/ 
 import 'federated/admin_dashboard.dart'; // Import Admin Dashboard
 import 'district/district_admin_dashboard.dart'; // Import District Admin Dashboard
 import 'LGU/lgu_dashboard.dart'; // Add this import
+import 'inspector/inspector_dashboard.dart'; // Inspector dashboard
+import 'services/firestore_repository.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,8 +35,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (userCredential.user != null) {
         String uid = userCredential.user!.uid;
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+        final userDoc = await FirestoreRepository.instance.getDocumentOnce(
+          'users/$uid',
+          () => FirebaseFirestore.instance.collection('users').doc(uid),
+        );
+        final userData = (userDoc.data() as Map<String, dynamic>?) ?? {};
 
         // Determine role and route accordingly
         if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
@@ -53,23 +58,31 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        // inspector route
+        if (userDoc.id == uid && userData['role'] == 'inspector') {
+          setState(() { _isLoading = false; });
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const InspectorDashboard()));
+          return;
+        }
+
         // If not found in users, check station_owners for district admin
-        QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
-            .collection('station_owners')
-            .where('userId', isEqualTo: uid)
-            .where('district_president', isEqualTo: true)
-            .where('status', isEqualTo: 'approved')
-            .limit(1)
-            .get();
+        final stationOwnerQuery = await FirestoreRepository.instance.getCollectionOnce(
+          'station_owners_user_$uid',
+          () => FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('userId', isEqualTo: uid)
+              .where('district_president', isEqualTo: true)
+              .where('status', isEqualTo: 'approved')
+              .limit(1),
+        );
 
         if (stationOwnerQuery.docs.isNotEmpty) {
           var stationOwnerDoc = stationOwnerQuery.docs.first;
           String stationOwnerDocId = stationOwnerDoc.id;
-          QuerySnapshot districtQuery = await FirebaseFirestore.instance
-              .collection('districts')
-              .where('customUID', isEqualTo: stationOwnerDocId)
-              .limit(1)
-              .get();
+          final districtQuery = await FirestoreRepository.instance.getCollectionOnce(
+            'districts_custom_$stationOwnerDocId',
+            () => FirebaseFirestore.instance.collection('districts').where('customUID', isEqualTo: stationOwnerDocId).limit(1),
+          );
           if (districtQuery.docs.isNotEmpty) {
             setState(() { _isLoading = false; });
             Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));

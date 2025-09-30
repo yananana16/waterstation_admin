@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 
 class DistrictManagementPage extends StatelessWidget {
   final void Function(void Function()) setState;
@@ -108,8 +109,11 @@ class DistrictManagementPage extends StatelessWidget {
                                             const SizedBox(height: 8),
                                             FutureBuilder<DocumentSnapshot?>(
                                               future: (customUID != null && customUID.isNotEmpty)
-                                                  ? FirebaseFirestore.instance.collection('station_owners').doc(customUID).get()
-                                                  : Future.value(null),
+                                                  ? FirestoreRepository.instance.getDocumentOnce(
+                                                      'station_owners/$customUID',
+                                                      () => FirebaseFirestore.instance.collection('station_owners').doc(customUID),
+                                                    )
+                                                  : Future<DocumentSnapshot?>.value(null),
                                               builder: (context, snapshot) {
                                                 String ownerDisplay = "Not assigned";
                                                 if (customUID != null && customUID.isNotEmpty && snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
@@ -188,10 +192,10 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('districts')
-          .where('districtName', isEqualTo: widget.districtName)
-          .get(),
+      future: FirestoreRepository.instance.getCollectionOnce(
+        'districts_${widget.districtName}',
+        () => FirebaseFirestore.instance.collection('districts').where('districtName', isEqualTo: widget.districtName),
+      ),
       builder: (context, districtSnap) {
         if (districtSnap.connectionState == ConnectionState.waiting) {
           return const AlertDialog(content: Center(child: CircularProgressIndicator()));
@@ -223,10 +227,13 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Current President Card
-                FutureBuilder<DocumentSnapshot>(
+                FutureBuilder<DocumentSnapshot?>(
                   future: currentPresidentUID != null && currentPresidentUID.isNotEmpty
-                      ? FirebaseFirestore.instance.collection('station_owners').doc(currentPresidentUID).get()
-                      : Future.value(null),
+                      ? FirestoreRepository.instance.getDocumentOnce(
+                          'station_owners/$currentPresidentUID',
+                          () => FirebaseFirestore.instance.collection('station_owners').doc(currentPresidentUID),
+                        )
+                      : Future<DocumentSnapshot?>.value(null),
                   builder: (context, ownerSnap) {
                     String presidentName = "Not assigned";
                     String stationName = "";

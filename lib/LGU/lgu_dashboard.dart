@@ -1,6 +1,7 @@
 // import 'package:cloud_firestore/cloud_firestore.dart'; // unused - removed
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // added to fetch real count
+import '../services/firestore_repository.dart';
 import 'package:waterstation_admin/LGU/water_stations_page.dart'; // moved Water Stations page to separate file
 import 'package:waterstation_admin/LGU/schedule_page.dart';
 
@@ -57,19 +58,22 @@ class _LguDashboardState extends State<LguDashboard> {
   // fetch real count of station_owners from Firestore
   Future<void> _fetchTotalOwners() async {
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('station_owners').get();
+      final snapshot = await FirestoreRepository.instance.getCollectionOnce(
+        'station_owners',
+        () => FirebaseFirestore.instance.collection('station_owners'),
+      );
       // compute total and counts per district
       final Map<String, int> counts = {};
       int approved = 0;
       int failed = 0;
       for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final district = (data['districtName'] ?? '').toString().trim();
+        final data = doc.data() as Map<String, dynamic>?;
+        final district = (data?['districtName'] ?? '').toString().trim();
         if (district.isNotEmpty) {
           counts[district] = (counts[district] ?? 0) + 1;
         }
         // count status == 'approved' (case-insensitive)
-        final status = (data['status'] ?? '').toString().toLowerCase();
+  final status = (data?['status'] ?? '').toString().toLowerCase();
         if (status == 'approved') {
           approved++;
         } else {

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/email_sender.dart';
@@ -60,13 +61,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   Future<void> sendFailedFilesEmail(Map<String, dynamic> complianceStatuses) async {
     // Fetch owner info
-    final ownerDoc = await FirebaseFirestore.instance
-        .collection('station_owners')
-        .doc(widget.stationOwnerDocId)
-        .get();
-    final ownerData = ownerDoc.data();
-    final recipientEmail = ownerData?['email']?.toString() ?? '';
-    final stationName = ownerData?['stationName']?.toString() ?? '';
+    final ownerDoc = await FirestoreRepository.instance.getDocumentOnce(
+      'station_owners/${widget.stationOwnerDocId}',
+      () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+    );
+  final ownerData = ownerDoc.data() as Map<String, dynamic>?;
+  final recipientEmail = ownerData?['email']?.toString() ?? '';
+  final stationName = ownerData?['stationName']?.toString() ?? '';
     if (recipientEmail.isEmpty) return;
 
     // Collect failed files with details (normalize dates to ISO where possible)
@@ -170,13 +171,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   Future<void> fetchComplianceStatuses(String docId) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(docId)
-          .get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'compliance_uploads/$docId',
+        () => FirebaseFirestore.instance.collection('compliance_uploads').doc(docId),
+      );
       if (doc.exists) {
         setState(() {
-          complianceStatuses = doc.data() ?? {};
+          complianceStatuses = (doc.data() as Map<String, dynamic>?) ?? {};
         });
       }
     } catch (e) {
@@ -196,12 +197,12 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       });
 
       // After updating, check statuses
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(widget.stationOwnerDocId)
-          .get();
-      final data = doc.data() ?? {};
-      final statusValues = data.entries
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'compliance_uploads/${widget.stationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('compliance_uploads').doc(widget.stationOwnerDocId),
+      );
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final statusValues = data.entries
           .where((e) => e.key.endsWith('_status'))
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
@@ -227,11 +228,11 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       }
 
       // Fetch previous status before updating
-      final prevStationDoc = await FirebaseFirestore.instance
-          .collection('station_owners')
-          .doc(widget.stationOwnerDocId)
-          .get();
-      final prevStatus = prevStationDoc.data()?['status']?.toString() ?? '';
+      final prevStationDoc = await FirestoreRepository.instance.getDocumentOnce(
+        'station_owners/${widget.stationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+      );
+      final prevStatus = (prevStationDoc.data() as Map<String, dynamic>?)?['status']?.toString() ?? '';
 
       await FirebaseFirestore.instance
           .collection('station_owners')
@@ -243,11 +244,11 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         // Send email if approved
         if (stationStatus == 'approved') {
           // Fetch email and station name from Firestore
-          final ownerDoc = await FirebaseFirestore.instance
-              .collection('station_owners')
-              .doc(widget.stationOwnerDocId)
-              .get();
-          final ownerData = ownerDoc.data();
+          final ownerDoc = await FirestoreRepository.instance.getDocumentOnce(
+            'station_owners/${widget.stationOwnerDocId}',
+            () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+          );
+          final ownerData = ownerDoc.data() as Map<String, dynamic>?;
           final recipientEmail = ownerData?['email']?.toString() ?? '';
           final stationName = ownerData?['station_name']?.toString() ?? '';
           if (recipientEmail.isNotEmpty) {
