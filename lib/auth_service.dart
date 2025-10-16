@@ -1,3 +1,4 @@
+import 'dart:developer' show log;
 import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthService {
@@ -11,8 +12,8 @@ class AuthService {
         password: password,
       );
       return userCredential.user;
-    } catch (e) {
-      print("Login Error: $e");
+    } catch (e, st) {
+      log('Login Error: $e', error: e, stackTrace: st);
       return null;
     }
   }

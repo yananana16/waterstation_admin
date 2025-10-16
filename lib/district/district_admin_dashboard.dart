@@ -1,3 +1,4 @@
+// ignore_for_file: unused_element, unused_field, unused_local_variable, library_private_types_in_public_api
 import 'package:flutter/material.dart';
 // Make sure this import path is correct and points to the file where RoleSelectionScreen is defined.
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
@@ -65,6 +66,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
         'users/${user.uid}',
         () => FirebaseFirestore.instance.collection('users').doc(user.uid),
       );
+      if (!mounted) return;
       setState(() {
         _userDistrict = (doc.data() as Map<String, dynamic>?)?['districtName']?.toString();
       });
@@ -86,7 +88,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
               color: const Color(0xFFD6E8FD),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
+                  color: Colors.black.withAlpha((0.10 * 255).round()),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -176,7 +178,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     color: const Color(0xFFD6E8FD),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
+                        color: Colors.black.withAlpha((0.18 * 255).round()),
                         blurRadius: 18,
                         offset: const Offset(0, 6),
                       ),
@@ -322,7 +324,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withAlpha((0.04 * 255).round()),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -354,7 +356,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withAlpha((0.04 * 255).round()),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -383,7 +385,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Center(
-                                      child: Icon(Icons.show_chart, size: 80, color: Colors.blueAccent.withOpacity(0.3)),
+                                      child: Icon(Icons.show_chart, size: 80, color: Colors.blueAccent.withAlpha((0.3 * 255).round())),
                                     ),
                                   ),
                                 ),
@@ -403,7 +405,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
+                                        color: Colors.black.withAlpha((0.04 * 255).round()),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -434,7 +436,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
+                                        color: Colors.black.withAlpha((0.04 * 255).round()),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -478,7 +480,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withAlpha((0.04 * 255).round()),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -526,7 +528,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withAlpha((0.04 * 255).round()),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -705,7 +707,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withAlpha((0.15 * 255).round()),
                             blurRadius: 16,
                             offset: const Offset(0, 4),
                           ),
@@ -906,7 +908,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
                     child: FutureBuilder<QuerySnapshot>(
                       future: FirestoreRepository.instance.getCollectionOnce(
-                        'station_owners_approved_${_userDistrict}',
+                        'station_owners_approved_$_userDistrict',
                         () => FirebaseFirestore.instance
                             .collection('station_owners')
                             .where('status', isEqualTo: 'approved'),
@@ -1255,7 +1257,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 // ...existing code...
 
 // Sidebar button widget
-// ignore: unused_element
 class _SidebarButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1321,7 +1322,7 @@ class _SummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.08),
+            color: Colors.blueAccent.withAlpha((0.08 * 255).round()),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1374,11 +1375,11 @@ class _ChartPlaceholder extends StatelessWidget {
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.blueAccent.withOpacity(0.3),
+              color: Colors.blueAccent.withAlpha((0.3 * 255).round()),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withOpacity(0.4)),
+              child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withAlpha((0.4 * 255).round())),
             ),
           ),
         ),
@@ -1425,7 +1426,7 @@ class _ComplianceStatBox extends StatelessWidget {
       width: 120,
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+  color: color.withAlpha((0.12 * 255).round()),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1458,11 +1459,11 @@ class _BigComplianceStatBox extends StatelessWidget {
       height: 70, // Reduced height
       margin: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+  color: color.withAlpha((0.10 * 255).round()),
         borderRadius: BorderRadius.circular(12), // Smaller border radius
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.08),
+            color: color.withAlpha((0.08 * 255).round()),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),

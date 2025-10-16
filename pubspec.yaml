@@ -46,12 +46,16 @@ dependencies:
   shared_preferences: ^2.0.6
   fl_heatmap: ^0.4.5
   flutter_map: ^8.1.1
+  latlong2: ^0.9.1
   fl_chart: ^1.0.0
   flutter_local_notifications: ^19.4.1
   firebase_messaging: ^15.2.10
   mailer: ^6.5.0
   shelf: ^1.4.2
   http: ^1.5.0
+  intl: ^0.18.0
+  shelf_router: ^1.1.4
+  dotenv: ^4.2.0
 
 
 dev_dependencies:

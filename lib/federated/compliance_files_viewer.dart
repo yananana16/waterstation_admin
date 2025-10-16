@@ -6,7 +6,7 @@ import '../services/firestore_repository.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/email_sender.dart';
-
+const String backendUrl = 'https://email-backend-qhq3.onrender.com/send-email';
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
   final VoidCallback? onStatusChanged; // Add this line
@@ -255,6 +255,12 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
             sendApprovalEmail(recipientEmail, stationName);
           }
         }
+        // Ensure station is marked active when approved
+        await FirebaseFirestore.instance
+            .collection('station_owners')
+            .doc(widget.stationOwnerDocId)
+            .update({'status': stationStatus, 'isActive': true});
+
         showDialog(
           context: context,
           builder: (context) => Dialog(
@@ -481,10 +487,12 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     icon: const Icon(Icons.open_in_new),
                                     label: const Text('Open PDF'),
                                     onPressed: () async {
-                                      if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                        await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                      final uri = Uri.parse(fileUrl);
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(uri, mode: LaunchMode.externalApplication);
                                       } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(this.context).showSnackBar(
                                           const SnackBar(content: Text('Could not open file')),
                                         );
                                       }
@@ -502,10 +510,12 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                         icon: const Icon(Icons.open_in_new),
                                         label: const Text('Open Document'),
                                         onPressed: () async {
-                                          if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                                            await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                                          final uri = Uri.parse(fileUrl);
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
                                           } else {
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(this.context).showSnackBar(
                                               const SnackBar(content: Text('Could not open file')),
                                             );
                                           }
@@ -518,8 +528,8 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download'),
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('Enlarge'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     foregroundColor: Colors.white,
@@ -529,12 +539,20 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                     ),
                   ),
                   onPressed: () async {
-                    if (await canLaunchUrl(Uri.parse(fileUrl))) {
-                      await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
+                    if (isImage) {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => _FullScreenImageViewer(imageUrl: fileUrl, title: file.name),
+                      ));
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Could not download file')),
-                      );
+                      final uri = Uri.parse(fileUrl);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(content: Text('Could not open file')),
+                        );
+                      }
                     }
                   },
                 ),
@@ -599,9 +617,9 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(compact ? 0.08 : 0.10),
+  color: color.withAlpha(((compact ? 0.08 : 0.10) * 255).round()),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: color.withOpacity(compact ? 0.30 : 0.35)),
+  border: Border.all(color: color.withAlpha(((compact ? 0.30 : 0.35) * 255).round())),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -703,7 +721,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
+                                        color: Colors.black.withAlpha((0.04 * 255).round()),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -713,7 +731,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     // left accent
                                     decoration: BoxDecoration(
                                       border: Border(
-                                        left: BorderSide(color: accent.withOpacity(0.85), width: 5),
+                                        left: BorderSide(color: accent.withAlpha((0.85 * 255).round()), width: 5),
                                       ),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -730,7 +748,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 width: 36,
                                                 height: 36,
                                                 decoration: BoxDecoration(
-                                                  color: iconColor.withOpacity(0.10),
+                                                  color: iconColor.withAlpha((0.10 * 255).round()),
                                                   shape: BoxShape.circle,
                                                 ),
                                                 child: Icon(icon, color: iconColor, size: 20),
@@ -761,7 +779,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                             child: Center(
                                               child: Icon(
                                                 icon,
-                                                color: iconColor.withOpacity(0.35),
+                                                color: iconColor.withAlpha((0.35 * 255).round()),
                                                 size: 64,
                                               ),
                                             ),
@@ -837,7 +855,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               labelStyle: const TextStyle(fontWeight: FontWeight.w600),
                                               hintText: 'Select status',
                                               filled: true,
-                                              fillColor: accent.withOpacity(0.05),
+                                              fillColor: accent.withAlpha((0.05 * 255).round()),
                                               prefixIcon: Padding(
                                                 padding: const EdgeInsets.only(left: 12, right: 8),
                                                 child: Container(width: 8, height: 8, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
@@ -846,7 +864,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                               enabledBorder: OutlineInputBorder(
                                                 borderRadius: BorderRadius.circular(12),
-                                                borderSide: BorderSide(color: accent.withOpacity(0.30)),
+                                                borderSide: BorderSide(color: accent.withAlpha((0.30 * 255).round())),
                                               ),
                                               focusedBorder: OutlineInputBorder(
                                                 borderRadius: BorderRadius.circular(12),
@@ -975,6 +993,41 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+/// Full screen image viewer used when user taps "Enlarge"
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  const _FullScreenImageViewer({Key? key, required this.imageUrl, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title, overflow: TextOverflow.ellipsis),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      backgroundColor: Colors.black,
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const Center(child: CircularProgressIndicator());
+            },
+            errorBuilder: (context, error, stack) => const Center(child: Text('Failed to load image', style: TextStyle(color: Colors.white))),
+          ),
+        ),
+      ),
     );
   }
 }

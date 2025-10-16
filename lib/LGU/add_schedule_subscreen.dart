@@ -183,6 +183,7 @@ class _AddScheduleSubscreenState extends State<AddScheduleSubscreen> {
           .get();
         if (existing.docs.isNotEmpty) {
           // Very likely a duplicate already exists; abort early and notify.
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('A schedule already exists for $monthKey')));
           if (mounted) setState(() => _isSaving = false);
           return;
@@ -208,12 +209,15 @@ class _AddScheduleSubscreenState extends State<AddScheduleSubscreen> {
         tx.update(stationRef, {'monthlyInspections': FieldValue.arrayUnion([monthKey])});
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule saved')));
-      if (widget.onClose != null) widget.onClose!();
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Schedule saved')));
+  if (widget.onClose != null) widget.onClose!();
     } on StateError catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('A schedule already exists for $monthKey')));
     } catch (e) {
       debugPrint('Error saving schedule: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error saving schedule')));
     } finally {
       if (mounted) setState(() => _isSaving = false);

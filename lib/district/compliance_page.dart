@@ -89,7 +89,7 @@ class _CompliancePageState extends State<CompliancePage> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
+                                  color: Colors.black.withAlpha((0.15 * 255).round()),
                                   blurRadius: 16,
                                   offset: const Offset(0, 4),
                                 ),
@@ -170,7 +170,7 @@ class _CompliancePageState extends State<CompliancePage> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.07),
+                color: Colors.black.withAlpha((0.07 * 255).round()),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -324,8 +324,8 @@ class _CompliancePageState extends State<CompliancePage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
+                                BoxShadow(
+                                  color: Colors.black.withAlpha((0.12 * 255).round()),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),

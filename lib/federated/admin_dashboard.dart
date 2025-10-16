@@ -1,4 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthProvider, FirebaseAuthException;
+// ignore_for_file: unused_import, unused_element, unused_field, unused_local_variable, library_private_types_in_public_api
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:flutter/material.dart';
 import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +12,7 @@ import 'change_password_dialog.dart'; // <-- Add this import
 // <-- Add this import
 import 'logout_dialog.dart'; // <-- Add this import
 import 'registered_stations_page.dart'; // <-- Add this import
+import 'recommendations_page.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -27,6 +29,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isLoading = false; // <-- Add this line
   bool _showSettingsPage = false; // <-- Add this line
   bool _showNotificationsPage = false; // <-- Add this line
+  bool _isSidebarCollapsed = false; // collapse for wide screens
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 // <-- Add this line
   LatLng? _mapSelectedLocation;
   final MapController _mapController = MapController(); // <-- Add this line
@@ -61,6 +65,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           setState(() {
             isFederatedPresident = false;
           });
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -91,6 +96,33 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return counts;
   }
 
+  // Count station owners by a specific status (e.g., 'approved', 'failed')
+  Future<int> _countStationsByStatus(String status) async {
+    final query = await FirebaseFirestore.instance
+        .collection('station_owners')
+        .where('status', isEqualTo: status)
+        .get();
+    return query.size;
+  }
+
+  // Count station owners with any of the provided statuses
+  Future<int> _countStationsByStatuses(List<String> statuses) async {
+    if (statuses.isEmpty) return 0;
+    // Firestore doesn't support OR queries directly, so run multiple queries and sum.
+    int total = 0;
+    for (final s in statuses) {
+      final q = await FirebaseFirestore.instance.collection('station_owners').where('status', isEqualTo: s).get();
+      total += q.size;
+    }
+    return total;
+  }
+
+  // Count total station owners
+  Future<int> _countTotalStations() async {
+    final q = await FirebaseFirestore.instance.collection('station_owners').get();
+    return q.size;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -119,6 +151,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
     if (shouldLogout == true) {
       await _authService.signOut();
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -131,190 +164,137 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final user = FirebaseAuth.instance.currentUser;
     final userEmail = user?.email ?? "Admin Panel";
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.white,
-      body: Row(
-        children: [
-          // Sidebar
-          Container(
-            width: 250,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6E8FD),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+      // On narrow screens we provide a Drawer
+      drawer: Drawer(
+        child: SafeArea(child: _buildSidebarContent(collapsed: false, forDrawer: true)),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 900; // breakpoint
+          final sidebarWidth = isWide ? (_isSidebarCollapsed ? 80.0 : 250.0) : 0.0;
+          return Row(
+            children: [
+              if (isWide)
+                // permanent sidebar on wide screens
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: sidebarWidth,
+                  child: _buildSidebarContent(collapsed: _isSidebarCollapsed),
                 ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Logo, App Name, Tagline
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFFD6E8FD), // Match sidebar background
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Column(
-                    children: [
-
-                    ],
-                  ),
-                ),
-                // User Info
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "Admin",
-                        style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        FirebaseAuth.instance.currentUser?.email ?? "user@gmail.com",
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                // Navigation Items
-                const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
-                _sidebarNavItem("Dashboard", 0),
-                _sidebarNavItem("Water Stations", 1),
-                _sidebarNavItem("District Presidents", 2),
-                _sidebarNavItem("Compliance", 3),
-                _sidebarNavItem("Profile", 4),
-                const Spacer(),
-                // Log out button
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: SizedBox(
-                    width: 160,
-                    height: 44,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.logout, color: Color(0xFF004687)),
-                      label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        side: const BorderSide(color: Color(0xFFD6E8FD)),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () => _logout(context),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Main Content Area
-          Expanded(
-            child: Column(
-              children: [
-                // --- Top Bar: logo, tagline, icons ---
-                Container(
-                  height: 60,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E8FD), // <-- Match sidebar background
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 32),
-                      // Logo and tagline
-
-                      const SizedBox(width: 16),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
-                        onPressed: () {
-                          setState(() {
-                            _showSettingsPage = true;
-                            _showNotificationsPage = false;
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
-                            onPressed: () {
-                              setState(() {
-                                _showNotificationsPage = true;
-                                _showSettingsPage = false;
-                              });
-                            },
-                          ),
-                          Positioned(
-                            right: 8,
-                            top: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 5,
-                                minHeight: 2,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
+              // Main Content Area
+              Expanded(
+                child: Column(
+                  children: [
+                    // --- Top Bar: logo, tagline, icons ---
+                    Container(
+                      height: 60,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD6E8FD), // <-- Match sidebar background
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha((0.18 * 255).round()),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      const SizedBox(width: 32),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          // Menu or collapse button
+                          if (!isWide)
+                            IconButton(
+                              icon: const Icon(Icons.menu, color: Color(0xFF1976D2)),
+                              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                            ),
+                          if (isWide)
+                            IconButton(
+                              icon: Icon(_isSidebarCollapsed ? Icons.chevron_right : Icons.chevron_left, color: const Color(0xFF1976D2)),
+                              onPressed: () {
+                                setState(() {
+                                  _isSidebarCollapsed = !_isSidebarCollapsed;
+                                });
+                              },
+                            ),
+                          const SizedBox(width: 12),
+                          // Logo and tagline area (keeps spacing)
+                          const SizedBox(width: 8),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
+                            onPressed: () {
+                              setState(() {
+                                _showSettingsPage = true;
+                                _showNotificationsPage = false;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Stack(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
+                                onPressed: () {
+                                  setState(() {
+                                    _showNotificationsPage = true;
+                                    _showSettingsPage = false;
+                                  });
+                                },
+                              ),
+                              Positioned(
+                                right: 8,
+                                top: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 5,
+                                    minHeight: 2,
+                                  ),
+                                  child: const Text(
+                                    '3',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 32),
+                        ],
+                      ),
+                    ),
+                    // --- Main Page Content ---
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : Center(
+                              child: _showNotificationsPage
+                                  ? _buildNotificationsPage()
+                                  : _showSettingsPage
+                                      ? _buildSettingsPage()
+                                      : _getSelectedPage(),
+                            ),
+                    ),
+                  ],
                 ),
-                // --- Main Page Content ---
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Center(
-                          child: _showNotificationsPage
-                              ? _buildNotificationsPage()
-                              : _showSettingsPage
-                                  ? _buildSettingsPage()
-                                  : _getSelectedPage(),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -367,6 +347,144 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
       ),
     );
+  }
+
+  // Build sidebar content so it can be used inside Drawer or as permanent sidebar
+  Widget _buildSidebarContent({required bool collapsed, bool forDrawer = false}) {
+    // When collapsed show only icons and tooltips
+    return Container(
+      color: const Color(0xFFD6E8FD),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            color: const Color(0xFFD6E8FD),
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: collapsed
+                ? const SizedBox(height: 20)
+                : Column(
+                    children: [],
+                  ),
+          ),
+          // User Info
+          if (!collapsed)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFD6E8FD),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Admin",
+                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    FirebaseAuth.instance.currentUser?.email ?? "user@gmail.com",
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          // Navigation Items
+          const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+          // Use icon-only buttons when collapsed
+          _sidebarNavTile("Dashboard", 0, collapsed),
+          _sidebarNavTile("Water Stations", 1, collapsed),
+          _sidebarNavTile("District Presidents", 2, collapsed),
+          _sidebarNavTile("Compliance", 3, collapsed),
+          _sidebarNavTile("Recommendations", 5, collapsed),
+          const Spacer(),
+          if (!collapsed) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 160,
+                height: 42,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.person, color: Color(0xFF004687)),
+                  label: const Text("Profile", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    side: const BorderSide(color: Color(0xFFD6E8FD)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => _onItemTapped(4),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: SizedBox(
+                width: 160,
+                height: 44,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.logout, color: Color(0xFF004687)),
+                  label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    side: const BorderSide(color: Color(0xFFD6E8FD)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => _logout(context),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // helper to build each nav row respecting collapsed state
+  Widget _sidebarNavTile(String label, int index, bool collapsed) {
+    IconData icon;
+    switch (label) {
+      case "Dashboard":
+        icon = Icons.dashboard;
+        break;
+      case "Water Stations":
+        icon = Icons.local_drink;
+        break;
+      case "District Presidents":
+        icon = Icons.location_city;
+        break;
+      case "Compliance":
+        icon = Icons.article;
+        break;
+      case "Profile":
+        icon = Icons.person;
+        break;
+      default:
+        icon = Icons.circle;
+    }
+    final isSelected = _selectedIndex == index;
+    if (collapsed) {
+      return Tooltip(
+        message: label,
+        child: IconButton(
+          icon: Icon(icon, color: isSelected ? const Color(0xFF004687) : Colors.blueGrey),
+          onPressed: () => _onItemTapped(index),
+        ),
+      );
+    }
+    return _sidebarNavItem(label, index);
   }
 
   Widget _getSelectedPage() {
@@ -422,401 +540,702 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return const CompliancePage();
       case 4:
         return _buildProfilePage();
+      case 5:
+        return RecommendationsPage();
       default:
         return const Center(child: Text("Page Not Found"));
     }
   }
 
   Widget _buildDashboardOverview() {
-    return Column(
-      children: [
-        // Top header bar (date, time)
-        Container(
-          width: double.infinity,
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= 900;
+      // Common header and welcome widgets
+      final header = Container(
+        width: double.infinity,
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today, color: Colors.blueAccent),
+            const SizedBox(width: 8),
+            Text(
+              "Monday, May 5, 2025",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const Spacer(),
+            const Icon(Icons.access_time, color: Colors.blueAccent),
+            const SizedBox(width: 8),
+            Text(
+              "11:25 AM PST",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+
+      final welcome = Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        decoration: BoxDecoration(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_today, color: Colors.blueAccent),
-              const SizedBox(width: 8),
-              Text(
-                "Monday, May 5, 2025",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const Spacer(),
-              const Icon(Icons.access_time, color: Colors.blueAccent),
-              const SizedBox(width: 8),
-              Text(
-                "11:25 AM PST",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
-          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withAlpha((0.08 * 255).round()),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        // Welcome message
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: const Text(
-            "Hello, User!",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-          ),
+        child: const Text(
+          "Hello, User!",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
         ),
-        // Main dashboard content
-        Expanded(
-          child: Container(
-            color: const Color(0xFFF5F8FE),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left column: Chart and Top Barangays
-                  Expanded(
-                    flex: 2,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          // Trends card
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(18),
-                            margin: const EdgeInsets.only(bottom: 18),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.08),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: const [
-                                    Text(
-                                      "Trends in Water Refilling Station Openings",
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
-                                    ),
-                                    Spacer(),
-                                    Text("2025", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.calendar_today, color: Colors.grey, size: 18),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                Container(
-                                  height: 90,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFE3F2FD),
-                                    borderRadius: BorderRadius.circular(12),
+      );
+
+      Widget buildMainContent(bool stackedForMobile) {
+        if (!stackedForMobile) {
+          // original two-column layout (desktop)
+          return Expanded(
+            child: Container(
+              color: const Color(0xFFF5F8FE),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left column: Chart and Top Barangays
+                    Expanded(
+                      flex: 2,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            // Compliance Overview (moved here)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(18),
+                              margin: const EdgeInsets.only(bottom: 18),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withAlpha((0.08 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  child: Center(
-                                    child: Icon(Icons.show_chart, size: 60, color: Colors.blueAccent.withOpacity(0.25)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Top Barangays row
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  // Remove fixed height
-                                  margin: const EdgeInsets.only(right: 18),
-                                  padding: const EdgeInsets.all(18),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.grey.withOpacity(0.08),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
+                                ],
+                              ),
+                              clipBehavior: Clip.hardEdge,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    children: const [
+                                      Icon(Icons.verified, color: Color(0xFF43A047), size: 22),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        "Compliance Overview",
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
                                       ),
                                     ],
                                   ),
-                                  child: FutureBuilder<Map<String, int>>(
-                                    future: _fetchDistrictCounts(),
-                                    builder: (context, snapshot) {
-                                      final counts = snapshot.data ?? {};
-                                      // Sort districts by count descending
-                                      final sorted = counts.entries.toList()
-                                        ..sort((a, b) => b.value.compareTo(a.value));
-                                      final top3 = sorted.take(3).toList();
-                                      return Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                            "Top 3 Districts with High Number of WRS",
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          for (int i = 0; i < top3.length; i++)
-                                            Text("${i + 1}. ${top3[i].key} (${top3[i].value})"),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.all(18),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.grey.withOpacity(0.08),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      const Text("Compliance Rate:", style: TextStyle(fontSize: 15, color: Colors.black87)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: FutureBuilder<List<int>>(
+                                          future: Future.wait([
+                                            _countTotalStations(),
+                                            _countStationsByStatus('approved')
+                                          ]),
+                                          builder: (context, snap) {
+                                            double rate = 0.0;
+                                            String pct = '-';
+                                            if (snap.hasData) {
+                                              final total = snap.data![0];
+                                              final approved = snap.data![1];
+                                              rate = total > 0 ? (approved / total) : 0.0;
+                                              pct = "${(rate * 100).toStringAsFixed(1)}%";
+                                            }
+                                            return Row(
+                                              children: [
+                                                Expanded(
+                                                  child: LinearProgressIndicator(
+                                                    value: rate,
+                                                    minHeight: 8,
+                                                    backgroundColor: Colors.grey[300],
+                                                    color: const Color(0xFF43A047),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(pct, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF43A047))),
+                                              ],
+                                            );
+                                          },
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  child: FutureBuilder<Map<String, int>>(
-                                    future: _fetchDistrictCounts(),
-                                    builder: (context, snapshot) {
-                                      final counts = snapshot.data ?? {};
-                                      // Sort districts by count ascending
-                                      final sorted = counts.entries.toList()
-                                        ..sort((a, b) => a.value.compareTo(b.value));
-                                      final top3 = sorted.take(3).toList();
-                                      return Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                            "Top 3 Districts with Low Number of WRS",
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFD32F2F)),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          for (int i = 0; i < top3.length; i++)
-                                            Text("${i + 1}. ${top3[i].key} (${top3[i].value})"),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  // Right column: Station count and Compliance stacked
-                  Expanded(
-                    flex: 1,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          // Water Refilling Stations Iloilo City card
-                          FutureBuilder<Map<String, int>>(
-                            future: _fetchDistrictCounts(),
-                            builder: (context, snapshot) {
-                              final counts = snapshot.data ?? {};
-                              return Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(18),
-                                margin: const EdgeInsets.only(bottom: 18),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.grey.withOpacity(0.08),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                clipBehavior: Clip.hardEdge,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      "Water Refilling Stations\nIloilo City",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: Color(0xFF1976D2),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                  const SizedBox(height: 18),
+                                  SizedBox(
+                                    height: 56,
+                                    child: Row(
                                       children: [
-                                        // Left column
                                         Expanded(
-                                          child: Column(
-                                            children: [
-                                              _DistrictStationTile("La Paz", "${counts["La Paz"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("Mandurriao", "${counts["Mandurriao"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("Molo", "${counts["Molo"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("Lapuz", "${counts["Lapuz"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("Arevalo", "${counts["Arevalo"] ?? "-"}"),
-                                            ],
+                                          child: FutureBuilder<int>(
+                                            future: _countStationsByStatuses([
+                                              'pending_approval',
+                                              'pending_approved',
+                                              'district_approved',
+                                              'District_Approved'
+                                            ]),
+                                            builder: (context, snap) {
+                                              final val = snap.data?.toString() ?? '-';
+                                              return _ComplianceStatTile(
+                                                "Pending Approvals",
+                                                val,
+                                                color: const Color(0xFFFFECB3),
+                                                textColor: const Color(0xFFF9A825),
+                                                icon: Icons.hourglass_top,
+                                              );
+                                            },
                                           ),
                                         ),
-                                        const SizedBox(width: 24),
-                                        // Right column
+                                        const SizedBox(width: 12),
                                         Expanded(
-                                          child: Column(
-                                            children: [
-                                              _DistrictStationTile("Jaro", "${counts["Jaro"] ?? "-"}"),
-                                              const SizedBox(height: 8),
-                                              _DistrictStationTile("City Proper", "${counts["City Proper"] ?? "-"}"),
-                                            ],
+                                          child: FutureBuilder<int>(
+                                            future: _countTotalStations(),
+                                            builder: (context, snap) {
+                                              final val = snap.data?.toString() ?? '-';
+                                              return _ComplianceStatTile(
+                                                "Total Stations",
+                                                val,
+                                                color: const Color(0xFFE3F2FD),
+                                                textColor: const Color(0xFF1976D2),
+                                                icon: Icons.check_circle,
+                                              );
+                                            },
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          // Compliance Overview card
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.08),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    height: 56,
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: FutureBuilder<int>(
+                                            future: _countStationsByStatus('approved'),
+                                            builder: (context, snap) {
+                                              final val = snap.data?.toString() ?? '-';
+                                              return _ComplianceStatTile(
+                                                "Compliant Stations",
+                                                val,
+                                                color: const Color(0xFFE8F5E9),
+                                                textColor: const Color(0xFF43A047),
+                                                icon: Icons.verified,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: FutureBuilder<int>(
+                                            future: Future.wait([
+                                              _countTotalStations(),
+                                              _countStationsByStatus('approved'),
+                                              _countStationsByStatuses([
+                                                'pending_approval',
+                                                'pending_approved',
+                                                'district_approved',
+                                                'District_Approved'
+                                              ])
+                                            ]).then((results) {
+                                              final total = results[0];
+                                              final approved = results[1];
+                                              final pending = results[2];
+                                              final nonCompliant = total - approved - pending;
+                                              return nonCompliant < 0 ? 0 : nonCompliant;
+                                            }),
+                                            builder: (context, snap) {
+                                              final val = snap.data?.toString() ?? '-';
+                                              return _ComplianceStatTile(
+                                                "Non-Compliant Stations",
+                                                val,
+                                                color: const Color(0xFFFFEBEE),
+                                                textColor: const Color(0xFFD32F2F),
+                                                icon: Icons.warning,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            clipBehavior: Clip.hardEdge,
-                            child: Column(
+                            // Top Barangays row
+                            Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: const [
-                                    Icon(Icons.verified, color: Color(0xFF43A047), size: 22),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      "Compliance Overview",
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                Expanded(
+                                  child: Container(
+                                    // Remove fixed height
+                                    margin: const EdgeInsets.only(right: 18),
+                                    padding: const EdgeInsets.all(18),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.grey.withAlpha((0.08 * 255).round()),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    const Text("Compliance Rate:", style: TextStyle(fontSize: 15, color: Colors.black87)),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: LinearProgressIndicator(
-                                        value: 0.616,
-                                        minHeight: 8,
-                                        backgroundColor: Colors.grey[300],
-                                        color: Color(0xFF43A047),
-                                      ),
+                                    child: FutureBuilder<Map<String, int>>(
+                                      future: _fetchDistrictCounts(),
+                                      builder: (context, snapshot) {
+                                        final counts = snapshot.data ?? {};
+                                        // Sort districts by count ascending
+                                        final sorted = counts.entries.toList()
+                                          ..sort((a, b) => a.value.compareTo(b.value));
+                                        final top3 = sorted.take(3).toList();
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Text(
+                                              "Top 3 Districts with Low Number of WRS",
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFD32F2F)),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            for (int i = 0; i < top3.length; i++)
+                                              Text("${i + 1}. ${top3[i].key} (${top3[i].value})"),
+                                          ],
+                                        );
+                                      },
                                     ),
-                                    const SizedBox(width: 8),
-                                    const Text("61.6%", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF43A047))),
-                                  ],
-                                ),
-                                const SizedBox(height: 18),
-                                SizedBox(
-                                  height: 56,
-                                  child: Row(
-                                    children: const [
-                                      Expanded(
-                                        child: _ComplianceStatTile(
-                                          "Pending Approvals",
-                                          "45",
-                                          color: Color(0xFFFFECB3),
-                                          textColor: Color(0xFFF9A825),
-                                          icon: Icons.hourglass_top,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: _ComplianceStatTile(
-                                          "Approved Today",
-                                          "5",
-                                          color: Color(0xFFE3F2FD),
-                                          textColor: Color(0xFF1976D2),
-                                          icon: Icons.check_circle,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  height: 56,
-                                  child: Row(
-                                    children: const [
-                                      Expanded(
-                                        child: _ComplianceStatTile(
-                                          "Compliant Stations",
-                                          "285",
-                                          color: Color(0xFFE8F5E9),
-                                          textColor: Color(0xFF43A047),
-                                          icon: Icons.verified,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: _ComplianceStatTile(
-                                          "Non-Compliant Stations",
-                                          "178",
-                                          color: Color(0xFFFFEBEE),
-                                          textColor: Color(0xFFD32F2F),
-                                          icon: Icons.warning,
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 18),
+                    // Right column: Station count and Trends (moved here)
+                    Expanded(
+                      flex: 1,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            // Water Refilling Stations Iloilo City card
+                            FutureBuilder<Map<String, int>>(
+                              future: _fetchDistrictCounts(),
+                              builder: (context, snapshot) {
+                                final counts = snapshot.data ?? {};
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(18),
+                                  margin: const EdgeInsets.only(bottom: 18),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withAlpha((0.08 * 255).round()),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  clipBehavior: Clip.hardEdge,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
+                                        "Water Refilling Stations\nIloilo City",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                          color: Color(0xFF1976D2),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Left column
+                                          Expanded(
+                                            child: Column(
+                                              children: [
+                                                _DistrictStationTile("La Paz", "${counts["La Paz"] ?? "-"}"),
+                                                const SizedBox(height: 8),
+                                                _DistrictStationTile("Mandurriao", "${counts["Mandurriao"] ?? "-"}"),
+                                                const SizedBox(height: 8),
+                                                _DistrictStationTile("Molo", "${counts["Molo"] ?? "-"}"),
+                                                const SizedBox(height: 8),
+                                                _DistrictStationTile("Lapuz", "${counts["Lapuz"] ?? "-"}"),
+                                                const SizedBox(height: 8),
+                                                _DistrictStationTile("Arevalo", "${counts["Arevalo"] ?? "-"}"),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 24),
+                                          // Right column
+                                          Expanded(
+                                            child: Column(
+                                              children: [
+                                                _DistrictStationTile("Jaro", "${counts["Jaro"] ?? "-"}"),
+                                                const SizedBox(height: 8),
+                                                _DistrictStationTile("City Proper", "${counts["City Proper"] ?? "-"}"),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            // Trends card (moved here)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(18),
+                              margin: const EdgeInsets.only(bottom: 18),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withAlpha((0.08 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: const [
+                                      Text(
+                                        "Trends in Water Refilling Station Openings",
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                      ),
+                                      Spacer(),
+                                      Text("2025", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                                      SizedBox(width: 4),
+                                      Icon(Icons.calendar_today, color: Colors.grey, size: 18),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Container(
+                                    height: 90,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFE3F2FD),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Icon(Icons.show_chart, size: 60, color: Colors.blueAccent.withAlpha((0.25 * 255).round())),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Stacked single-column layout for narrow/mobile
+        return Expanded(
+          child: Container(
+            color: const Color(0xFFF5F8FE),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Compliance Overview (moved here for mobile)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withAlpha((0.06 * 255).round()),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.verified, color: Color(0xFF43A047), size: 20),
+                            const SizedBox(width: 8),
+                            const Text("Compliance Overview", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1976D2))),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Text("Compliance Rate:", style: TextStyle(fontSize: 14, color: Colors.black87)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FutureBuilder<List<int>>(
+                                future: Future.wait([
+                                  _countTotalStations(),
+                                  _countStationsByStatus('approved')
+                                ]),
+                                builder: (context, snap) {
+                                  double rate = 0.0;
+                                  String pct = '-';
+                                  if (snap.hasData) {
+                                    final total = snap.data![0];
+                                    final approved = snap.data![1];
+                                    rate = total > 0 ? (approved / total) : 0.0;
+                                    pct = "${(rate * 100).toStringAsFixed(1)}%";
+                                  }
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: LinearProgressIndicator(
+                                          value: rate,
+                                          minHeight: 8,
+                                          backgroundColor: Colors.grey[300],
+                                          color: const Color(0xFF43A047),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(pct, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF43A047))),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FutureBuilder<int>(
+                                future: _countStationsByStatuses([
+                                  'pending_approval',
+                                  'pending_approved',
+                                  'district_approved',
+                                  'District_Approved'
+                                ]),
+                                builder: (context, snap) {
+                                  final val = snap.data?.toString() ?? '-';
+                                  return _ComplianceStatTile(
+                                    "Pending Approvals",
+                                    val,
+                                    color: const Color(0xFFFFECB3),
+                                    textColor: const Color(0xFFF9A825),
+                                    icon: Icons.hourglass_top,
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FutureBuilder<int>(
+                                future: _countTotalStations(),
+                                builder: (context, snap) {
+                                  final val = snap.data?.toString() ?? '-';
+                                  return _ComplianceStatTile(
+                                    "Total Stations",
+                                    val,
+                                    color: const Color(0xFFE3F2FD),
+                                    textColor: const Color(0xFF1976D2),
+                                    icon: Icons.check_circle,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: FutureBuilder<int>(
+                                future: _countStationsByStatus('approved'),
+                                builder: (context, snap) {
+                                  final val = snap.data?.toString() ?? '-';
+                                  return _ComplianceStatTile(
+                                    "Compliant Stations",
+                                    val,
+                                    color: const Color(0xFFE8F5E9),
+                                    textColor: const Color(0xFF43A047),
+                                    icon: Icons.verified,
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FutureBuilder<int>(
+                                future: Future.wait([
+                                  _countTotalStations(),
+                                  _countStationsByStatus('approved'),
+                                  _countStationsByStatuses([
+                                    'pending_approval',
+                                    'pending_approved',
+                                    'district_approved',
+                                    'District_Approved'
+                                  ])
+                                ]).then((results) {
+                                  final total = results[0];
+                                  final approved = results[1];
+                                  final pending = results[2];
+                                  final nonCompliant = total - approved - pending;
+                                  return nonCompliant < 0 ? 0 : nonCompliant;
+                                }),
+                                builder: (context, snap) {
+                                  final val = snap.data?.toString() ?? '-';
+                                  return _ComplianceStatTile(
+                                    "Non-Compliant Stations",
+                                    val,
+                                    color: const Color(0xFFFFEBEE),
+                                    textColor: const Color(0xFFD32F2F),
+                                    icon: Icons.warning,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
+
+                  // Top districts (stacked)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withAlpha((0.06 * 255).round()),
+                          blurRadius: 6,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: FutureBuilder<Map<String, int>>(
+                      future: _fetchDistrictCounts(),
+                      builder: (context, snapshot) {
+                        final counts = snapshot.data ?? {};
+                        final sortedDesc = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+                        final top3Desc = sortedDesc.take(3).toList();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Top Districts", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1976D2))),
+                            const SizedBox(height: 8),
+                            for (int i = 0; i < top3Desc.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Text("${i + 1}. ${top3Desc[i].key} (${top3Desc[i].value})"),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Station counts and compliance stacked
+                  FutureBuilder<Map<String, int>>(
+                    future: _fetchDistrictCounts(),
+                    builder: (context, snapshot) {
+                      final counts = snapshot.data ?? {};
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withAlpha((0.06 * 255).round()),
+                              blurRadius: 6,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("Water Refilling Stations", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1976D2))),
+                            const SizedBox(height: 12),
+                            _DistrictStationTile("La Paz", "${counts["La Paz"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("Mandurriao", "${counts["Mandurriao"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("Molo", "${counts["Molo"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("Lapuz", "${counts["Lapuz"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("Arevalo", "${counts["Arevalo"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("Jaro", "${counts["Jaro"] ?? "-"}"),
+                            const SizedBox(height: 8),
+                            _DistrictStationTile("City Proper", "${counts["City Proper"] ?? "-"}"),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
+                  // (removed duplicate mobile Compliance Overview)
                 ],
               ),
             ),
           ),
-        ),
-      ],
-    );
+        );
+      }
+
+      return Column(
+        children: [
+          header,
+          welcome,
+          buildMainContent(!isWide),
+        ],
+      );
+    });
   }
 
 
@@ -1431,7 +1850,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
 }
 
 // Summary card widget
-// ignore: unused_element
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
@@ -1447,8 +1865,8 @@ class _SummaryCard extends StatelessWidget {
         color: const Color(0xFFE3F2FD), // Set box background to 0xFFE3F2FD
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.08),
+            BoxShadow(
+            color: Colors.blueAccent.withAlpha((0.08 * 255).round()),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1483,7 +1901,6 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // Chart placeholder widget
-// ignore: unused_element
 class _ChartPlaceholder extends StatelessWidget {
   final String title;
 
@@ -1500,15 +1917,15 @@ class _ChartPlaceholder extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withAlpha((0.3 * 255).round()),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withAlpha((0.4 * 255).round())),
+              ),
             ),
-            child: Center(
-              child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withOpacity(0.4)),
-            ),
-          ),
         ),
       ],
     );

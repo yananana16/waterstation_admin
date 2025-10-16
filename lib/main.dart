@@ -1,3 +1,4 @@
+import 'dart:developer' show log;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -16,7 +17,7 @@ void main() async {
 
   await dotenv.load();
 
-  try {
+    try {
     await Firebase.initializeApp(
       options: FirebaseOptions(   
         apiKey: dotenv.env['API_KEY'] ?? '',
@@ -26,18 +27,18 @@ void main() async {
         messagingSenderId: dotenv.env['MESSAGING_SENDER_ID'] ?? '',
         appId: dotenv.env['APP_ID'] ?? '',
       ),
-    );
-    print("✅ Firebase Initialized Successfully");
+  );
+  log("✅ Firebase Initialized Successfully");
 
     // Firebase connectivity check
     final firebaseUser = firebase_auth.FirebaseAuth.instance.currentUser;
     if (firebaseUser != null) {
-      print("✅ Connected to Firebase Auth. User: ${firebaseUser.uid}");
+      log("✅ Connected to Firebase Auth. User: ${firebaseUser.uid}");
     } else {
-      print("ℹ️ No Firebase user signed in.");
+      log("ℹ️ No Firebase user signed in.");
     }
-  } catch (e) {
-    print("❌ Firebase Initialization Failed: $e");
+  } catch (e, st) {
+    log("❌ Firebase Initialization Failed: $e", error: e, stackTrace: st);
   }
 
   // Supabase connectivity check
@@ -45,15 +46,15 @@ void main() async {
     final supabaseClient = Supabase.instance.client;
     final session = supabaseClient.auth.currentSession;
     if (session != null) {
-      print("✅ Connected to Supabase. Session user: ${session.user.id}");
+      log("✅ Connected to Supabase. Session user: ${session.user.id}");
     } else {
-      print("ℹ️ No Supabase session found.");
+      log("ℹ️ No Supabase session found.");
     }
     // Optionally, try a simple query (uncomment if you have a table):
     // final response = await supabaseClient.from('your_table').select().limit(1).execute();
     // print("Supabase test query: ${response.data}");
-  } catch (e) {
-    print("❌ Supabase connectivity check failed: $e");
+  } catch (e, st) {
+    log("❌ Supabase connectivity check failed: $e", error: e, stackTrace: st);
   }
 
   runApp(const MyApp());

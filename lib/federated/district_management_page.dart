@@ -9,14 +9,29 @@ class DistrictManagementPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Responsive layout values
+    final screenWidth = MediaQuery.of(context).size.width;
+    int crossAxisCount = 3; // default desktop
+    double contentPadding = 40;
+    double innerSpacing = 24;
+    if (screenWidth < 600) {
+      crossAxisCount = 1; // mobile: single column stacked
+      contentPadding = 16;
+      innerSpacing = 12;
+    } else if (screenWidth < 900) {
+      crossAxisCount = 2; // tablet: two columns
+      contentPadding = 24;
+      innerSpacing = 16;
+    }
+
     return Container(
-      color: Colors.white, // White background
+      color: Colors.white,
       child: Column(
         children: [
           // Header bar
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 32),
+            padding: EdgeInsets.symmetric(vertical: 18, horizontal: contentPadding),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -32,12 +47,12 @@ class DistrictManagementPage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: innerSpacing * 1.33),
           Expanded(
             child: Center(
               child: Container(
-                width: 950,
-                padding: const EdgeInsets.all(40),
+                constraints: const BoxConstraints(maxWidth: 1100),
+                padding: EdgeInsets.all(contentPadding),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -56,7 +71,7 @@ class DistrictManagementPage extends StatelessWidget {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 32),
+                    SizedBox(height: innerSpacing * 1.33),
                     Expanded(
                       child: StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance.collection('districts').snapshots(),
@@ -72,11 +87,11 @@ class DistrictManagementPage extends StatelessWidget {
                             return const Center(child: Text('No districts found.'));
                           }
                           return GridView.builder(
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 24,
-                              crossAxisSpacing: 24,
-                              childAspectRatio: 2.6,
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              mainAxisSpacing: innerSpacing,
+                              crossAxisSpacing: innerSpacing,
+                              childAspectRatio: 3.2,
                             ),
                             itemCount: docs.length,
                             itemBuilder: (context, idx) {
@@ -88,9 +103,9 @@ class DistrictManagementPage extends StatelessWidget {
                                 elevation: 2,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 color: Colors.white,
-                                shadowColor: Colors.blueGrey.withOpacity(0.08),
+                                shadowColor: Colors.blueGrey.withAlpha((0.08 * 255).round()),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                                  padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                                   child: Row(
                                     children: [
                                       Expanded(
@@ -144,7 +159,7 @@ class DistrictManagementPage extends StatelessWidget {
                                         decoration: BoxDecoration(
                                           color: Colors.blue[800],
                                           borderRadius: BorderRadius.circular(12),
-                                          boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.12), blurRadius: 8)],
+                                          boxShadow: [BoxShadow(color: Colors.blueAccent.withAlpha((0.12 * 255).round()), blurRadius: 8)],
                                         ),
                                         child: IconButton(
                                           icon: const Icon(Icons.people, color: Colors.white, size: 30),
@@ -253,7 +268,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                       elevation: 2,
                       margin: const EdgeInsets.only(bottom: 18),
                       color: Colors.white,
-                      shadowColor: Colors.blueGrey.withOpacity(0.08),
+                      shadowColor: Colors.blueGrey.withAlpha((0.08 * 255).round()),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 22),
                         child: Row(
@@ -355,7 +370,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                     elevation: 2,
                                     margin: const EdgeInsets.symmetric(vertical: 10),
                                     color: Colors.white,
-                                    shadowColor: Colors.blueGrey.withOpacity(0.08),
+                                    shadowColor: Colors.blueGrey.withAlpha((0.08 * 255).round()),
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
                                       child: Row(
@@ -394,17 +409,18 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                               icon: const Icon(Icons.check_circle, color: Colors.blueAccent, size: 30),
                                               tooltip: "Assign as President",
                                               onPressed: () async {
-                                                await FirebaseFirestore.instance
-                                                    .collection('districts')
-                                                    .where('districtName', isEqualTo: widget.districtName)
-                                                    .get()
-                                                    .then((districtSnap) async {
-                                                  if (districtSnap.docs.isNotEmpty) {
-                                                    await districtSnap.docs.first.reference.update({'customUID': ownerUID});
-                                                  }
-                                                });
-                                                Navigator.of(context).pop();
-                                              },
+                                                  await FirebaseFirestore.instance
+                                                      .collection('districts')
+                                                      .where('districtName', isEqualTo: widget.districtName)
+                                                      .get()
+                                                      .then((districtSnap) async {
+                                                    if (districtSnap.docs.isNotEmpty) {
+                                                      await districtSnap.docs.first.reference.update({'customUID': ownerUID});
+                                                    }
+                                                  });
+                                                  if (!mounted) return;
+                                                  Navigator.of(context).pop();
+                                                },
                                             ),
                                         ],
                                       ),

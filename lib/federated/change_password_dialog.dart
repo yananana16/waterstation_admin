@@ -39,8 +39,9 @@ class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
       setState(() {
         _isLoading = false;
       });
+      if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(this.context).showSnackBar(
         const SnackBar(content: Text('Password changed successfully.')),
       );
     } on FirebaseAuthException catch (e) {

@@ -7,6 +7,25 @@ from sklearn.cluster import DBSCAN
 import folium
 from folium.plugins import MarkerCluster, HeatMap
 import argparse
+from datetime import datetime
+
+def save_recommendations(db, recommendations):
+    """
+    Save recommendations to Firestore.
+    Each district will only have ONE doc (overwrite mode).
+    Old recommendations get replaced by the latest.
+    """
+    recs_ref = db.collection("station_recommendations")
+
+    for rec in recommendations:
+        # Add timestamp
+        rec['createdAt'] = datetime.utcnow()
+
+        # Use district name as the doc ID (overwrite per district)
+        doc_id = rec['district'].replace(" ", "_")  # safer IDs
+        recs_ref.document(doc_id).set(rec)
+
+    print(f"Saved {len(recommendations)} recommendations (overwrite mode).")
 
 # -------------------------------
 # Initialize Firebase Admin SDK

@@ -20,9 +20,24 @@ class _SchedulePageState extends State<SchedulePage> {
 
   // We'll load stations from Firestore (collection: 'station_owners').
   // Cache per-station month-inspection status to reduce queries on rebuilds.
-  final Map<String, String> _monthStatusCache = {}; // key: stationId::YYYY-MM -> 'Done'|'Pending'
+  final Map<String, String> _monthStatusCache = {}; // key: stationId::YYYY-MM -> 'done'|'pending'
 
   String _monthKey(DateTime m) => '${m.year}-${m.month.toString().padLeft(2, '0')}';
+
+  // Normalize potential status values coming from Firestore documents to
+  // either 'done' or 'pending'. Accepts nulls and various field names.
+  String _normalizeStatus(dynamic raw) {
+    try {
+      if (raw == null) return 'pending';
+      final s = raw.toString().toLowerCase().trim();
+      if (s.contains('done') || s.contains('complete') || s.contains('completed')) return 'done';
+      if (s.contains('pending') || s.contains('todo') || s.contains('scheduled')) return 'pending';
+      // some documents store booleans
+      if (s == 'true') return 'done';
+      if (s == 'false') return 'pending';
+    } catch (_) {}
+    return 'pending';
+  }
 
   // Query Firestore to determine if a station has an inspection for the given month.
   // This supports both a subcollection 'inspections' under station doc, or a top-level
@@ -38,34 +53,66 @@ class _SchedulePageState extends State<SchedulePage> {
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // 1) Try station subcollection: station_owners/{stationId}/inspections
-      final subRef = firestore.collection('station_owners').doc(stationId).collection('inspections')
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+      // 1) Prefer station subcollection documents that explicitly mark the monthlyInspectionMonth
+      final subByMonth = firestore
+          .collection('station_owners')
+          .doc(stationId)
+          .collection('inspections')
+          .where('monthlyInspectionMonth', isEqualTo: mk)
           .limit(1);
-      final subSnap = await subRef.get();
-      if (subSnap.docs.isNotEmpty) {
-        _monthStatusCache[cacheKey] = 'Done';
-        return 'Done';
+      final subByMonthSnap = await subByMonth.get();
+      if (subByMonthSnap.docs.isNotEmpty) {
+        final data = subByMonthSnap.docs.first.data();
+        final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        _monthStatusCache[cacheKey] = status;
+        return status;
       }
 
-      // 2) Try top-level collection 'inspections' with stationId field
-      final topRef = firestore.collection('inspections')
-          .where('stationId', isEqualTo: stationId)
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+      // 1b) Fallback: search subcollection by date range (some docs use a 'date' or 'createdAt' field)
+      final subByDate = firestore.collection('station_owners').doc(stationId).collection('inspections')
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
           .limit(1);
-      final topSnap = await topRef.get();
-      if (topSnap.docs.isNotEmpty) {
-        _monthStatusCache[cacheKey] = 'Done';
-        return 'Done';
+      final subByDateSnap = await subByDate.get();
+      if (subByDateSnap.docs.isNotEmpty) {
+        final data = subByDateSnap.docs.first.data();
+        final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        _monthStatusCache[cacheKey] = status;
+        return status;
+      }
+
+      // 2) Try top-level collection 'inspections' with an explicit monthlyInspectionMonth
+      final topByMonth = firestore.collection('inspections')
+          .where('stationId', isEqualTo: stationId)
+          .where('monthlyInspectionMonth', isEqualTo: mk)
+          .limit(1);
+      final topByMonthSnap = await topByMonth.get();
+      if (topByMonthSnap.docs.isNotEmpty) {
+        final data = topByMonthSnap.docs.first.data();
+        final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        _monthStatusCache[cacheKey] = status;
+        return status;
+      }
+
+      // 2b) Fallback: top-level search by date range
+      final topByDate = firestore.collection('inspections')
+          .where('stationId', isEqualTo: stationId)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+          .limit(1);
+      final topByDateSnap = await topByDate.get();
+      if (topByDateSnap.docs.isNotEmpty) {
+        final data = topByDateSnap.docs.first.data();
+        final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        _monthStatusCache[cacheKey] = status;
+        return status;
       }
     } catch (e) {
       // on error, default to Pending but do not crash UI
       debugPrint('Error checking inspections for station: $stationId -> $e');
     }
-    _monthStatusCache[cacheKey] = 'Pending';
-    return 'Pending';
+    _monthStatusCache[cacheKey] = 'pending';
+    return 'pending';
   }
 
   void _openInspection() => setState(() => _activeSubscreen = _ActiveSubscreen.inspection);
@@ -260,14 +307,16 @@ class _SchedulePageState extends State<SchedulePage> {
                                                                               child: FutureBuilder<String>(
                                                                                 future: _getMonthStatus(sId, _selectedMonth),
                                                                                 builder: (context, statusSnap) {
-                                                                                  final status = statusSnap.data ?? 'Pending';
+                                                                                  final raw = statusSnap.data ?? 'pending';
+                                                                                  final status = raw.toString().toLowerCase();
+                                                                                  final display = status.isNotEmpty ? (status[0].toUpperCase() + status.substring(1)) : 'Pending';
                                                                                   return Container(
                                                                                     padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
                                                                                     decoration: BoxDecoration(
-                                                                                      color: (status == 'Done') ? const Color(0xFF4CAF50) : const Color(0xFFFFC107),
+                                                                                      color: (status == 'done') ? const Color(0xFF4CAF50) : const Color(0xFFFFC107),
                                                                                       borderRadius: BorderRadius.circular(6 * scale),
                                                                                     ),
-                                                                                    child: Text(status, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * scale)),
+                                                                                    child: Text(display, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * scale)),
                                                                                   );
                                                                                 },
                                                                               ),

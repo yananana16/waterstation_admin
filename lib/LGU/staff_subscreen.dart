@@ -73,7 +73,7 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
 
     final first = firstCtrl.text.trim();
     final last = lastCtrl.text.trim();
-    final displayName = '$first $last';
+  final displayName = '$first $last';
 
     // Try to add to Firestore; fall back to local placeholder list on error.
     try {
@@ -90,7 +90,7 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
         'firstName': first,
         'lastName': last,
         'displayName': displayName,
-        'email': 'inspector${inspectorNo}@gmail.com',
+        'email': 'inspector$inspectorNo@gmail.com',
         'phone': '',
         'role': roleCtrl.text,
         'createdAt': FieldValue.serverTimestamp(),
@@ -99,8 +99,8 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
 
       await docRef.set(payload);
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inspector added')));
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inspector added')));
     } catch (e) {
       // Firestore failed — keep local placeholder for offline/demo use.
       final id = 'inspector_local_${DateTime.now().millisecondsSinceEpoch}';
@@ -113,14 +113,14 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
           'firstName': first,
           'lastName': last,
           'displayName': displayName,
-          'email': 'inspector${inspectorNo}@gmail.com',
+          'email': 'inspector$inspectorNo@gmail.com',
           'phone': '',
           'role': roleCtrl.text,
         });
       });
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inspector added (local fallback)')));
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Inspector added (local fallback)')));
     }
   }
 

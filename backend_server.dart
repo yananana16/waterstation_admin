@@ -6,7 +6,7 @@ import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 
 const String gmailUsername = 'federated.president000@gmail.com';
-const String gmailPassword = 'xfbb cnzs eflu zzsb';
+const String gmailPassword = 'rnty azah nvrk fzyk';
 const String senderName = 'H2OGO';
 const String senderEmail = 'federated.president000@gmail.com';
 

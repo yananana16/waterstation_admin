@@ -1,9 +1,11 @@
+// ignore_for_file: unused_element, unused_local_variable
 // import 'package:cloud_firestore/cloud_firestore.dart'; // unused - removed
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // added to fetch real count
 import '../services/firestore_repository.dart';
 import 'package:waterstation_admin/LGU/water_stations_page.dart'; // moved Water Stations page to separate file
 import 'package:waterstation_admin/LGU/schedule_page.dart';
+import '../federated/logout_dialog.dart';
 
 class LguDashboard extends StatefulWidget {
   const LguDashboard({super.key});
@@ -29,20 +31,8 @@ class _LguDashboardState extends State<LguDashboard> {
   void _logout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (context) => const LogoutDialog(),
     );
     if (shouldLogout == true) {
       Navigator.of(context).pop(); // or pushReplacement to login page if available
@@ -105,7 +95,7 @@ class _LguDashboardState extends State<LguDashboard> {
               color: const Color(0xFFD6E8FD),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
+                  color: Colors.black.withAlpha((0.10 * 255).round()),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -215,7 +205,7 @@ class _LguDashboardState extends State<LguDashboard> {
                     color: const Color(0xFFD6E8FD),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
+                        color: Colors.black.withAlpha((0.18 * 255).round()),
                         blurRadius: 18,
                         offset: const Offset(0, 6),
                       ),
@@ -304,7 +294,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: Offset(0, 2))],
+                                  boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.04 * 255).round()), blurRadius: 8, offset: Offset(0, 2))],
                                 ),
                                 child: const Text("Hello, User!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
                               ),
@@ -325,7 +315,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                             decoration: BoxDecoration(
                                               color: Colors.white,
                                               borderRadius: BorderRadius.circular(10),
-                                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+                                              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
                                             ),
                                             padding: const EdgeInsets.all(16),
                                             child: _CalendarWidget(), // existing calendar widget
@@ -337,7 +327,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                             decoration: BoxDecoration(
                                               color: Colors.white,
                                               borderRadius: BorderRadius.circular(10),
-                                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+                                              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
                                             ),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,7 +384,7 @@ class _LguDashboardState extends State<LguDashboard> {
                                         decoration: BoxDecoration(
                                           color: Colors.white,
                                           borderRadius: BorderRadius.circular(10),
-                                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+                                          boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
                                         ),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -806,7 +796,7 @@ class _ProfilePageState extends State<_ProfilePage> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
             ),
             child: const Text('Profile', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 18)),
           ),
@@ -892,7 +882,6 @@ class _ProfilePageState extends State<_ProfilePage> {
 }
 
 // All Stations Table Page
-// ignore: unused_element
 class _AllStationsTable extends StatelessWidget {
   const _AllStationsTable();
 

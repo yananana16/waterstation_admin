@@ -184,7 +184,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
           ownerFirst = (data?['stationOwnerFirstName'] ?? data?['firstName'] ?? '') as String? ?? '';
           ownerLast = (data?['stationOwnerLastName'] ?? data?['lastName'] ?? '') as String? ?? '';
         }
-  final ownerFull = (ownerFirst + ' ' + ownerLast).trim();
+  final ownerFull = ('$ownerFirst $ownerLast').trim();
         final ownerFallback = (data?['stationOwnerName'] ?? data?['ownerName'] ?? '') as String? ?? '';
 
         // Station name/address: prefer ownerDoc values when available
@@ -199,40 +199,59 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
           'status': data?['status'] ?? 'Pending',
           'owner': ownerFull.isNotEmpty ? ownerFull : ownerFallback,
           'date': data?['date'],
-          '__path': d.reference.path,
-          '__isStationScoped': isStationScoped,
+          // Keep a list of all document paths that correspond to this inspection
+          // so we can update both top-level and station-scoped copies when needed.
+          'documentPaths': <String>[d.reference.path],
+          'ownerId': candidateOwnerId,
+          'isStationScoped': isStationScoped,
         };
 
         if (!keyed.containsKey(canonicalKey)) {
           keyed[canonicalKey] = entry;
         } else {
           final existing = keyed[canonicalKey]!;
-          final existingScoped = existing['__isStationScoped'] as bool? ?? false;
+          final existingScoped = existing['isStationScoped'] as bool? ?? false;
+          // Merge documentPaths so we can update all copies later
+          final List<String> existingPaths = List<String>.from(existing['documentPaths'] ?? <String>[]);
+          if (!existingPaths.contains(d.reference.path)) existingPaths.add(d.reference.path);
+          existing['documentPaths'] = existingPaths;
+
+          // Prefer station-scoped doc when replacing base values, but still keep merged paths
           if (!existingScoped && isStationScoped) {
+            // preserve merged documentPaths when replacing
+            entry['documentPaths'] = existing['documentPaths'];
             keyed[canonicalKey] = entry;
+          } else {
+            // keep original entry but ensure its documentPaths are up-to-date
+            existing['documentPaths'] = existingPaths;
+            keyed[canonicalKey] = existing;
           }
         }
       }
 
       // Convert keyed map to list
       final list = keyed.values.map((e) {
-        // remove internal helpers before returning
+        // convert to plain map (keep documentPaths so we can update all copies)
         final copy = Map<String, dynamic>.from(e);
-        copy.remove('__path');
-        copy.remove('__isStationScoped');
+        // ensure documentPaths exists and is a List<String>
+        copy['documentPaths'] = List<String>.from(copy['documentPaths'] ?? <String>[]);
         return copy;
       }).toList();
 
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _assignedStations = list;
         _loadingAssigned = false;
       });
+      }
     } catch (e) {
       debugPrint('Error loading assigned inspections: $e');
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _assignedStations = [];
         _loadingAssigned = false;
       });
+      }
     }
   }
 
@@ -269,7 +288,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
         color: sidebarBg,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.10),
+            color: Colors.black.withAlpha((0.10 * 255).round()),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -410,7 +429,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 6)],
                 ),
                 child: Row(
                   children: [
@@ -460,7 +479,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                             // small count badge
                                             if (!_loadingAssigned) Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(color: primary.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+                                              decoration: BoxDecoration(color: primary.withAlpha((0.08 * 255).round()), borderRadius: BorderRadius.circular(12)),
                                               child: Text('${_assignedStations.length} items', style: TextStyle(fontSize: 12, color: primary)),
                                             ),
                                           ],
@@ -810,7 +829,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
       onTap: () => _showInspectionModal(s),
       child: Card(
         color: cardTint,
-        shadowColor: Colors.black.withOpacity(0.06),
+  shadowColor: Colors.black.withAlpha((0.06 * 255).round()),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 4,
         child: Padding(
@@ -842,9 +861,9 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.14),
+                  color: badgeColor.withAlpha((0.14 * 255).round()),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: badgeColor.withOpacity(0.20)),
+                  border: Border.all(color: badgeColor.withAlpha((0.20 * 255).round())),
                 ),
                 child: Text(
                   status,
@@ -881,7 +900,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
             child: Material(
               color: Colors.transparent,
               child: Container(
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 24)]),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.08 * 255).round()), blurRadius: 24)]),
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   // header strip
                   Container(
@@ -891,7 +910,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                       CircleAvatar(radius: 22, backgroundColor: _primary, child: Text(_initials(stationName), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                       const SizedBox(width: 12),
                       Expanded(child: Text(stationName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F1724)))),
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: _statusColor(status).withOpacity(0.12), borderRadius: BorderRadius.circular(18)), child: Text(status, style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.w700))),
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: _statusColor(status).withAlpha((0.12 * 255).round()), borderRadius: BorderRadius.circular(18)), child: Text(status, style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.w700))),
                       const SizedBox(width: 8),
                       IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, color: Color(0xFF6B7280))),
                     ]),
@@ -931,8 +950,8 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                         ElevatedButton.icon(
                           onPressed: status.toLowerCase().contains('done')
                               ? null
-                              : () {
-                                  // optimistic UI: mark done locally
+                              : () async {
+                                  // optimistic UI: mark done locally and close modal
                                   setState(() {
                                     for (var i = 0; i < _assignedStations.length; i++) {
                                       if ((_assignedStations[i]['id'] ?? '') == id) {
@@ -942,18 +961,69 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                     }
                                   });
                                   Navigator.of(context).pop();
+
+                                  // find the local item we changed to get its documentPaths
+                                  final localIdx = _assignedStations.indexWhere((it) => (it['id'] ?? '') == id);
+                                  final List<String> docPaths = localIdx != -1 ? List<String>.from(_assignedStations[localIdx]['documentPaths'] ?? <String>[]) : <String>[];
+
+                                  // Try to update all recorded document paths in a batch
+                                  bool updateSucceeded = false;
+                                  String prevStatus = status;
+                                  if (docPaths.isNotEmpty) {
+                                    try {
+                                      final batch = FirebaseFirestore.instance.batch();
+                                      for (final p in docPaths) {
+                                        final ref = FirebaseFirestore.instance.doc(p);
+                                        batch.update(ref, {'status': 'Done'});
+                                      }
+                                      await batch.commit();
+                                      updateSucceeded = true;
+                                    } catch (err) {
+                                      debugPrint('Batch update failed, will try individual updates: $err');
+                                      // fallback: try one-by-one
+                                      for (final p in docPaths) {
+                                        try {
+                                          await FirebaseFirestore.instance.doc(p).update({'status': 'Done'});
+                                          updateSucceeded = true;
+                                        } catch (e) {
+                                          debugPrint('Failed updating $p: $e');
+                                        }
+                                      }
+                                    }
+                                  }
+
                                   final snack = SnackBar(
-                                    content: Text('Marked "$stationName" as done.'),
-                                    action: SnackBarAction(label: 'Undo', onPressed: () {
-                                      // revert locally
+                                    content: Text('Marked "$stationName" as done.' + (updateSucceeded ? '' : ' (local only — failed to update server)')),
+                                    action: SnackBarAction(label: 'Undo', onPressed: () async {
+                                      // revert locally first
                                       setState(() {
                                         for (var i = 0; i < _assignedStations.length; i++) {
                                           if ((_assignedStations[i]['id'] ?? '') == id) {
-                                            _assignedStations[i]['status'] = status;
+                                            _assignedStations[i]['status'] = prevStatus;
                                             break;
                                           }
                                         }
                                       });
+
+                                      // revert on server if we succeeded earlier
+                                      if (updateSucceeded && docPaths.isNotEmpty) {
+                                        try {
+                                          final batch = FirebaseFirestore.instance.batch();
+                                          for (final p in docPaths) {
+                                            final ref = FirebaseFirestore.instance.doc(p);
+                                            batch.update(ref, {'status': prevStatus});
+                                          }
+                                          await batch.commit();
+                                        } catch (err) {
+                                          debugPrint('Failed to undo updates on server: $err');
+                                          // best-effort: try individually
+                                          for (final p in docPaths) {
+                                            try {
+                                              await FirebaseFirestore.instance.doc(p).update({'status': prevStatus});
+                                            } catch (_) {}
+                                          }
+                                        }
+                                      }
                                     }),
                                   );
                                   ScaffoldMessenger.of(context).showSnackBar(snack);
@@ -1015,8 +1085,9 @@ class InspectionDetailPage extends StatelessWidget {
     final dt = data['date'];
     String datetimeStr = '';
     try {
-      if (dt is Timestamp) datetimeStr = DateFormat.yMMMd().add_jm().format(dt.toDate());
-      else if (dt is DateTime) datetimeStr = DateFormat.yMMMd().add_jm().format(dt);
+      if (dt is Timestamp) {
+        datetimeStr = DateFormat.yMMMd().add_jm().format(dt.toDate());
+      } else if (dt is DateTime) datetimeStr = DateFormat.yMMMd().add_jm().format(dt);
       else if (dt is String) datetimeStr = dt;
     } catch (_) {}
 

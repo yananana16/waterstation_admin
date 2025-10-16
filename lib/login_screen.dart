@@ -44,16 +44,19 @@ class _LoginScreenState extends State<LoginScreen> {
         // Determine role and route accordingly
         if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
           setState(() { _isLoading = false; });
+          if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboard()));
           return;
         }
         if (userDoc.id == uid && userData['role'] == 'admin' && userData['district_president'] == true) {
           setState(() { _isLoading = false; });
+          if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));
           return;
         }
         if (userDoc.id == uid && userData['role'] == 'cho_lgu') {
           setState(() { _isLoading = false; });
+          if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (context) => const LguDashboard()));
           return;
         }
@@ -61,6 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // inspector route
         if (userDoc.id == uid && userData['role'] == 'inspector') {
           setState(() { _isLoading = false; });
+          if (!mounted) return;
           Navigator.push(context, MaterialPageRoute(builder: (context) => const InspectorDashboard()));
           return;
         }
@@ -85,10 +89,12 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           if (districtQuery.docs.isNotEmpty) {
             setState(() { _isLoading = false; });
+            if (!mounted) return;
             Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));
             return;
           } else {
             setState(() { _isLoading = false; });
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('District record not found or not linked to this account.'),
@@ -100,6 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         setState(() { _isLoading = false; });
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Account not found or not authorized for any role.'),
@@ -110,6 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       setState(() { _isLoading = false; });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message ?? 'Invalid username or password.'),
@@ -320,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         if (_isLoading)
           Container(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withAlpha((0.3 * 255).round()),
             child: const Center(
               child: CircularProgressIndicator(),
             ),

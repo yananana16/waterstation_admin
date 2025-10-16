@@ -89,7 +89,15 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     final ownerData = ownerDoc.data();
     final recipientEmail = ownerData?['email']?.toString() ?? '';
     final stationName = ownerData?['station_name']?.toString() ?? '';
-    if (recipientEmail.isEmpty) return;
+    if (recipientEmail.isEmpty) {
+      // reset sending flag and return
+      if (mounted) {
+        setState(() {
+          _isSendingEmail = false;
+        });
+      }
+      return;
+    }
 
     // Collect failed files with details
     final failedFiles = complianceStatuses.entries
@@ -106,7 +114,14 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           };
         })
         .toList();
-    if (failedFiles.isEmpty) return;
+    if (failedFiles.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isSendingEmail = false;
+        });
+      }
+      return;
+    }
 
     // Build HTML table rows
     final rows = failedFiles.map((f) =>
@@ -154,6 +169,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       customBody: body,
       customSubject: 'Some Compliance Files Failed Requirements',
     );
+    if (!mounted) return;
     setState(() {
       _emailSent = true;
       _isSendingEmail = false;
@@ -231,14 +247,17 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       final response = await Supabase.instance.client.storage
           .from('compliance_docs')
           .list(path: 'uploads/$docId');
+      if (!mounted) return;
       setState(() {
         uploadedFiles = response;
         isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -249,6 +268,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
           .doc(docId)
           .get();
       if (doc.exists) {
+        if (!mounted) return;
         setState(() {
           complianceStatuses = doc.data() ?? {};
         });
@@ -421,7 +441,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   /// Returns a tuple: (canonicalCategoryKey, displayLabel)
   /// canonicalCategoryKey is guaranteed to match Firestore fields like:
-  ///   <canonicalCategoryKey>_status (e.g., business_permit_status)
+  ///   `<canonicalCategoryKey>_status` (e.g., business_permit_status)
   (String, String) _extractCategoryKeyAndLabel(String fileName, String docId) {
     // Lowercase everything for matching
     String lower = fileName.toLowerCase();
@@ -564,13 +584,14 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                         label: const Text('Open PDF'),
                                         onPressed: () async {
                                           final uri = Uri.parse(fileUrl);
-                                          if (await canLaunchUrl(uri)) {
-                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                          } else {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Could not open file')),
-                                            );
-                                          }
+                                                  if (await canLaunchUrl(uri)) {
+                                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                                  } else {
+                                                    if (!mounted) return;
+                                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                                      const SnackBar(content: Text('Could not open file')),
+                                                    );
+                                                  }
                                         },
                                       ),
                                     ],
@@ -589,7 +610,8 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               if (await canLaunchUrl(uri)) {
                                                 await launchUrl(uri, mode: LaunchMode.externalApplication);
                                               } else {
-                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(this.context).showSnackBar(
                                                   const SnackBar(content: Text('Could not open file')),
                                                 );
                                               }
@@ -719,11 +741,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     validUntilText = validText;
                                   });
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
                                     const SnackBar(content: Text('Date and validity saved')),
                                   );
                                 } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
                                     const SnackBar(content: Text('Failed to save date')),
                                   );
                                 } finally {
@@ -734,10 +758,10 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Download button (existing)
+                    // Enlarge / Open button: for images open a full-screen viewer, otherwise open externally
                     ElevatedButton.icon(
-                      icon: const Icon(Icons.download),
-                      label: const Text('Download'),
+                      icon: const Icon(Icons.open_in_full),
+                      label: const Text('Enlarge'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueAccent,
                         foregroundColor: Colors.white,
@@ -747,13 +771,20 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                         ),
                       ),
                       onPressed: () async {
-                        final uri = Uri.parse(fileUrl);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (isImage) {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _FullScreenImageViewer(imageUrl: fileUrl, title: file.name),
+                          ));
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Could not download file')),
-                          );
+                          final uri = Uri.parse(fileUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(this.context).showSnackBar(
+                              const SnackBar(content: Text('Could not open file')),
+                            );
+                          }
                         }
                       },
                     ),
@@ -867,9 +898,9 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(compact ? 0.08 : 0.10),
+  color: color.withAlpha(((compact ? 0.08 : 0.10) * 255).round()),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: color.withOpacity(compact ? 0.30 : 0.35)),
+  border: Border.all(color: color.withAlpha(((compact ? 0.30 : 0.35) * 255).round())),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -985,7 +1016,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
+                                        color: Colors.black.withAlpha((0.04 * 255).round()),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -994,7 +1025,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                   child: Container(
                                     decoration: BoxDecoration(
                                       border: Border(
-                                        left: BorderSide(color: accent.withOpacity(0.85), width: 5),
+                                        left: BorderSide(color: accent.withAlpha((0.85 * 255).round()), width: 5),
                                       ),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -1010,7 +1041,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 width: 36,
                                                 height: 36,
                                                 decoration: BoxDecoration(
-                                                  color: iconColor.withOpacity(0.10),
+                                                  color: iconColor.withAlpha((0.10 * 255).round()),
                                                   shape: BoxShape.circle,
                                                 ),
                                                 child: Icon(icon, color: iconColor, size: 20),
@@ -1038,7 +1069,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                             child: Center(
                                               child: Icon(
                                                 icon,
-                                                color: iconColor.withOpacity(0.35),
+                                                color: iconColor.withAlpha((0.35 * 255).round()),
                                                 size: 64,
                                               ),
                                             ),
@@ -1109,7 +1140,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               labelStyle: const TextStyle(fontWeight: FontWeight.w600),
                                               hintText: 'Select status',
                                               filled: true,
-                                              fillColor: accent.withOpacity(0.05),
+                                              fillColor: accent.withAlpha((0.05 * 255).round()),
                                               prefixIcon: Padding(
                                                 padding: const EdgeInsets.only(left: 12, right: 8),
                                                 child: Container(width: 8, height: 8, decoration: BoxDecoration(color: accent, shape: BoxShape.circle)),
@@ -1118,7 +1149,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                               enabledBorder: OutlineInputBorder(
                                                 borderRadius: BorderRadius.circular(12),
-                                                borderSide: BorderSide(color: accent.withOpacity(0.30)),
+                                                borderSide: BorderSide(color: accent.withAlpha((0.30 * 255).round())),
                                               ),
                                               focusedBorder: OutlineInputBorder(
                                                 borderRadius: BorderRadius.circular(12),
@@ -1249,6 +1280,41 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+/// Full screen image viewer used when user taps "Enlarge"
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  const _FullScreenImageViewer({Key? key, required this.imageUrl, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title, overflow: TextOverflow.ellipsis),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      backgroundColor: Colors.black,
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const Center(child: CircularProgressIndicator());
+            },
+            errorBuilder: (context, error, stack) => const Center(child: Text('Failed to load image', style: TextStyle(color: Colors.white))),
+          ),
+        ),
+      ),
     );
   }
 }

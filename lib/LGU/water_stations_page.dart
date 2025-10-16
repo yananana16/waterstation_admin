@@ -175,8 +175,8 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: status == 'approved'
-                                          ? const Color(0xFF4CAF50).withOpacity(0.1)
-                                          : const Color(0xFFD32F2F).withOpacity(0.1),
+                                          ? const Color(0xFF4CAF50).withAlpha((0.1 * 255).round())
+                                          : const Color(0xFFD32F2F).withAlpha((0.1 * 255).round()),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(

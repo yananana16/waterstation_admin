@@ -1,5 +1,5 @@
+// ignore_for_file: unused_local_variable, unused_element
 import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
 import 'dart:math' as math;
 
 class RecommendationsPage extends StatelessWidget {
@@ -28,7 +28,7 @@ class RecommendationsPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             color: Colors.white,
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 6)),
+              BoxShadow(color: Colors.black.withAlpha((0.04 * 255).round()), blurRadius: 10, offset: const Offset(0, 6)),
             ],
             border: Border.all(color: const Color(0xFFE7F0FF)),
           ),
@@ -43,7 +43,7 @@ class RecommendationsPage extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1565C0).withOpacity(0.12),
+                      color: const Color(0xFF1565C0).withAlpha((0.12 * 255).round()),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(icon, size: 26, color: const Color(0xFF1565C0)),
@@ -112,7 +112,7 @@ class RecommendationsPage extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFE7F0FF)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 4))],
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8, offset: const Offset(0, 4))],
             ),
             child: Row(
               children: [
@@ -120,7 +120,7 @@ class RecommendationsPage extends StatelessWidget {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1565C0).withOpacity(0.12),
+                    color: const Color(0xFF1565C0).withAlpha((0.12 * 255).round()),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: const Color(0xFF1565C0), size: 26),
@@ -158,7 +158,7 @@ class RecommendationsPage extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE7F0FF)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8, offset: const Offset(0, 6))],
       ),
       child: child,
     );
@@ -199,7 +199,7 @@ class RecommendationsPage extends StatelessWidget {
               ],
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -522,10 +522,11 @@ class _SparklinePainter extends CustomPainter {
     for (var i = 0; i < points.length; i++) {
       final x = i * dx;
       final y = size.height - (points[i] / max) * size.height;
-      if (i == 0)
+      if (i == 0) {
         path.moveTo(x, y);
-      else
+      } else {
         path.lineTo(x, y);
+      }
     }
 
     final fillPath = Path.from(path)..lineTo(size.width, size.height)..lineTo(0, size.height)..close();

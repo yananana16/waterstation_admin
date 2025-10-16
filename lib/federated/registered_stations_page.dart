@@ -5,6 +5,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_files_viewer.dart';
 
+// Responsive breakpoints
+const double _kMobileBreakpoint = 800.0;
+const double _kTabletBreakpointLower = 600.0;
+
 class RegisteredStationsPage extends StatelessWidget {
   final LatLng? mapSelectedLocation;
   final MapController mapController;
@@ -45,7 +49,8 @@ class RegisteredStationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const int rowsPerPage = 8;
+  const int rowsPerPage = 8;
+  // Tablet breakpoint: between tabletBreakpointLower and mobileBreakpoint we'll use a denser layout
 
     if (showComplianceReportDetails &&
         selectedComplianceStationData != null &&
@@ -69,7 +74,7 @@ class RegisteredStationsPage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.10),
+                            color: Colors.black.withAlpha((0.10 * 255).round()),
                             blurRadius: 18,
                             offset: const Offset(0, 6),
                           ),
@@ -91,7 +96,12 @@ class RegisteredStationsPage extends StatelessWidget {
       );
     }
 
-    return Column(
+  final screenWidth = MediaQuery.of(context).size.width;
+
+  // If small screen, render mobile-friendly stacked layout
+  final isMobile = screenWidth < _kMobileBreakpoint;
+
+  return isMobile ? _buildMobileLayout(context, rowsPerPage) : Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Map Section with shadow and rounded corners
@@ -101,10 +111,10 @@ class RegisteredStationsPage extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
+            border: Border.all(color: Colors.blueAccent.withAlpha((0.2 * 255).round()), width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.07),
+                color: Colors.blueAccent.withAlpha((0.07 * 255).round()),
                 blurRadius: 12,
                 spreadRadius: 2,
                 offset: const Offset(0, 4),
@@ -152,7 +162,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.blueAccent.withOpacity(0.15),
+                                    color: Colors.blueAccent.withAlpha((0.15 * 255).round()),
                                     blurRadius: 6,
                                     spreadRadius: 1,
                                   ),
@@ -192,17 +202,15 @@ class RegisteredStationsPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Search pill (left)
-              SizedBox(
-                width: 800,
+              Expanded(
                 child: Container(
-                  margin: const EdgeInsets.only(left: 220),
                   height: 40,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withAlpha((0.08 * 255).round()),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -226,9 +234,10 @@ class RegisteredStationsPage extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 16),
               // Filter pill (right)
               SizedBox(
-                width: 700,
+                width: 320,
                 child: FutureBuilder<QuerySnapshot>(
                   future: FirestoreRepository.instance.getCollectionOnce(
                     'districts',
@@ -244,14 +253,13 @@ class RegisteredStationsPage extends StatelessWidget {
                         .toList()
                       ..sort();
                     return Container(
-                      margin: const EdgeInsets.only(right: 500),
                       height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withAlpha((0.08 * 255).round()),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -376,8 +384,8 @@ class RegisteredStationsPage extends StatelessWidget {
       border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
       borderRadius: BorderRadius.circular(8),
       boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
+                      BoxShadow(
+          color: Colors.black.withAlpha((0.06 * 255).round()),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -388,7 +396,7 @@ class RegisteredStationsPage extends StatelessWidget {
                             dataRowColor: WidgetStateProperty.resolveWith<Color?>(
                               (Set<WidgetState> states) {
                                 if (states.contains(WidgetState.selected)) {
-                                  return Colors.blueAccent.withOpacity(0.08);
+                                  return Colors.blueAccent.withAlpha((0.08 * 255).round());
                                 }
                                 return Colors.white;
                               },
@@ -630,6 +638,411 @@ class RegisteredStationsPage extends StatelessWidget {
                             }).toList(),
                           ),
                         ),
+                      ),
+                    ),
+                    // Pagination controls
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left),
+                            onPressed: registeredStationsCurrentPage > 0
+                                ? () => onCurrentPageChanged(registeredStationsCurrentPage - 1)
+                                : null,
+                          ),
+                          Text(
+                            'Page ${totalPages == 0 ? 0 : (registeredStationsCurrentPage + 1)} of $totalPages',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed: (registeredStationsCurrentPage < totalPages - 1)
+                                ? () => onCurrentPageChanged(registeredStationsCurrentPage + 1)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context, int rowsPerPage) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= _kTabletBreakpointLower && screenWidth < _kMobileBreakpoint;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Map (smaller on mobile)
+        Container(
+          height: 200,
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blueAccent.withAlpha((0.2 * 255).round()), width: 2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: FutureBuilder<QuerySnapshot>(
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
+              builder: (context, snapshot) {
+                final center = mapSelectedLocation ?? LatLng(10.7202, 122.5621);
+                List<Marker> markers = [];
+                if (snapshot.hasData) {
+                  final docs = snapshot.data!.docs;
+                  for (final doc in docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    double? lat, lng;
+                    if (data['geopoint'] != null) {
+                      final geo = data['geopoint'];
+                      lat = geo.latitude?.toDouble();
+                      lng = geo.longitude?.toDouble();
+                    } else if (data['location'] != null && data['location'] is Map) {
+                      lat = (data['location']['latitude'] as num?)?.toDouble();
+                      lng = (data['location']['longitude'] as num?)?.toDouble();
+                    } else {
+                      lat = (data['latitude'] as num?)?.toDouble();
+                      lng = (data['longitude'] as num?)?.toDouble();
+                    }
+                    final stationName = data['stationName'] ?? '';
+                    if (lat != null && lng != null) {
+                      markers.add(
+                        Marker(
+                          width: 40,
+                          height: 40,
+                          point: LatLng(lat, lng),
+                          child: Tooltip(
+                            message: stationName,
+                            child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 28),
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                }
+                return FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: mapSelectedLocation != null ? 16.0 : 12.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.example.app',
+                    ),
+                    MarkerLayer(markers: markers),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+
+        // Stacked search and filter
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+          child: Column(
+            children: [
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: (value) => onSearchQueryChanged(value.toLowerCase()),
+                  decoration: const InputDecoration(
+                    hintText: "Search",
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              FutureBuilder<QuerySnapshot>(
+                future: FirestoreRepository.instance.getCollectionOnce(
+                  'districts',
+                  () => FirebaseFirestore.instance.collection('districts'),
+                ),
+                builder: (context, snapshot) {
+                  final docs = snapshot.data?.docs ?? [];
+                  final districts = docs
+                      .map((doc) => doc['districtName']?.toString() ?? '')
+                      .where((d) => d.isNotEmpty)
+                      .toSet()
+                      .toList()
+                    ..sort();
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
+                                  ? null
+                                  : registeredStationsDistrictFilter,
+                              hint: const Text('Filter'),
+                              isExpanded: true,
+                              items: districts
+                                  .map((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                                  .toList(),
+                              onChanged: (v) => onDistrictFilterChanged(v),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () {
+                          searchController.clear();
+                          onSearchQueryChanged('');
+                          onDistrictFilterChanged(null);
+                          try {
+                            setState(() {});
+                          } catch (_) {}
+                        },
+                        icon: const Icon(Icons.clear, color: Colors.blueAccent),
+                        label: const Text('Clear', style: TextStyle(color: Colors.blueAccent)),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        // List of stations as cards for mobile/tablet
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
+            child: FutureBuilder<QuerySnapshot>(
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error loading station owners: ${snapshot.error}'));
+                }
+                final docs = snapshot.data?.docs ?? [];
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final stationName = (data['stationName'] ?? '').toString().toLowerCase();
+                  final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
+                  final district = (data['districtName'] ?? '').toString().toLowerCase();
+                  final matchesSearch = searchQuery.isEmpty ||
+                      stationName.contains(searchQuery) ||
+                      ownerName.contains(searchQuery) ||
+                      district.contains(searchQuery);
+                  final matchesDistrict = registeredStationsDistrictFilter == null || registeredStationsDistrictFilter!.isEmpty
+                      ? true
+                      : (data['districtName'] ?? '') == registeredStationsDistrictFilter;
+                  return matchesSearch && matchesDistrict;
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(child: Text('No station owners found.'));
+                }
+
+                final totalRows = filteredDocs.length;
+                final totalPages = (totalRows / rowsPerPage).ceil();
+                final startIdx = registeredStationsCurrentPage * rowsPerPage;
+                final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
+                final pageDocs = filteredDocs.sublist(
+                  startIdx < totalRows ? startIdx : 0,
+                  endIdx < totalRows ? endIdx : totalRows,
+                );
+
+                return Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: pageDocs.length,
+                        itemBuilder: (ctx, idx) {
+                          final doc = pageDocs[idx];
+                          final data = doc.data() as Map<String, dynamic>;
+                          final stationName = data['stationName'] ?? '';
+                          final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                          final district = data['districtName'] ?? '';
+                          final email = data['email'] ?? '';
+                          final phone = data['phone'] ?? '';
+                          final addressSnippet = (data['address'] ?? '').toString();
+                          double? lat, lng;
+                          if (data['geopoint'] != null) {
+                            final geo = data['geopoint'];
+                            lat = geo.latitude?.toDouble();
+                            lng = geo.longitude?.toDouble();
+                          } else if (data['location'] != null && data['location'] is Map) {
+                            lat = (data['location']['latitude'] as num?)?.toDouble();
+                            lng = (data['location']['longitude'] as num?)?.toDouble();
+                          } else {
+                            lat = (data['latitude'] as num?)?.toDouble();
+                            lng = (data['longitude'] as num?)?.toDouble();
+                          }
+                          final rawStatus = (data['status'] ?? '').toString();
+                          final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                          final statusColor = statusNormalized == 'Done' ? const Color(0xFF4CAF50) : const Color(0xFFFFC107);
+
+                          // Dense style for tablet: smaller paddings and fonts
+                          final cardPadding = isTablet ? 8.0 : 12.0;
+                          final titleSize = isTablet ? 14.0 : 16.0;
+                          final subtitleSize = isTablet ? 12.0 : 13.0;
+
+                          return Card(
+                            color: Colors.white,
+                            margin: EdgeInsets.symmetric(vertical: isTablet ? 6 : 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: Colors.grey.shade200, width: 1),
+                            ),
+                            elevation: 0.5,
+                            child: Padding(
+                              padding: EdgeInsets.all(cardPadding),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Leading icon + title
+                                      Padding(
+                                        padding: EdgeInsets.only(right: isTablet ? 8 : 12),
+                                        child: CircleAvatar(
+                                          radius: isTablet ? 18 : 22,
+                                          backgroundColor: Colors.blueAccent.withOpacity(0.12),
+                                          child: const Icon(Icons.local_drink, color: Colors.blueAccent),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(stationName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: titleSize)),
+                                            const SizedBox(height: 6),
+                                            Wrap(
+                                              spacing: 12,
+                                              runSpacing: 6,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.person, size: subtitleSize + 2, color: Colors.black54),
+                                                    const SizedBox(width: 6),
+                                                    Text(ownerName, style: TextStyle(fontSize: subtitleSize)),
+                                                  ],
+                                                ),
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.location_city, size: subtitleSize + 2, color: Colors.black54),
+                                                    const SizedBox(width: 6),
+                                                    Text(district, style: TextStyle(fontSize: subtitleSize, color: Colors.black54)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      // Status chip
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: isTablet ? 8 : 10, vertical: isTablet ? 4 : 6),
+                                        decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(6)),
+                                        child: Text(statusNormalized, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Secondary info row (email, phone, address snippet)
+                                  Row(
+                                    children: [
+                                      if ((email ?? '').toString().isNotEmpty) ...[
+                                        Icon(Icons.email, size: subtitleSize + 2, color: Colors.black45),
+                                        const SizedBox(width: 6),
+                                        Expanded(child: Text(email.toString(), style: TextStyle(fontSize: subtitleSize), overflow: TextOverflow.ellipsis)),
+                                        const SizedBox(width: 12),
+                                      ],
+                                      if ((phone ?? '').toString().isNotEmpty) ...[
+                                        Icon(Icons.phone, size: subtitleSize + 2, color: Colors.black45),
+                                        const SizedBox(width: 6),
+                                        Text(phone.toString(), style: TextStyle(fontSize: subtitleSize)),
+                                      ],
+                                    ],
+                                  ),
+                                  if (addressSnippet.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.home, size: subtitleSize + 2, color: Colors.black45),
+                                        const SizedBox(width: 6),
+                                        Expanded(child: Text(addressSnippet, style: TextStyle(fontSize: subtitleSize), overflow: TextOverflow.ellipsis)),
+                                      ],
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Tooltip(
+                                        message: 'View on map',
+                                        child: IconButton(
+                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                          onPressed: () {
+                                            if (lat != null && lng != null) {
+                                              onMapSelectedLocation(LatLng(lat, lng));
+                                              mapController.move(LatLng(lat, lng), 16.0);
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                      Tooltip(
+                                        message: 'View compliance report',
+                                        child: IconButton(
+                                          icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                          onPressed: () {
+                                            onShowComplianceReportDetails(true, data, doc.id, stationName);
+                                          },
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      TextButton.icon(
+                                        onPressed: () => onShowComplianceReportDetails(true, data, doc.id, stationName),
+                                        icon: const Icon(Icons.info_outline, size: 16, color: Colors.blueAccent),
+                                        label: const Text('Details', style: TextStyle(color: Colors.blueAccent)),
+                                        style: TextButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: isTablet ? 8 : 12, vertical: isTablet ? 4 : 6)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     // Pagination controls
