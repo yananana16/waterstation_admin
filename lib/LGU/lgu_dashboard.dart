@@ -2,6 +2,7 @@
 // import 'package:cloud_firestore/cloud_firestore.dart'; // unused - removed
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // added to fetch real count
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_repository.dart';
 import 'package:waterstation_admin/LGU/water_stations_page.dart'; // moved Water Stations page to separate file
 import 'package:waterstation_admin/LGU/schedule_page.dart';
@@ -778,10 +779,128 @@ class _ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<_ProfilePage> {
-  String name = 'User';
-  String role = 'Sanitary Inspector';
-  String contact = '(+63) 912 345 6789';
-  String email = 'email@gmail.com';
+  String name = '';
+  String role = '';
+  String contact = '';
+  String email = '';
+  bool _loading = false;
+  String? _docId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _loading = true);
+    try {
+      final col = FirebaseFirestore.instance.collection('cho_lgu');
+      // If a signed-in user exists, prefer the document with their UID
+      final user = FirebaseAuth.instance.currentUser;
+      QuerySnapshot snap;
+      if (user != null) {
+        final doc = await col.doc(user.uid).get();
+        if (doc.exists) {
+          // found the user's document directly
+          final d = doc;
+          final data = d.data();
+          setState(() {
+            _docId = d.id;
+            name = (data?['name'] ?? data?['adminName'] ?? data?['displayName'] ?? '').toString();
+            role = (data?['role'] ?? '').toString();
+            contact = (data?['contact'] ?? data?['phone'] ?? '').toString();
+            email = (data?['email'] ?? '').toString();
+          });
+          if (mounted) setState(() => _loading = false);
+          return;
+        } else {
+          // fall back to admin:true or first doc
+          var snapTmp = await col.where('admin', isEqualTo: true).limit(1).get();
+          if (snapTmp.docs.isEmpty) {
+            snapTmp = await col.limit(1).get();
+          }
+          if (snapTmp.docs.isNotEmpty) {
+            final d = snapTmp.docs.first;
+            final data = d.data() as Map<String, dynamic>?;
+            setState(() {
+              _docId = d.id;
+              name = (data?['name'] ?? data?['adminName'] ?? data?['displayName'] ?? '').toString();
+              role = (data?['role'] ?? '').toString();
+              contact = (data?['contact'] ?? data?['phone'] ?? '').toString();
+              email = (data?['email'] ?? '').toString();
+            });
+            if (mounted) setState(() => _loading = false);
+            return;
+          }
+        }
+      }
+      // No user or no matching/user doc found; use existing behavior
+      var snapResult = await col.where('admin', isEqualTo: true).limit(1).get();
+      if (snapResult.docs.isEmpty) {
+        snapResult = await col.limit(1).get();
+      }
+      if (snapResult.docs.isNotEmpty) {
+        final d = snapResult.docs.first;
+        final data = d.data();
+        setState(() {
+          _docId = d.id;
+          name = (data['name'] ?? data['adminName'] ?? data['displayName'] ?? '').toString();
+          role = (data['role'] ?? '').toString();
+          contact = (data['contact'] ?? data['phone'] ?? '').toString();
+          email = (data['email'] ?? '').toString();
+        });
+      } else {
+        // no existing profile; keep fields empty so user can add
+        setState(() {
+          _docId = null;
+          name = '';
+          role = '';
+          contact = '';
+          email = '';
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load LGU profile: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _loading = true);
+    try {
+      final col = FirebaseFirestore.instance.collection('cho_lgu');
+      final data = {
+        'name': name,
+        'role': role,
+        'contact': contact,
+        'email': email,
+        'admin': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      final user = FirebaseAuth.instance.currentUser;
+      if (_docId != null) {
+        await col.doc(_docId).set(data, SetOptions(merge: true));
+      } else if (user != null) {
+        // ensure email is set to authenticated email if empty
+        if ((data['email'] ?? '').toString().isEmpty && user.email != null) data['email'] = user.email!;
+        // create the document under the user's UID so rules allowing owner writes pass
+        await col.doc(user.uid).set(data, SetOptions(merge: true));
+        _docId = user.uid;
+      } else {
+        // fallback to adding a document (may be blocked by rules depending on auth)
+        final ref = await col.add(data);
+        _docId = ref.id;
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
+    } catch (e) {
+      debugPrint('Failed to save LGU profile: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save profile')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -805,9 +924,9 @@ class _ProfilePageState extends State<_ProfilePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Left column: avatar + change picture + save button
-              Column(
+                  Column(
                 children: [
-                  const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
+                    const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
                   const SizedBox(height: 12),
                   Row(
                     children: const [
@@ -818,17 +937,17 @@ class _ProfilePageState extends State<_ProfilePage> {
                   ),
                   const SizedBox(height: 18),
                   SizedBox(
-                    width: 140,
-                    height: 40,
-                    child: ElevatedButton(
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0B63B7),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      width: 140,
+                      height: 40,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0B63B7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
                       ),
-                      child: const Text('Save Changes'),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(width: 32),

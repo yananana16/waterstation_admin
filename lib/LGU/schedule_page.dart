@@ -21,6 +21,32 @@ class _SchedulePageState extends State<SchedulePage> {
   // We'll load stations from Firestore (collection: 'station_owners').
   // Cache per-station month-inspection status to reduce queries on rebuilds.
   final Map<String, String> _monthStatusCache = {}; // key: stationId::YYYY-MM -> 'done'|'pending'
+  // Cache for per-station officer name for the month (key: stationId::YYYY-MM)
+  final Map<String, String> _monthOfficerCache = {};
+  // Cache for per-station inspection date for the month (string)
+  final Map<String, String> _monthDateCache = {};
+
+  String _formatDateField(dynamic value) {
+    try {
+      if (value == null) return '';
+      if (value is Timestamp) {
+        final dt = value.toDate().toLocal();
+        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      }
+      if (value is DateTime) {
+        final dt = value.toLocal();
+        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      }
+      final parsed = DateTime.tryParse(value.toString());
+      if (parsed != null) {
+        final dt = parsed.toLocal();
+        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      }
+      return value.toString();
+    } catch (_) {
+      return value.toString();
+    }
+  }
 
   String _monthKey(DateTime m) => '${m.year}-${m.month.toString().padLeft(2, '0')}';
 
@@ -64,7 +90,11 @@ class _SchedulePageState extends State<SchedulePage> {
       if (subByMonthSnap.docs.isNotEmpty) {
         final data = subByMonthSnap.docs.first.data();
         final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        final officerName = (data['officerName'] ?? data['officer'] ?? data['officer_full_name'])?.toString() ?? '';
+        final dateStr = _formatDateField(data['date'] ?? data['createdAt'] ?? data['inspectionDate']);
         _monthStatusCache[cacheKey] = status;
+        _monthOfficerCache[cacheKey] = officerName;
+        _monthDateCache[cacheKey] = dateStr;
         return status;
       }
 
@@ -77,7 +107,11 @@ class _SchedulePageState extends State<SchedulePage> {
       if (subByDateSnap.docs.isNotEmpty) {
         final data = subByDateSnap.docs.first.data();
         final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        final officerName = (data['officerName'] ?? data['officer'] ?? data['officer_full_name'])?.toString() ?? '';
+        final dateStr = _formatDateField(data['date'] ?? data['createdAt'] ?? data['inspectionDate']);
         _monthStatusCache[cacheKey] = status;
+        _monthOfficerCache[cacheKey] = officerName;
+        _monthDateCache[cacheKey] = dateStr;
         return status;
       }
 
@@ -90,7 +124,11 @@ class _SchedulePageState extends State<SchedulePage> {
       if (topByMonthSnap.docs.isNotEmpty) {
         final data = topByMonthSnap.docs.first.data();
         final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        final officerName = (data['officerName'] ?? data['officer'] ?? data['officer_full_name'])?.toString() ?? '';
+        final dateStr = _formatDateField(data['date'] ?? data['createdAt'] ?? data['inspectionDate']);
         _monthStatusCache[cacheKey] = status;
+        _monthOfficerCache[cacheKey] = officerName;
+        _monthDateCache[cacheKey] = dateStr;
         return status;
       }
 
@@ -104,7 +142,11 @@ class _SchedulePageState extends State<SchedulePage> {
       if (topByDateSnap.docs.isNotEmpty) {
         final data = topByDateSnap.docs.first.data();
         final status = _normalizeStatus(data['status'] ?? data['state'] ?? data['statusText']);
+        final officerName = (data['officerName'] ?? data['officer'] ?? data['officer_full_name'])?.toString() ?? '';
+        final dateStr = _formatDateField(data['date'] ?? data['createdAt'] ?? data['inspectionDate']);
         _monthStatusCache[cacheKey] = status;
+        _monthOfficerCache[cacheKey] = officerName;
+        _monthDateCache[cacheKey] = dateStr;
         return status;
       }
     } catch (e) {
@@ -112,12 +154,14 @@ class _SchedulePageState extends State<SchedulePage> {
       debugPrint('Error checking inspections for station: $stationId -> $e');
     }
     _monthStatusCache[cacheKey] = 'pending';
+    _monthOfficerCache[cacheKey] = '';
+    _monthDateCache[cacheKey] = '';
     return 'pending';
   }
 
   void _openInspection() => setState(() => _activeSubscreen = _ActiveSubscreen.inspection);
   void _openAddSchedule() => setState(() => _activeSubscreen = _ActiveSubscreen.addSchedule);
-  void _openAssignment() => setState(() => _activeSubscreen = _ActiveSubscreen.assignment);
+  // assignment action removed (Assign quick action was removed from UI)
   void _openStaff() => setState(() => _activeSubscreen = _ActiveSubscreen.staff); // new
   void _closeSubscreen() => setState(() => _activeSubscreen = _ActiveSubscreen.none);
 
@@ -299,8 +343,21 @@ class _SchedulePageState extends State<SchedulePage> {
                                                                           SizedBox(width: 28 * scale, child: Text('${idx + 1}', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
                                                                           Expanded(child: Text(sName.toString(), style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13 * scale))),
                                                                           Expanded(child: Text(sLoc.toString(), style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
-                                                                          Expanded(child: Text('${_selectedMonth.year}-${_selectedMonth.month.toString().padLeft(2, '0')}-01', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
-                                                                          Expanded(child: Text('', style: TextStyle(color: Colors.black54, fontSize: 13 * scale))),
+                                                                          Expanded(
+                                                                            child: Builder(builder: (ctx) {
+                                                                              final cacheKey = '$sId::${_monthKey(_selectedMonth)}';
+                                                                              final dateText = _monthDateCache.containsKey(cacheKey) ? (_monthDateCache[cacheKey] ?? '') : '';
+                                                                              return Text(dateText, style: TextStyle(color: Colors.black54, fontSize: 13 * scale));
+                                                                            }),
+                                                                          ),
+                                                                          // Officer: show officerName from cache if an inspection exists for the month
+                                                                          Expanded(
+                                                                            child: Builder(builder: (ctx) {
+                                                                              final cacheKey = '$sId::${_monthKey(_selectedMonth)}';
+                                                                              final officer = _monthOfficerCache.containsKey(cacheKey) ? (_monthOfficerCache[cacheKey] ?? '') : '';
+                                                                              return Text(officer, style: TextStyle(color: Colors.black54, fontSize: 13 * scale));
+                                                                            }),
+                                                                          ),
                                                                           SizedBox(
                                                                             width: 80 * scale,
                                                                             child: Center(
@@ -383,7 +440,6 @@ class _SchedulePageState extends State<SchedulePage> {
                                                             scale: scale,
                                                           ),
                                                           _ScheduleActionButton(icon: Icons.calendar_month, label: 'Add', scale: scale, onPressed: _openAddSchedule),
-                                                          _ScheduleActionButton(icon: Icons.assignment, label: 'Assign', onPressed: _openAssignment, scale: scale),
                                                           _ScheduleActionButton(icon: Icons.people, label: 'Staff', onPressed: _openStaff, scale: scale),
                                                         ],
                                                       ),

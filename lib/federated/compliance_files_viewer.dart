@@ -1001,7 +1001,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 class _FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
   final String title;
-  const _FullScreenImageViewer({Key? key, required this.imageUrl, required this.title}) : super(key: key);
+  const _FullScreenImageViewer({required this.imageUrl, required this.title});
 
   @override
   Widget build(BuildContext context) {

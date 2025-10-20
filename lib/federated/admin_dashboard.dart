@@ -912,52 +912,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 );
                               },
                             ),
-                            // Trends card (moved here)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(18),
-                              margin: const EdgeInsets.only(bottom: 18),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withAlpha((0.08 * 255).round()),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: const [
-                                      Text(
-                                        "Trends in Water Refilling Station Openings",
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
-                                      ),
-                                      Spacer(),
-                                      Text("2025", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                                      SizedBox(width: 4),
-                                      Icon(Icons.calendar_today, color: Colors.grey, size: 18),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Container(
-                                    height: 90,
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFE3F2FD),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Center(
-                                      child: Icon(Icons.show_chart, size: 60, color: Colors.blueAccent.withAlpha((0.25 * 255).round())),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            // Trends card removed as requested
                           ],
                         ),
                       ),

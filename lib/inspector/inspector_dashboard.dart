@@ -26,6 +26,13 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
   static const Color _pendingColor = Color(0xFFF39C12);
   static const Color _missedColor = Color(0xFFEF4444);
 
+  // Profile form state
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _roleController = TextEditingController();
+  final TextEditingController _contactController = TextEditingController();
+  String _profileEmail = '';
+  String? _inspectorDocId;
+
   @override
   void initState() {
     super.initState();
@@ -38,14 +45,88 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tick();
-      _loadAssignedInspections();
+      // Load assigned inspections; respect the current _showAllInspections flag
+      _loadAssignedInspections(all: _showAllInspections);
+      // also load inspector profile
+      _loadInspectorProfile();
     });
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _roleController.dispose();
+    _contactController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadInspectorProfile() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final email = FirebaseAuth.instance.currentUser?.email ?? '';
+      _profileEmail = email;
+      if (uid == null) return;
+
+      // find inspector doc by uid where possible
+      final snap = await FirebaseFirestore.instance.collection('inspectors').where('uid', isEqualTo: uid).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first;
+        final data = d.data();
+        _inspectorDocId = d.id;
+        _nameController.text = (data['name'] ?? data['fullName'] ?? '') as String? ?? '';
+        _roleController.text = (data['role'] ?? '') as String? ?? '';
+        _contactController.text = (data['contact'] ?? data['phone'] ?? '') as String? ?? '';
+      } else {
+        // optional: try to find by email if inspectors indexed differently
+        final snap2 = await FirebaseFirestore.instance.collection('inspectors').where('email', isEqualTo: email).limit(1).get();
+        if (snap2.docs.isNotEmpty) {
+          final d = snap2.docs.first;
+          final data = d.data();
+          _inspectorDocId = d.id;
+          _nameController.text = (data['name'] ?? data['fullName'] ?? '') as String? ?? '';
+          _roleController.text = (data['role'] ?? '') as String? ?? '';
+          _contactController.text = (data['contact'] ?? data['phone'] ?? '') as String? ?? '';
+        }
+      }
+      setState(() {});
+    } catch (err) {
+      debugPrint('Failed loading inspector profile: $err');
+    }
+  }
+
+  Future<void> _saveInspectorProfile() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final email = FirebaseAuth.instance.currentUser?.email ?? '';
+      if (uid == null) return;
+
+      final data = {
+        'uid': uid,
+        'email': email,
+        'name': _nameController.text.trim(),
+        'role': _roleController.text.trim(),
+        'contact': _contactController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (_inspectorDocId != null) {
+        await FirebaseFirestore.instance.collection('inspectors').doc(_inspectorDocId).set(data, SetOptions(merge: true));
+      } else {
+        // create new inspector doc with uid as id when possible
+        try {
+          await FirebaseFirestore.instance.collection('inspectors').doc(uid).set(data, SetOptions(merge: true));
+          _inspectorDocId = uid;
+        } catch (_) {
+          final docRef = await FirebaseFirestore.instance.collection('inspectors').add(data);
+          _inspectorDocId = docRef.id;
+        }
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
+    } catch (err) {
+      debugPrint('Failed saving inspector profile: $err');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save profile: $err')));
+    }
   }
 
   /// Convert various stored date formats into a DateTime (if possible)
@@ -322,15 +403,15 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Column(
                 children: [
-                  InkWell(onTap: () { setState(() => _selectedIndex = 0); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                  InkWell(onTap: () { setState(() => _selectedIndex = 0); if (!isWide) { Navigator.of(context).pop(); } }, child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                     child: Text('Home', style: TextStyle(color: _selectedIndex == 0 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4), fontWeight: _selectedIndex == 0 ? FontWeight.bold : FontWeight.normal)),
                   )),
-                  InkWell(onTap: () { setState(() => _selectedIndex = 1); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                  InkWell(onTap: () { setState(() => _selectedIndex = 1); if (!isWide) { Navigator.of(context).pop(); } }, child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                     child: Text('Schedule', style: TextStyle(color: _selectedIndex == 1 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4))),
                   )),
-                  InkWell(onTap: () { setState(() => _selectedIndex = 2); if (!isWide) Navigator.of(context).pop(); }, child: Padding(
+                  InkWell(onTap: () { setState(() => _selectedIndex = 2); if (!isWide) { Navigator.of(context).pop(); } }, child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                     child: Text('Profile', style: TextStyle(color: _selectedIndex == 2 ? const Color(0xFF0B63B7) : const Color(0xFF7A93B4))),
                   )),
@@ -699,10 +780,126 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               _whiteCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    SizedBox(height: 12),
-                    Text('Calendar and scheduled inspections will show here.'),
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Schedule', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        Row(
+                          children: [
+                            const Text('Show all'),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _showAllInspections,
+                              onChanged: (v) async {
+                                setState(() {
+                                  _showAllInspections = v;
+                                });
+                                await _loadAssignedInspections(all: _showAllInspections);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Content: either loading, empty-calendar placeholder, or inspections list
+                    if (_loadingAssigned)
+                      SizedBox(height: 240, child: Center(child: CircularProgressIndicator(color: _primary)))
+                    else if (_assignedStations.isEmpty)
+                      SizedBox(height: 240, child: Center(child: Text('No scheduled inspections found.', style: TextStyle(color: Colors.black54))))
+                    else
+                      // show list of assigned inspections in a table-like layout
+                      SizedBox(
+                        height: 360,
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                          child: Column(
+                            children: [
+                              // header row
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10),
+                                child: Row(
+                                  children: const [
+                                    Expanded(flex: 3, child: Text('Station', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    Expanded(flex: 2, child: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    Expanded(flex: 2, child: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    Expanded(flex: 1, child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    SizedBox(width: 56),
+                                  ],
+                                ),
+                              ),
+                              const Divider(height: 1),
+                              // rows
+                              Expanded(
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  itemCount: _assignedStations.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, i) {
+                                    final s = _assignedStations[i];
+                                    final dt = _toDateTime(s['date']);
+                                    final status = (s['status'] ?? 'Pending').toString();
+                                    final done = status.toLowerCase().contains('done');
+                                    final bg = i.isEven ? Colors.white : const Color(0xFFF8FAFB);
+                                    final initials = (s['stationName'] ?? '').toString().trim().split(' ').where((p) => p.isNotEmpty).map((p) => p[0]).take(2).join().toUpperCase();
+                                    return Material(
+                                      color: bg,
+                                      child: InkWell(
+                                        onTap: () => _showInspectionModal(s),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
+                                          child: Row(
+                                            children: [
+                                              // avatar + station name
+                                              Expanded(
+                                                flex: 3,
+                                                child: Row(
+                                                  children: [
+                                                    CircleAvatar(radius: 18, backgroundColor: _primary, child: Text(initials.isEmpty ? 'S' : initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    const SizedBox(width: 10),
+                                                    Flexible(child: Text(s['stationName'] ?? 'Unknown', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                                                  ],
+                                                ),
+                                              ),
+                                              Expanded(flex: 2, child: Text(s['owner'] ?? '', style: const TextStyle(fontSize: 13))),
+                                              Expanded(flex: 2, child: Text(_formatDateTime(dt), style: const TextStyle(fontSize: 13, color: Colors.black54))),
+                                              Expanded(
+                                                flex: 1,
+                                                child: Align(
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: _statusColor(status).withAlpha((0.14 * 255).round()),
+                                                      borderRadius: BorderRadius.circular(16),
+                                                    ),
+                                                    child: Text(status, style: TextStyle(color: _statusColor(status), fontWeight: FontWeight.w700, fontSize: 12)),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              SizedBox(
+                                                width: 48,
+                                                child: IconButton(
+                                                  tooltip: 'Mark as Done',
+                                                  icon: Icon(Icons.check, color: done ? Colors.grey : _doneColor),
+                                                  onPressed: done ? null : () => _markAsDoneQuick(s['id'] ?? ''),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -710,13 +907,33 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               _whiteCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    SizedBox(height: 12),
-                    Text('Name: Inspector'),
-                    Text('Role: Sanitary Inspector'),
-                    Text('Contact Number: (+63) 912 345 6789'),
-                    Text('Email: inspector@example.com'),
+                  children: [
+                    const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(labelText: 'Full name', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _roleController,
+                      decoration: const InputDecoration(labelText: 'Role', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _contactController,
+                      decoration: const InputDecoration(labelText: 'Contact number', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: Text('Email: $_profileEmail')),
+                        ElevatedButton(
+                          onPressed: _saveInspectorProfile,
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -993,7 +1210,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                   }
 
                                   final snack = SnackBar(
-                                    content: Text('Marked "$stationName" as done.' + (updateSucceeded ? '' : ' (local only — failed to update server)')),
+                                    content: Text('Marked "$stationName" as done.${updateSucceeded ? '' : ' (local only — failed to update server)'}'),
                                     action: SnackBarAction(label: 'Undo', onPressed: () async {
                                       // revert locally first
                                       setState(() {
@@ -1051,6 +1268,72 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
         return FadeTransition(opacity: anim, child: SlideTransition(position: anim.drive(tween), child: child));
       },
     );
+  }
+
+  /// Quick mark-as-done helper used by the table action button.
+  Future<void> _markAsDoneQuick(String id) async {
+    if (id.isEmpty) return;
+    // optimistic UI update
+    String prevStatus = 'Pending';
+    final idx = _assignedStations.indexWhere((it) => (it['id'] ?? '') == id);
+    if (idx == -1) return;
+    prevStatus = (_assignedStations[idx]['status'] ?? 'Pending').toString();
+    setState(() {
+      _assignedStations[idx]['status'] = 'Done';
+    });
+
+    // try to update all recorded document paths
+    final List<String> docPaths = List<String>.from(_assignedStations[idx]['documentPaths'] ?? <String>[]);
+    bool updateSucceeded = false;
+    if (docPaths.isNotEmpty) {
+      try {
+        final batch = FirebaseFirestore.instance.batch();
+        for (final p in docPaths) {
+          final ref = FirebaseFirestore.instance.doc(p);
+          batch.update(ref, {'status': 'Done'});
+        }
+        await batch.commit();
+        updateSucceeded = true;
+      } catch (err) {
+        debugPrint('Batch update failed: $err');
+        // fallback: try individually
+        for (final p in docPaths) {
+          try {
+            await FirebaseFirestore.instance.doc(p).update({'status': 'Done'});
+            updateSucceeded = true;
+          } catch (e) {
+            debugPrint('Failed updating $p: $e');
+          }
+        }
+      }
+    }
+
+    final snack = SnackBar(
+      content: Text('Marked "${_assignedStations[idx]['stationName'] ?? ''}" as done.${updateSucceeded ? '' : ' (local only)'}'),
+      action: SnackBarAction(label: 'Undo', onPressed: () async {
+        setState(() {
+          _assignedStations[idx]['status'] = prevStatus;
+        });
+        if (updateSucceeded && docPaths.isNotEmpty) {
+          try {
+            final batch = FirebaseFirestore.instance.batch();
+            for (final p in docPaths) {
+              final ref = FirebaseFirestore.instance.doc(p);
+              batch.update(ref, {'status': prevStatus});
+            }
+            await batch.commit();
+          } catch (err) {
+            debugPrint('Failed to undo on server: $err');
+            for (final p in docPaths) {
+              try {
+                await FirebaseFirestore.instance.doc(p).update({'status': prevStatus});
+              } catch (_) {}
+            }
+          }
+        }
+      }),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snack);
   }
 
   String _initials(String name) {

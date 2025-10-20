@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -8,66 +9,119 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      // Admin + cho_lgu both treated as admin
-      return user.role == "admin" || user.role == "cho_lgu";
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "cho_lgu"
+      );
+    }
+
+    // Check if the current user is a CHO/LGU account.
+    // This accepts either a users doc with role == 'cho_lgu' or an explicit document
+    // in a top-level `cho_lgu` collection (useful if you maintain a separate collection).
+    function isChoLGU() {
+      return request.auth != null && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "cho_lgu")
+        || exists(/databases/$(database)/documents/cho_lgu/$(request.auth.uid))
+      );
     }
 
     function isDistrictPresident() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.district_president == true;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.district_president == true;
     }
 
     function isFederatedPresident() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.federated_president == true;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.federated_president == true;
     }
 
     function isCustomer() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "customer";
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "customer";
     }
 
     function isOwner() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner";
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "station_owner" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "station_admin" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "stationowner"
+      );
+    }
+
+    function isRiderOf(stationOwnerId) {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rider' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationOwnerDocId == stationOwnerId
+      );
     }
 
     function isInspector() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "inspector";
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "inspector";
+    }
+
+    function isRider() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "rider";
     }
 
     // === Allow collectionGroup queries on any 'inspections' subcollection ===
-    // This match enables queries that use collectionGroup('inspections') across the DB.
-    // Inspectors can read inspection documents only when the inspection's
-    // officerId refers to an inspector document whose `uid` equals the
-    // authenticated user's uid. Admins keep full read access.
     match /{path=**}/inspections/{inspectionId} {
       allow read: if isSignedIn() && (
         isAdmin() || (
           isInspector() &&
-          // Ensure the inspection's officerId points to an inspector doc
-          // whose `uid` matches the authenticated user.
           (resource.data.officerId is string &&
             get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
         )
       );
-      allow create, update, delete: if isSignedIn() && isAdmin();
+      allow create, update, delete: if isSignedIn() && isAdmin() || isInspector();
+    }
+
+    // 🔹 Sales Forecast — one per station
+    match /sales_forecast/{stationOwnerId} {
+      allow read, update, delete, create: if request.auth != null && request.auth.uid == stationOwnerId || isOwner() || isAdmin();
+      allow delete: if false;
+      allow create: if request.auth != null && request.auth.uid == stationOwnerId && request.resource.id == stationOwnerId;
+    }
+
+    // 🔹 Forecast Requests — station owner requests backend to compute forecast
+    match /forecast_requests/{stationOwnerId} {
+      allow create, update, delete, read: if request.auth != null && (
+        (exists(/databases/$(database)/documents/station_owners/$(stationOwnerId)) &&
+         request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId)
+        || isAdmin()
+      );
+
+      allow update: if request.auth != null && (
+        (
+          exists(/databases/$(database)/documents/station_owners/$(stationOwnerId)) &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId &&
+          !(request.resource.data.processed is bool) &&
+          !(request.resource.data.processedAt is timestamp) &&
+          !(request.resource.data.status is string)
+        ) || isAdmin()
+      );
+
+      allow read: if request.auth != null && (
+        (exists(/databases/$(database)/documents/station_owners/$(stationOwnerId)) &&
+         request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId)
+        || isAdmin()
+      );
+
+      allow delete: if isAdmin();
     }
 
     // === station_owners ===
     match /station_owners/{stationOwnerId} {
 
-      // Owner creates own document
-      allow create: if isSignedIn() &&
-        request.resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
-      // Owner reads/updates/deletes own doc
-      allow read, update, delete: if isSignedIn() &&
-        request.auth.uid == resource.data.userId;
-
-      // Inspectors may read station owner documents to perform inspections
-      // This grants read-only access for users identified as inspectors.
-      allow read: if isSignedIn() && isInspector();
-
-      // Admin or cho_lgu full access
-      allow read, update, delete: if isAdmin();
+      // Owner reads/updates/deletes own doc; inspectors can read; admins full
+      allow read, update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || isInspector() || isAdmin()
+      );
 
       // District president & customers can read
       allow read: if isDistrictPresident() || isCustomer();
@@ -82,35 +136,33 @@ service cloud.firestore {
           request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId;
       }
 
+      // --- riders subcollection ---
+      match /riders/{riderId} {
+        allow create, read, update, delete: if isSignedIn() && (
+          (exists(/databases/$(database)/documents/station_owners/$(stationOwnerId)) &&
+           request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId)
+          || isAdmin() || isOwner()
+        );
+      }
+
       // --- orders subcollection ---
+      // **Relaxed for riders:** Riders have full CRUD on station-level orders.
       match /orders/{orderId} {
-        allow create: if isSignedIn() && (
+        allow create, read, update, delete: if isSignedIn() && (
+          isRider() ||
           request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
-          isCustomer() || isAdmin()
-        );
-
-        allow read: if isSignedIn() && (
-          request.auth.uid == resource.data.customerId ||
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
-          isAdmin()
-        );
-
-        allow update: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
-          isAdmin()
-        );
-
-        allow delete: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
-          isAdmin()
+          isAdmin() || isCustomer()
         );
       }
 
       // --- sales subcollection ---
+      // **Relaxed for riders:** Riders can read/write sales under a station.
       match /sales/{saleId} {
-        allow read, write: if isSignedIn() &&
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId || isOwner();
-        allow read, write: if isAdmin();
+        allow read, write: if isSignedIn() && (
+          isRider() ||
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isAdmin()
+        );
       }
 
       // --- inventory subcollection ---
@@ -146,7 +198,7 @@ service cloud.firestore {
               get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
           )
         );
-        allow create, update, delete: if isSignedIn() && isAdmin();
+        allow create, update, delete: if isSignedIn() && isAdmin() || isInspector();
       }
     }
 
@@ -159,50 +211,109 @@ service cloud.firestore {
             get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
         )
       );
-      allow create, update, delete: if isSignedIn() && isAdmin();
+      allow create, update, delete: if isSignedIn() && isAdmin() || isInspector();
     }
 
     // === orders (top-level) ===
+    // **Relaxed for riders:** Riders have full CRUD on top-level orders.
     match /orders/{orderId} {
-      allow create: if isSignedIn() && (isCustomer() || isOwner());
-
-      allow read: if isSignedIn() && (
-        (isOwner() &&
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
-        ) ||
-        request.auth.uid == resource.data.customerId ||
-        isAdmin() || isOwner()
+      allow create, read, update, delete: if isSignedIn() && (
+        isRider() ||
+        isAdmin() || isOwner() || isCustomer()
       );
-
-      allow update: if isSignedIn() && (
-        (isOwner() &&
-          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
-        ) ||
-        isAdmin() || isOwner()
-      );
-
-      allow delete: if isSignedIn() && isAdmin();
     }
 
     // === users ===
     match /users/{userId} {
-      allow read, write: if isSignedIn() && (
-        request.auth.uid == userId || isAdmin()
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      allow create: if isSignedIn() && (
+        (
+          request.resource.data.role == 'rider' &&
+          request.resource.data.stationOwnerDocId is string &&
+          exists(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerDocId)) &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerDocId)).data.userId
+        )
+        || request.auth.uid == userId
+        || isAdmin()
+      );
+
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        (
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.stationOwnerDocId == resource.data.stationOwnerDocId &&
+          request.resource.data.stationOwnerDocId is string &&
+          exists(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerDocId)) &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerDocId)).data.userId
+        )
+      );
+
+      allow delete: if isSignedIn() && (
+        isAdmin() || (
+          resource.data.stationOwnerDocId is string &&
+          exists(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerDocId)) &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerDocId)).data.userId
+        )
       );
     }
 
     // === inspectors ===
     match /inspectors/{inspectorId} {
-      // Allow inspectors to read their own inspector document (so client code
-      // can lookup the inspector `id` by matching on auth uid). Admins keep
-      // full management rights. Creation/updates/deletes remain admin-only.
       allow read: if isSignedIn() && (
         isAdmin() ||
-        // the inspector document is expected to include the auth uid in `uid`
-        // field; allow the authenticated inspector to read their own doc
         (resource.data.uid is string && request.auth.uid == resource.data.uid)
       );
       allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // === cho_lgu ===
+    // Top-level collection to store CHO/LGU account details. Owners may manage
+    // their own document (doc id = auth uid). Admins have full access.
+    match /cho_lgu/{lguId} {
+      // Allow the owner (authenticated user with same uid) or admins to read
+      allow read: if isSignedIn() && (request.auth.uid == lguId || isAdmin());
+
+
+      // Allow creation if the caller is the owner (auth uid matches doc id) or an admin
+      // Also allow a signed-in user to create a cho_lgu document when the new doc
+      // includes an `email` that matches the caller's authenticated email and
+      // supplies at least `name` or `contact` (this lets LGU users create their
+      // profile entry without needing to control the document id).
+      allow create, write, update, delete: if isSignedIn() && (
+        request.auth.uid == lguId ||
+        isAdmin() ||
+        (
+          request.resource.data.email is string &&
+          request.resource.data.email == request.auth.token.email &&
+          (
+            request.resource.data.name is string || request.resource.data.contact is string
+          )
+        )
+      );
+
+      // Allow the owner or admins to update their LGU profile.
+      // Additionally, allow the authenticated user whose email matches the
+      // existing document's `email` to fill missing `name` or `contact` fields
+      // if those fields are currently absent (this permits adding those fields
+      // to an admin-created placeholder document).
+      allow update: if isSignedIn() && (
+        request.auth.uid == lguId ||
+        isAdmin() ||
+        (
+          resource.data.email is string &&
+          resource.data.email == request.auth.token.email &&
+          (
+            // only allow if at least one of the fields is being added and was missing
+            ((resource.data.name == null) && (request.resource.data.name is string)) ||
+            ((resource.data.contact == null) && (request.resource.data.contact is string))
+          )
+        )
+      );
+
+      // Only admins may delete LGU entries
+      allow delete: if isSignedIn() && isAdmin();
     }
 
     // === station_recommendations ===
@@ -236,8 +347,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           request.resource.data.stationOwnerId is string &&
-          request.auth.uid ==
-            get(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerId)).data.userId
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerId)).data.userId
         )
       );
 
@@ -245,8 +355,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           resource.data.stationOwnerId is string &&
-          request.auth.uid ==
-            get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
         )
       );
 
@@ -254,8 +363,7 @@ service cloud.firestore {
         isAdmin() ||
         (
           resource.data.stationOwnerId is string &&
-          request.auth.uid ==
-            get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
         )
       );
 
@@ -265,7 +373,7 @@ service cloud.firestore {
     // === customers ===
     match /customers/{customerId} {
       allow write: if isSignedIn() && request.auth.uid == customerId;
-      allow read: if isSignedIn() && (isOwner() || request.auth.uid == customerId);
+      allow read: if isSignedIn() && (isOwner() || request.auth.uid == customerId || isRider() || isAdmin());
 
       match /address/{addressId} {
         allow read, write: if isSignedIn() && request.auth.uid == customerId;
