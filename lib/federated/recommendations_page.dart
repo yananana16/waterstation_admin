@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-// Using a static OpenStreetMap image with an overlayed circle for 50m radius
 
 /// Model for a federated-safe recommendation
 class Recommendation {
