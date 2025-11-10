@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,7 +16,6 @@ class Recommendation {
   final int rangeRadius;
   final String priority;
   final String insight;
-  final String explanation;
 
   Recommendation({
     required this.district,
@@ -24,19 +24,11 @@ class Recommendation {
     required this.rangeRadius,
     required this.priority,
     required this.insight,
-    required this.explanation,
   });
 
   /// Transform raw backend data into federated-safe insights
   factory Recommendation.fromRaw(Map<String, dynamic> data) {
-    String explanation = data['explanation'] ?? "";
-    String priority = "Medium";
-
-    if (explanation.contains("highest sales")) {
-      priority = "High";
-    } else if (explanation.contains("low")) {
-      priority = "Low";
-    }
+    String priority = "";
 
     String safeInsight =
         "Recommended Location identified in ${data['district']} district";
@@ -48,7 +40,6 @@ class Recommendation {
       rangeRadius: data['range_radius'] ?? 50,
       priority: priority,
       insight: safeInsight,
-      explanation: explanation,
     );
   }
 }
@@ -63,45 +54,29 @@ class RecommendationsPage extends StatefulWidget {
 
 class _RecommendationsPageState extends State<RecommendationsPage> {
   bool _isRunning = false;
-  bool _cancelRequested = false;
+  http.Client? _httpClient;
 
   /// Trigger FastAPI backend to regenerate recommendations
   Future<void> _triggerServicePy() async {
     setState(() {
       _isRunning = true;
-      _cancelRequested = false;
     });
+
+    // Create a new HTTP client for this request
+    _httpClient = http.Client();
 
     try {
       final url = Uri.parse(
         "https://ai-recommendation-model.onrender.com/generate_recommendations",
       );
 
-      final response = await http.post(
+      final response = await _httpClient!.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"mode": "firestore"}),
       );
 
       if (!mounted) return;
-      
-      if (_cancelRequested) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.info, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Generation cancelled by user'),
-              ],
-            ),
-            backgroundColor: Color(0xFFED8936),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        setState(() => _isRunning = false);
-        return;
-      }
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -127,26 +102,57 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         );
       }
     } catch (e) {
-      if (mounted && !_cancelRequested) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error triggering service: $e"),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (mounted) {
+        // Check if this is a cancellation
+        if (e.toString().contains('Connection closed') || 
+            e.toString().contains('ClientException')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.info, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Generation cancelled by user'),
+                ],
+              ),
+              backgroundColor: Color(0xFFED8936),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error triggering service: $e"),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
-    }
-
-    if (mounted) {
-      setState(() => _isRunning = false);
+    } finally {
+      _httpClient?.close();
+      _httpClient = null;
+      if (mounted) {
+        setState(() => _isRunning = false);
+      }
     }
   }
 
   void _cancelGeneration() {
+    // Close the HTTP client to cancel the ongoing request
+    _httpClient?.close();
+    _httpClient = null;
+    
     setState(() {
-      _cancelRequested = true;
+      _isRunning = false;
     });
+  }
+
+  @override
+  void dispose() {
+    // Clean up HTTP client if widget is disposed
+    _httpClient?.close();
+    super.dispose();
   }
 
   @override
@@ -485,7 +491,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -501,7 +507,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     ),
                     child: const Icon(Icons.location_on, color: Colors.white, size: 18),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       rec.district,
@@ -538,9 +544,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     )
                 ],
               ),
-              const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF7FAFC),
                   borderRadius: BorderRadius.circular(10),
@@ -549,7 +554,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                 child: Row(
                   children: [
                     Icon(Icons.lightbulb_outline, size: 16, color: Colors.amber[700]),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         rec.insight,
@@ -561,25 +566,29 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Divider(height: 1, color: Colors.grey.shade200),
-              const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      rec.explanation,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700], height: 1.4),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.auto_awesome, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'AI-powered analysis based on customer density, sales patterns, and geographic distribution',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const Spacer(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -598,7 +607,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                           _showMapSheet(context, rec.lat, rec.lng, rec.district);
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: const [
