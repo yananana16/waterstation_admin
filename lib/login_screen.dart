@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart'; // Add Firebase Auth import/ 
 import 'federated/admin_dashboard.dart'; // Import Admin Dashboard
 import 'district/district_admin_dashboard.dart'; // Import District Admin Dashboard
 import 'LGU/lgu_dashboard.dart'; // Add this import
+import 'inspector/inspector_dashboard.dart'; // Inspector dashboard
+import 'services/firestore_repository.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,8 +35,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (userCredential.user != null) {
         String uid = userCredential.user!.uid;
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+        final userDoc = await FirestoreRepository.instance.getDocumentOnce(
+          'users/$uid',
+          () => FirebaseFirestore.instance.collection('users').doc(uid),
+        );
+        final userData = (userDoc.data() as Map<String, dynamic>?) ?? {};
 
         // Determine role and route accordingly
         if (userDoc.id == uid && userData['federated_president'] == true && userData['role'] == 'admin') {
@@ -53,23 +58,31 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        // inspector route
+        if (userDoc.id == uid && userData['role'] == 'inspector') {
+          setState(() { _isLoading = false; });
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const InspectorDashboard()));
+          return;
+        }
+
         // If not found in users, check station_owners for district admin
-        QuerySnapshot stationOwnerQuery = await FirebaseFirestore.instance
-            .collection('station_owners')
-            .where('userId', isEqualTo: uid)
-            .where('district_president', isEqualTo: true)
-            .where('status', isEqualTo: 'approved')
-            .limit(1)
-            .get();
+        final stationOwnerQuery = await FirestoreRepository.instance.getCollectionOnce(
+          'station_owners_user_$uid',
+          () => FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('userId', isEqualTo: uid)
+              .where('district_president', isEqualTo: true)
+              .where('status', isEqualTo: 'approved')
+              .limit(1),
+        );
 
         if (stationOwnerQuery.docs.isNotEmpty) {
           var stationOwnerDoc = stationOwnerQuery.docs.first;
           String stationOwnerDocId = stationOwnerDoc.id;
-          QuerySnapshot districtQuery = await FirebaseFirestore.instance
-              .collection('districts')
-              .where('customUID', isEqualTo: stationOwnerDocId)
-              .limit(1)
-              .get();
+          final districtQuery = await FirestoreRepository.instance.getCollectionOnce(
+            'districts_custom_$stationOwnerDocId',
+            () => FirebaseFirestore.instance.collection('districts').where('customUID', isEqualTo: stationOwnerDocId).limit(1),
+          );
           if (districtQuery.docs.isNotEmpty) {
             setState(() { _isLoading = false; });
             Navigator.push(context, MaterialPageRoute(builder: (context) => DistrictAdminDashboard()));
@@ -122,13 +135,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // Left side: Logo and illustration
                   Expanded(
-                    flex: 1,
+                    //flex: 1,
                     child: Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           colors:[
-                            Color(0xFFF9FBFF), // near white
-                            Color(0xFFEAF3FF), // light blue
+                            Color.fromARGB(255, 249, 254, 255), // near white
+                            Color.fromARGB(255, 234, 253, 255), // light blue
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -157,14 +170,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(
                                     fontSize: screenWidth > 800 ? 24 : 20,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
+                                    color: Color.fromARGB(255, 0, 92, 118),
                                   ),
                                 ),
                                 Text(
                                   'Where safety meets efficiency.',
                                   style: TextStyle(
                                     fontSize: screenWidth > 800 ? 14 : 12,
-                                    color: Colors.black54,
+                                    color: Color.fromARGB(255, 0, 92, 118),
                                   ),
                                 ),
                               ],
@@ -195,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'WELCOME',
                             style: TextStyle(
                               fontSize: screenWidth > 800 ? 50 : 20,
-                              color: Color(0xFF0066B2),
+                              color: Color.fromARGB(255, 0, 92, 118),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -214,11 +227,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Username',
                               labelStyle: TextStyle(
                                 fontSize: 16,
-                                color: Color(0xFF0066B2), // Set label text color to blue
+                                color: Color.fromARGB(255, 0, 92, 118), // Set label text color to blue
                               ),
-                              prefixIcon: Icon(Icons.person, color: Color(0xFF0066B2)),
+                              prefixIcon: Icon(Icons.person, color: Color(0xFF087693)),
                               filled: true,
-                              fillColor: Color(0xFFEAF3FF),
+                              fillColor: Color.fromARGB(255, 234, 251, 255),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -233,15 +246,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Password',
                               labelStyle: TextStyle(
                                 fontSize: 16,
-                                color: Color(0xFF0066B2), // Set label text color to blue
+                                color: Color.fromARGB(255, 0, 92, 118), // Set label text color to blue
                               ),
-                              prefixIcon: Icon(Icons.lock, color: Color(0xFF0066B2)),
+                              prefixIcon: Icon(Icons.lock, color: Color(0xFF087693)),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _isPasswordVisible
                                       ? Icons.visibility
                                       : Icons.visibility_off,
-                                  color: Color(0xFF0066B2),
+                                  color: Color(0xFF087693),
                                 ),
                                 onPressed: () {
                                   setState(() {
@@ -250,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 },
                               ),
                               filled: true,
-                              fillColor: Color(0xFFEAF3FF),
+                              fillColor: Color.fromARGB(255, 234, 251, 255),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -268,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 'Forgot Password? Reset',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Color(0xFF0066B2),
+                                  color: Color.fromARGB(255, 0, 92, 118),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -278,7 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ElevatedButton(
                             onPressed: _handleLogin,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
+                              backgroundColor: Color(0xFF0094c3),
                               padding: EdgeInsets.symmetric(
                                 horizontal: screenWidth > 800 ? 50 : 30,
                                 vertical: screenWidth > 800 ? 18 : 12,
@@ -316,3 +329,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

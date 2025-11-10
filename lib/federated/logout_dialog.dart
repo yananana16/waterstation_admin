@@ -17,8 +17,8 @@ class LogoutDialog extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 32,
-                backgroundColor: Colors.blueAccent.withOpacity(0.1),
-                child: const Icon(Icons.logout, color: Colors.blueAccent, size: 38),
+                backgroundColor: Color.fromARGB(255, 108, 187, 214).withOpacity(0.1),
+                child: const Icon(Icons.logout, color: Color(0xFF087693), size: 38),
               ),
               const SizedBox(height: 18),
               const Text(
@@ -27,7 +27,7 @@ class LogoutDialog extends StatelessWidget {
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 22,
-                  color: Colors.blueAccent,
+                  color: Color.fromARGB(255, 0, 92, 118),
                 ),
               ),
               const SizedBox(height: 12),
@@ -45,7 +45,7 @@ class LogoutDialog extends StatelessWidget {
                     height: 44,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: Color(0xFF0094c3),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold),
@@ -61,8 +61,8 @@ class LogoutDialog extends StatelessWidget {
                     height: 44,
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blueAccent,
-                        side: const BorderSide(color: Colors.blueAccent, width: 1.5),
+                        foregroundColor: Color(0xFF0094c3),
+                        side: const BorderSide(color: Color(0xFF0094c3), width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold),
                       ),
@@ -79,3 +79,4 @@ class LogoutDialog extends StatelessWidget {
     );
   }
 }
+

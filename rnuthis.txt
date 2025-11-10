@@ -1,0 +1,2 @@
+$env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\Users\Andrew\Documents\serviceAccountKey.json'
+node .\scripts\create_inspector_auth.js --watch 

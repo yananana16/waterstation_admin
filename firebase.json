@@ -1,1 +1,28 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"waterstation-3464b","appId":"1:333018391428:android:786e9f810e9a5e71f3f3d1","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"waterstation-3464b","configurations":{"android":"1:333018391428:android:786e9f810e9a5e71f3f3d1","ios":"1:333018391428:ios:93bb64463b226d8df3f3d1","macos":"1:333018391428:ios:93bb64463b226d8df3f3d1","web":"1:333018391428:web:1533679b3fd18a2af3f3d1","windows":"1:333018391428:web:9c725841559fb10af3f3d1"}}}}}}
+{
+	"flutter": {
+		"platforms": {
+			"android": {
+				"default": {
+					"projectId": "waterstation-3464b",
+					"appId": "1:333018391428:android:786e9f810e9a5e71f3f3d1",
+					"fileOutput": "android/app/google-services.json"
+				}
+			},
+			"dart": {
+				"lib/firebase_options.dart": {
+					"projectId": "waterstation-3464b",
+					"configurations": {
+						"android": "1:333018391428:android:786e9f810e9a5e71f3f3d1",
+						"ios": "1:333018391428:ios:93bb64463b226d8df3f3d1",
+						"macos": "1:333018391428:ios:93bb64463b226d8df3f3d1",
+						"web": "1:333018391428:web:1533679b3fd18a2af3f3d1",
+						"windows": "1:333018391428:web:9c725841559fb10af3f3d1"
+					}
+				}
+			}
+		}
+	},
+	"firestore": {
+		"rules": "firestore.rules"
+	}
+}

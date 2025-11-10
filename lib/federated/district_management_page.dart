@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 
 class DistrictManagementPage extends StatelessWidget {
   final void Function(void Function()) setState;
@@ -50,7 +51,7 @@ class DistrictManagementPage extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
-                        color: Colors.blueAccent,
+                        color: Color.fromARGB(255, 0, 92, 118),
                         letterSpacing: 0.5,
                       ),
                       textAlign: TextAlign.center,
@@ -102,14 +103,17 @@ class DistrictManagementPage extends StatelessWidget {
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 17,
-                                                color: Colors.blueAccent,
+                                                color: Color.fromARGB(255, 0, 92, 118),
                                               ),
                                             ),
                                             const SizedBox(height: 8),
                                             FutureBuilder<DocumentSnapshot?>(
                                               future: (customUID != null && customUID.isNotEmpty)
-                                                  ? FirebaseFirestore.instance.collection('station_owners').doc(customUID).get()
-                                                  : Future.value(null),
+                                                  ? FirestoreRepository.instance.getDocumentOnce(
+                                                      'station_owners/$customUID',
+                                                      () => FirebaseFirestore.instance.collection('station_owners').doc(customUID),
+                                                    )
+                                                  : Future<DocumentSnapshot?>.value(null),
                                               builder: (context, snapshot) {
                                                 String ownerDisplay = "Not assigned";
                                                 if (customUID != null && customUID.isNotEmpty && snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
@@ -126,7 +130,7 @@ class DistrictManagementPage extends StatelessWidget {
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w500,
                                                     fontSize: 15,
-                                                    color: ownerDisplay == "Not assigned" ? Colors.grey : Colors.blue[900],
+                                                    color: ownerDisplay == "Not assigned" ? Colors.grey : Color.fromARGB(255, 0, 92, 118),
                                                   ),
                                                 );
                                               },
@@ -138,9 +142,9 @@ class DistrictManagementPage extends StatelessWidget {
                                         width: 52,
                                         height: 52,
                                         decoration: BoxDecoration(
-                                          color: Colors.blue[800],
+                                          color: Color(0xFF087693),
                                           borderRadius: BorderRadius.circular(12),
-                                          boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.12), blurRadius: 8)],
+                                          boxShadow: [BoxShadow(color: Color(0xFF087693).withOpacity(0.12), blurRadius: 8)],
                                         ),
                                         child: IconButton(
                                           icon: const Icon(Icons.people, color: Colors.white, size: 30),
@@ -188,10 +192,10 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('districts')
-          .where('districtName', isEqualTo: widget.districtName)
-          .get(),
+      future: FirestoreRepository.instance.getCollectionOnce(
+        'districts_${widget.districtName}',
+        () => FirebaseFirestore.instance.collection('districts').where('districtName', isEqualTo: widget.districtName),
+      ),
       builder: (context, districtSnap) {
         if (districtSnap.connectionState == ConnectionState.waiting) {
           return const AlertDialog(content: Center(child: CircularProgressIndicator()));
@@ -210,11 +214,11 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
           title: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.blueAccent),
+                icon: const Icon(Icons.close, color: Color(0xFF087693)),
                 onPressed: () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: 12),
-              Text(widget.districtName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blue[900])),
+              Text(widget.districtName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color.fromARGB(255, 0, 92, 118))),
             ],
           ),
           content: SizedBox(
@@ -223,10 +227,13 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Current President Card
-                FutureBuilder<DocumentSnapshot>(
+                FutureBuilder<DocumentSnapshot?>(
                   future: currentPresidentUID != null && currentPresidentUID.isNotEmpty
-                      ? FirebaseFirestore.instance.collection('station_owners').doc(currentPresidentUID).get()
-                      : Future.value(null),
+                      ? FirestoreRepository.instance.getDocumentOnce(
+                          'station_owners/$currentPresidentUID',
+                          () => FirebaseFirestore.instance.collection('station_owners').doc(currentPresidentUID),
+                        )
+                      : Future<DocumentSnapshot?>.value(null),
                   builder: (context, ownerSnap) {
                     String presidentName = "Not assigned";
                     String stationName = "";
@@ -253,7 +260,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                           children: [
                             const CircleAvatar(
                               radius: 30,
-                              backgroundColor: Colors.blueAccent,
+                              backgroundColor: Color(0xFF087693),
                               child: Icon(Icons.person, color: Colors.white, size: 36),
                             ),
                             const SizedBox(width: 22),
@@ -263,7 +270,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                 children: [
                                   Text(
                                     "Current President: $presidentName",
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color.fromARGB(255, 0, 92, 118)),
                                   ),
                                   if (stationName.isNotEmpty)
                                     Text(stationName, style: const TextStyle(fontSize: 14, color: Colors.black)),
@@ -288,14 +295,14 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.blue[100]!),
+                            border: Border.all(color: Color.fromARGB(255, 226, 244, 255)),
                             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
                           ),
                           child: TextField(
                             decoration: InputDecoration(
                               hintText: "Search Station Owner, Email, or Station Name",
                               border: InputBorder.none,
-                              prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                              prefixIcon: const Icon(Icons.search, color: Color(0xFF087693)),
                               contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
                             ),
                             onChanged: (val) {
@@ -355,7 +362,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                         children: [
                                           CircleAvatar(
                                             radius: 24,
-                                            backgroundColor: Colors.blueAccent,
+                                            backgroundColor: Color(0xFF087693),
                                             child: Icon(
                                               isPresident ? Icons.verified_user : Icons.person,
                                               color: Colors.white,
@@ -372,7 +379,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 16,
-                                                    color: Colors.blue[900],
+                                                    color: Color.fromARGB(255, 0, 92, 118),
                                                   ),
                                                 ),
                                                 if (stationName.isNotEmpty)
@@ -384,7 +391,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                           ),
                                           if (!isPresident)
                                             IconButton(
-                                              icon: const Icon(Icons.check_circle, color: Colors.blueAccent, size: 30),
+                                              icon: const Icon(Icons.check_circle, color: Color(0xFF087693), size: 30),
                                               tooltip: "Assign as President",
                                               onPressed: () async {
                                                 await FirebaseFirestore.instance
@@ -420,3 +427,4 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
     );
   }
 }
+

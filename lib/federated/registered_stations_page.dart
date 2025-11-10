@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_files_viewer.dart';
@@ -100,10 +101,10 @@ class RegisteredStationsPage extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blueAccent.withOpacity(0.2), width: 2),
+            border: Border.all(color: Color(0xFF087693).withOpacity(0.2), width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.07),
+                color: Color(0xFF087693).withOpacity(0.07),
                 blurRadius: 12,
                 spreadRadius: 2,
                 offset: const Offset(0, 4),
@@ -113,7 +114,10 @@ class RegisteredStationsPage extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
               builder: (context, snapshot) {
                 final center = mapSelectedLocation ?? LatLng(10.7202, 122.5621);
                 List<Marker> markers = [];
@@ -148,13 +152,13 @@ class RegisteredStationsPage extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.blueAccent.withOpacity(0.15),
+                                    color: Color(0xFF087693).withOpacity(0.15),
                                     blurRadius: 6,
                                     spreadRadius: 1,
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
+                              child: const Icon(Icons.location_on, color: Color(0xFF087693), size: 32),
                             ),
                           ),
                         ),
@@ -226,7 +230,10 @@ class RegisteredStationsPage extends StatelessWidget {
               SizedBox(
                 width: 700,
                 child: FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance.collection('districts').get(),
+                  future: FirestoreRepository.instance.getCollectionOnce(
+                    'districts',
+                    () => FirebaseFirestore.instance.collection('districts'),
+                  ),
                   builder: (context, snapshot) {
                     final docs = snapshot.data?.docs ?? [];
                     // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
@@ -275,8 +282,33 @@ class RegisteredStationsPage extends StatelessWidget {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: Icon(Icons.filter_alt, color: Colors.blue[800]),
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(Icons.filter_alt, color: Color(0xFF087693)),
+                          ),
+                          // Clear filters button
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: TextButton.icon(
+                              onPressed: () {
+                                // Clear the search input and district filter, then refresh parent state
+                                searchController.clear();
+                                onSearchQueryChanged('');
+                                onDistrictFilterChanged(null);
+                                try {
+                                  setState(() {});
+                                } catch (_) {}
+                              },
+                              icon: const Icon(Icons.clear, size: 18, color: Color(0xFF087693)),
+                              label: const Text(
+                                'Clear',
+                                style: TextStyle(color: Color.fromARGB(255, 0, 92, 118), fontSize: 13),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                minimumSize: const Size(0, 0),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -292,7 +324,10 @@ class RegisteredStationsPage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance.collection('station_owners').get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners',
+                () => FirebaseFirestore.instance.collection('station_owners'),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -331,28 +366,29 @@ class RegisteredStationsPage extends StatelessWidget {
                 return Column(
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Container(
-                          width: 1200,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                      child: ConstrainedBox(
+  constraints: BoxConstraints(
+    minWidth: MediaQuery.of(context).size.width * 0.9, // at least 90% of screen
+  ),
+  child: Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.06),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
                           child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
+                            headingRowColor: WidgetStateProperty.all(const Color.fromARGB(255, 226, 244, 255)),
                             dataRowColor: WidgetStateProperty.resolveWith<Color?>(
                               (Set<WidgetState> states) {
                                 if (states.contains(WidgetState.selected)) {
-                                  return Colors.blueAccent.withOpacity(0.08);
+                                  return Color(0xFF087693).withOpacity(0.08);
                                 }
                                 return Colors.white;
                               },
@@ -368,7 +404,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                     'Name of Station',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
+                                      color: Color.fromARGB(255, 0, 92, 118),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -381,7 +417,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                     'Owner',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
+                                      color: Color.fromARGB(255, 0, 92, 118),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -394,7 +430,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                     'District',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
+                                      color: Color.fromARGB(255, 0, 92, 118),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -407,7 +443,20 @@ class RegisteredStationsPage extends StatelessWidget {
                                     'Address',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
+                                      color: Color.fromARGB(255, 0, 92, 118),
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Text(
+                                    'CHO inspection Status',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color.fromARGB(255, 0, 92, 118),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -420,7 +469,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                     'Actions',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
+                                      color: Color.fromARGB(255, 0, 92, 118),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -445,6 +494,14 @@ class RegisteredStationsPage extends StatelessWidget {
                                 lat = (data['latitude'] as num?)?.toDouble();
                                 lng = (data['longitude'] as num?)?.toDouble();
                               }
+                // Normalize status to only show 'Done' or 'Pending'.
+                // Any value equal to 'done' (case-insensitive) => 'Done', otherwise => 'Pending'.
+                final rawStatus = (data['status'] ?? '').toString();
+                final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                final statusColor = statusNormalized == 'Done'
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFFFFC107);
+
                               return DataRow(
                                 cells: [
                                   DataCell(
@@ -481,10 +538,70 @@ class RegisteredStationsPage extends StatelessWidget {
                                     ),
                                   ),
                                   DataCell(
+                                    // Show CHO inspection status by querying the inspections subcollection for the latest inspection
+                                    FutureBuilder<QuerySnapshot>(
+                                      future: () async {
+                                        final now = DateTime.now();
+                                        final ym = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+                                        return FirebaseFirestore.instance
+                                            .collection('station_owners')
+                                            .doc(doc.id)
+                                            .collection('inspections')
+                                            .where('monthlyInspectionMonth', isEqualTo: ym)
+                                            .limit(1)
+                                            .get();
+                                      }(),
+                                      builder: (ctx, inspSnap) {
+                                        String displayStatus = statusNormalized; // fallback to owner doc status
+                                        Color displayColor = statusColor;
+                                        if (inspSnap.connectionState == ConnectionState.waiting) {
+                                          return SizedBox(
+                                            width: 90,
+                                            child: Row(
+                                              children: const [
+                                                SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                ),
+                                                SizedBox(width: 8),
+                                                Text('Loading', style: TextStyle(fontSize: 12)),
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        if (inspSnap.hasError) {
+                                          // on error, fallback to owner status
+                                          displayStatus = statusNormalized;
+                                          displayColor = statusColor;
+                                        } else if (inspSnap.hasData && inspSnap.data!.docs.isNotEmpty) {
+                                          final inspDoc = inspSnap.data!.docs.first;
+                                          final inspData = inspDoc.data() as Map<String, dynamic>;
+                                          final rawInspStatus = (inspData['status'] ?? '').toString();
+                                          final inspNormalized = rawInspStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                                          displayStatus = inspNormalized;
+                                          displayColor = inspNormalized == 'Done' ? const Color(0xFF4CAF50) : const Color(0xFFFFC107);
+                                        }
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(color: displayColor, borderRadius: BorderRadius.circular(6)),
+                                            child: Text(
+                                              displayStatus,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  DataCell(
                                     Row(
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                          icon: const Icon(Icons.location_on, color: Color(0xFF087693)),
                                           tooltip: "View on Map",
                                           onPressed: () {
                                             if (lat != null && lng != null) {
@@ -494,7 +611,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                           },
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                          icon: const Icon(Icons.description, color: Color(0xFF087693)),
                                           tooltip: "View Compliance Report",
                                           onPressed: () {
                                             onShowComplianceReportDetails(
@@ -559,7 +676,7 @@ class RegisteredStationsPage extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.blueAccent, size: 32),
+                icon: const Icon(Icons.close, color: Color(0xFF087693), size: 32),
                 onPressed: () {
                   onShowComplianceReportDetails(false, null, null, "");
                 },
@@ -570,7 +687,7 @@ class RegisteredStationsPage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1976D2),
+                  color: Color.fromARGB(255, 0, 92, 118),
                   letterSpacing: 0.7,
                 ),
               ),
@@ -582,45 +699,52 @@ class RegisteredStationsPage extends StatelessWidget {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1976D2),
+              color: Color.fromARGB(255, 0, 92, 118),
             ),
           ),
           const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black54, width: 1),
-              borderRadius: BorderRadius.circular(2),
-              color: Colors.white,
-            ),
-            child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(1),
-                1: FlexColumnWidth(1),
-              },
-              border: TableBorder.symmetric(
-                inside: BorderSide(color: Colors.black26, width: 1),
-              ),
-              children: [
-                TableRow(
+          // Normalize status for display in details view (Done or Pending only)
+          Builder(
+            builder: (ctx) {
+              final rawStatus = (data['status'] ?? '').toString();
+              final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black54, width: 1),
+                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.white,
+                ),
+                child: Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(1),
+                    1: FlexColumnWidth(1),
+                  },
+                  border: TableBorder.symmetric(
+                    inside: BorderSide(color: Colors.black26, width: 1),
+                  ),
                   children: [
-                    _detailCell(Icons.person, "Store Owner", "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim()),
-                    _detailCell(Icons.home, "Address", data['address']),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.person, "Store Owner", "${data['firstName'] ?? ''} ${data['lastName'] ?? ''}".trim()),
+                        _detailCell(Icons.home, "Address", data['address']),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.email, "Email", data['email']),
+                        _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        _detailCell(Icons.phone, "Contact Number", data['phone']),
+                        _detailCell(Icons.info, "Status", statusNormalized),
+                      ],
+                    ),
                   ],
                 ),
-                TableRow(
-                  children: [
-                    _detailCell(Icons.email, "Email", data['email']),
-                    _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
-                  ],
-                ),
-                TableRow(
-                  children: [
-                    _detailCell(Icons.phone, "Contact Number", data['phone']),
-                    _detailCell(Icons.info, "Status", data['status']),
-                  ],
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),
@@ -632,7 +756,7 @@ class RegisteredStationsPage extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.blueAccent, size: 22),
+          Icon(icon, color: Color(0xFF087693), size: 22),
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(width: 8),

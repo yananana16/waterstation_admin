@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'compliance_files_viewer.dart';
+import '../services/firestore_repository.dart';
 
 class CompliancePage extends StatefulWidget {
   const CompliancePage({super.key});
@@ -22,12 +23,12 @@ class _CompliancePageState extends State<CompliancePage> {
 
   Future<void> _refreshSelectedStationData() async {
     if (selectedStationOwnerDocId != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('station_owners')
-          .doc(selectedStationOwnerDocId)
-          .get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'station_owners/${selectedStationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('station_owners').doc(selectedStationOwnerDocId),
+      );
       setState(() {
-        selectedStationData = doc.data();
+        selectedStationData = doc.data() as Map<String, dynamic>?;
       });
     }
   }
@@ -106,7 +107,7 @@ class _CompliancePageState extends State<CompliancePage> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
           decoration: BoxDecoration(
-            color: const Color(0xFFE3F2FD),
+            color: const Color.fromARGB(255, 226, 244, 255),
             borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(16),
               bottomRight: Radius.circular(16),
@@ -117,7 +118,7 @@ class _CompliancePageState extends State<CompliancePage> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 22,
-              color: Colors.blueAccent,
+              color: Color.fromARGB(255, 0, 92, 118),
               letterSpacing: 0.5,
             ),
           ),
@@ -145,7 +146,7 @@ class _CompliancePageState extends State<CompliancePage> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: complianceStatusFilter == 'district_approved'
-                            ? Colors.blueAccent
+                            ? Color(0xFF087693)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
@@ -176,7 +177,7 @@ class _CompliancePageState extends State<CompliancePage> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: complianceStatusFilter == 'approved'
-                            ? Colors.blueAccent
+                            ? Color(0xFF087693)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
@@ -204,7 +205,10 @@ class _CompliancePageState extends State<CompliancePage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: FutureBuilder<QuerySnapshot>(
-            future: FirebaseFirestore.instance.collection('districts').get(),
+            future: FirestoreRepository.instance.getCollectionOnce(
+              'districts',
+              () => FirebaseFirestore.instance.collection('districts'),
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox(height: 40, child: Align(alignment: Alignment.centerLeft, child: CircularProgressIndicator(strokeWidth: 2)));
@@ -216,7 +220,7 @@ class _CompliancePageState extends State<CompliancePage> {
               final districts = docs.map((doc) => doc['districtName']?.toString() ?? '').where((d) => d.isNotEmpty).toList();
               return Row(
                 children: [
-                  const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 16)),
+                  const Text("Filter by District:", style: TextStyle(fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118), fontSize: 16)),
                   const SizedBox(width: 12),
                   Container(
                     decoration: BoxDecoration(
@@ -253,17 +257,17 @@ class _CompliancePageState extends State<CompliancePage> {
           ),
         ),
         const SizedBox(height: 18),
-        const Divider(thickness: 1, height: 1, color: Color(0xFFB3E5FC)),
+        const Divider(thickness: 1, height: 1, color: Color.fromARGB(255, 226, 244, 255)),
         const SizedBox(height: 18),
         // Station Cards List
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('station_owners')
-                  .where('status', isEqualTo: complianceStatusFilter)
-                  .get(),
+              future: FirestoreRepository.instance.getCollectionOnce(
+                'station_owners_status_$complianceStatusFilter',
+                () => FirebaseFirestore.instance.collection('station_owners').where('status', isEqualTo: complianceStatusFilter),
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -299,7 +303,7 @@ class _CompliancePageState extends State<CompliancePage> {
                           complianceStatusFilter == 'approved'
                               ? 'No approved stations found.'
                               : 'No pending approval stations found.',
-                          style: const TextStyle(fontSize: 18, color: Colors.blueAccent, fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontSize: 18, color: Color.fromARGB(255, 0, 92, 118), fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -313,7 +317,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         scrollDirection: Axis.vertical,
                         child: DataTable(
                           columnSpacing: 18,
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFFE3F2FD)),
+                          headingRowColor: WidgetStateProperty.all(const Color.fromARGB(255, 226, 244, 255)),
                           columns: const [
                             DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
                             DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -332,7 +336,7 @@ class _CompliancePageState extends State<CompliancePage> {
                             final stationOwnerDocId = doc.id;
                             return DataRow(
                               cells: [
-                                DataCell(Text(stationName, style: const TextStyle(color: Colors.blueAccent))),
+                                DataCell(Text(stationName, style: const TextStyle(color: Color.fromARGB(255, 0, 92, 118)))),
                                 DataCell(Text(ownerName)),
                                 DataCell(Text(district)),
                                 DataCell(Text(address)),
@@ -362,7 +366,7 @@ class _CompliancePageState extends State<CompliancePage> {
                                       });
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blueAccent,
+                                      backgroundColor: Color(0xFF0094c3),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                                     ),
@@ -386,7 +390,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.chevron_left, size: 28),
-                            color: Colors.blueAccent,
+                            color: Color(0xFF087693),
                             onPressed: complianceCurrentPage > 0
                                 ? () => setState(() {
                                     complianceCurrentPage--;
@@ -395,11 +399,11 @@ class _CompliancePageState extends State<CompliancePage> {
                           ),
                           Text(
                             'Page ${totalPages == 0 ? 0 : (complianceCurrentPage + 1)} of $totalPages',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color.fromARGB(255, 0, 92, 118)),
                           ),
                           IconButton(
                             icon: const Icon(Icons.chevron_right, size: 28),
-                            color: Colors.blueAccent,
+                            color: Color(0xFF087693),
                             onPressed: (complianceCurrentPage < totalPages - 1)
                                 ? () => setState(() {
                                     complianceCurrentPage++;
@@ -429,7 +433,7 @@ class _CompliancePageState extends State<CompliancePage> {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.blueAccent, size: 32),
+                icon: const Icon(Icons.close, color: Color(0xFF087693), size: 32),
                 onPressed: () {
                   setState(() {
                     showComplianceReport = false;
@@ -444,7 +448,7 @@ class _CompliancePageState extends State<CompliancePage> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1976D2),
+                  color: Color.fromARGB(255, 0, 92, 118),
                   letterSpacing: 0.7,
                 ),
               ),
@@ -457,7 +461,7 @@ class _CompliancePageState extends State<CompliancePage> {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1976D2),
+              color: Color.fromARGB(255, 0, 92, 118),
             ),
           ),
           const SizedBox(height: 16),
@@ -496,7 +500,7 @@ class _CompliancePageState extends State<CompliancePage> {
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Icon(Icons.info, color: Colors.blueAccent, size: 22),
+                          Icon(Icons.info, color: Color(0xFF087693), size: 22),
                           const SizedBox(width: 8),
                           const Text("Status", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(width: 8),
@@ -529,7 +533,7 @@ class _CompliancePageState extends State<CompliancePage> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.blueAccent, size: 22),
+          Icon(icon, color: Color(0xFF087693), size: 22),
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(width: 8),
@@ -545,3 +549,4 @@ class _CompliancePageState extends State<CompliancePage> {
     );
   }
 }
+

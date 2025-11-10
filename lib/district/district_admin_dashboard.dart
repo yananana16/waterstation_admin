@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:waterstation_admin/login_screen.dart';
 import 'package:waterstation_admin/district/district_compliance_files_viewer.dart';
 import 'package:waterstation_admin/district/compliance_page.dart'; // Add this import
+import 'package:waterstation_admin/district/recommendations_page.dart';
+import 'package:waterstation_admin/services/firestore_repository.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
   const DistrictAdminDashboard({super.key});
@@ -51,16 +51,22 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
 
   // Fetch districts from Firestore
   Future<List<Map<String, dynamic>>> _fetchDistricts() async {
-    final snapshot = await FirebaseFirestore.instance.collection('districts').get();
-    return snapshot.docs.map((doc) => doc.data()).toList();
+    final snapshot = await FirestoreRepository.instance.getCollectionOnce(
+      'districts',
+      () => FirebaseFirestore.instance.collection('districts'),
+    );
+    return snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
   }
 
   Future<void> _fetchUserDistrict() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'users/${user.uid}',
+        () => FirebaseFirestore.instance.collection('users').doc(user.uid),
+      );
       setState(() {
-        _userDistrict = doc.data()?['districtName']?.toString();
+        _userDistrict = (doc.data() as Map<String, dynamic>?)?['districtName']?.toString();
       });
     }
   }
@@ -77,7 +83,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
           Container(
             width: 250,
             decoration: BoxDecoration(
-              color: const Color(0xFFD6E8FD),
+              color: const Color.fromARGB(255, 226, 244, 255),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.10),
@@ -91,7 +97,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 // Logo, App Name, Tagline (optional, can add if needed)
                 Container(
                   width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
+                  color: const Color.fromARGB(255, 226, 244, 255),
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
                     children: [
@@ -102,14 +108,14 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 // User Info
                 Container(
                   width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
+                  color: const Color.fromARGB(255, 226, 244, 255),
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 32,
                         backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
+                        child: Icon(Icons.person, size: 40, color: Color(0xFF087693)),
                       ),
                       const SizedBox(height: 10),
                       const Text(
@@ -119,17 +125,18 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                       ),
                       Text(
                         userEmail,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                        style: const TextStyle(fontSize: 13, color: Color.fromARGB(255, 0, 92, 118)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 // Navigation Items
-                const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+                const Divider(color: Color(0xFF087693), thickness: 1, height: 10),
                 _sidebarNavItem("Dashboard", 0),
                 _sidebarNavItem("Water Stations", 1),
                 _sidebarNavItem("Compliance", 2),
+                _sidebarNavItem("Recommendations", 4),
                 _sidebarNavItem("Profile", 3),
                 const Spacer(),
                 // Log out button
@@ -139,15 +146,15 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     width: 160,
                     height: 44,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.logout, color: Color(0xFF004687)),
-                      label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                      icon: const Icon(Icons.logout, color: Color(0xFF087693)),
+                      label: const Text("Log out", style: TextStyle(color: Color.fromARGB(255, 0, 92, 118))),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         elevation: 2,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
-                        side: const BorderSide(color: Color(0xFFD6E8FD)),
+                        side: const BorderSide(color: Color.fromARGB(255, 226, 244, 255)),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       onPressed: () => _logout(context),
@@ -166,12 +173,12 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   height: 60,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD6E8FD),
+                    color: const Color.fromARGB(255, 226, 244, 255),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.18),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
@@ -189,7 +196,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
+                        icon: const Icon(Icons.settings, color: Color(0xFF087693), size: 28),
                         onPressed: () {
                           // ...handle settings page...
                         },
@@ -198,7 +205,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                       Stack(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
+                            icon: const Icon(Icons.notifications, color: Color(0xFF087693), size: 28),
                             onPressed: () {
                               // ...handle notifications page...
                             },
@@ -281,12 +288,12 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
           child: Row(
             children: [
-              Icon(icon, color: isSelected ? Color(0xFF004687) : Colors.blueGrey, size: 22),
+              Icon(icon, color: isSelected ? Color(0xFF087693) : Colors.blueGrey, size: 22),
               const SizedBox(width: 16),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Color(0xFF004687) : Colors.blueGrey,
+                  color: isSelected ? Color.fromARGB(255, 0, 92, 118) : Colors.blueGrey,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 15,
                 ),
@@ -323,7 +330,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 ),
                 child: const Text(
                   "Hello, User!",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -353,35 +360,35 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                 ),
                               ],
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      "Trends in Water Refilling Station Openings",
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
-                                    ),
-                                    const Spacer(),
-                                    const Text("2025", style: TextStyle(fontSize: 14, color: Colors.grey)),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.calendar_today, size: 18, color: Colors.grey),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFE3F2FD),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Center(
-                                      child: Icon(Icons.show_chart, size: 80, color: Colors.blueAccent.withOpacity(0.3)),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            // child: Column(
+                            //   crossAxisAlignment: CrossAxisAlignment.start,
+                            //   children: [
+                            //     Row(
+                            //       children: [
+                            //         const Text(
+                            //           "Trends in Water Refilling Station Openings",
+                            //           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
+                            //         ),
+                            //         const Spacer(),
+                            //         const Text("2025", style: TextStyle(fontSize: 14, color: Colors.grey)),
+                            //         const SizedBox(width: 8),
+                            //         const Icon(Icons.calendar_today, size: 18, color: Colors.grey),
+                            //       ],
+                            //     ),
+                            //     const SizedBox(height: 12),
+                            //     Expanded(
+                            //       child: Container(
+                            //         decoration: BoxDecoration(
+                            //           color: Color(0xFFE3F2FD),
+                            //           borderRadius: BorderRadius.circular(8),
+                            //         ),
+                            //         child: Center(
+                            //           child: Icon(Icons.show_chart, size: 80, color: Colors.blueAccent.withOpacity(0.3)),
+                            //         ),
+                            //       ),
+                            //     ),
+                            //   ],
+                            // ),
                           ),
                           const SizedBox(height: 18),
                           // Barangay lists
@@ -407,7 +414,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                     children: const [
                                       Text(
                                         "Top 3 Barangays with High Number of WRS (La Paz)",
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color.fromARGB(255, 0, 92, 118)),
                                       ),
                                       SizedBox(height: 10),
                                       Text("1. Jereos"),
@@ -484,10 +491,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                   children: [
                                     Text(
                                       "Water Refilling Stations\n$_userDistrict",
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color.fromARGB(255, 0, 92, 118)),
                                     ),
                                     const Spacer(),
-                                    const Text("See More", style: TextStyle(fontSize: 12, color: Colors.blueAccent)),
+                                    //const Text("See More", style: TextStyle(fontSize: 12, color: Color.fromARGB(255, 0, 92, 118))),
                                   ],
                                 ),
                                 const SizedBox(height: 10),
@@ -530,11 +537,11 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                               children: [
                                 Row(
                                   children: const [
-                                    Icon(Icons.verified, color: Colors.green, size: 22),
+                                    Icon(Icons.verified, color: Color(0xFF087693), size: 22),
                                     SizedBox(width: 8),
                                     Text(
                                       "Compliance Overview",
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1976D2)),
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color.fromARGB(255, 0, 92, 118)),
                                     ),
                                   ],
                                 ),
@@ -548,14 +555,14 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                       child: LinearProgressIndicator(
                                         value: 285 / (285 + 178), // compliant / total
                                         backgroundColor: Colors.grey[300],
-                                        color: Colors.green,
+                                        color: Color(0xFF087693),
                                         minHeight: 8,
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
                                       "${((285 / (285 + 178)) * 100).toStringAsFixed(1)}%",
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
                                     ),
                                   ],
                                 ),
@@ -578,7 +585,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                         icon: Icons.check_circle,
                                         label: "Approved Today",
                                         value: "5",
-                                        color: Colors.blueAccent,
+                                        color: Color(0xFF087693),
                                       ),
                                     ),
                                   ],
@@ -620,6 +627,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
         );
       case 1:
         return _buildWaterStationsPage();
+      case 4:
+        return const RecommendationsPage();
       case 2:
         // Use the new CompliancePage widget
         return FutureBuilder<void>(
@@ -655,7 +664,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF087693)),
                   onPressed: () {
                     setState(() {
                       _showComplianceReportDetails = false;
@@ -667,7 +676,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 const SizedBox(width: 8),
                 Text(
                   _complianceReportTitle,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
                 ),
               ],
             ),
@@ -743,25 +752,25 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 // Header Section
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: const Color(0xFFE3F2FD),
+                  color: const Color.fromARGB(255, 234, 248, 255),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         "Water Refilling Stations",
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
                       ),
                       Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.settings, color: Color(0xFF1976D2)),
+                            icon: const Icon(Icons.settings, color: Color(0xFF087693)),
                             onPressed: () {},
                           ),
                           const SizedBox(width: 16),
                           Stack(
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.notifications, color: Color(0xFF1976D2)),
+                                icon: const Icon(Icons.notifications, color: Color(0xFF087693)),
                                 onPressed: () {},
                               ),
                               Positioned(
@@ -808,7 +817,10 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance.collection('station_owners').get(),
+                      future: FirestoreRepository.instance.getCollectionOnce(
+                        'station_owners',
+                        () => FirebaseFirestore.instance.collection('station_owners'),
+                      ),
                       builder: (context, snapshot) {
                         final center = _mapSelectedLocation ?? LatLng(10.7202, 122.5621); // Iloilo City
                         List<Marker> markers = [];
@@ -843,7 +855,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                   point: LatLng(lat, lng),
                                   child: Tooltip(
                                     message: stationName,
-                                    child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
+                                    child: const Icon(Icons.location_on, color: Color(0xFF087693), size: 32),
                                   ),
                                 ),
                               );
@@ -893,10 +905,12 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
                     child: FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('station_owners')
-                          .where('status', isEqualTo: 'approved')
-                          .get(),
+                      future: FirestoreRepository.instance.getCollectionOnce(
+                        'station_owners_approved_${_userDistrict}',
+                        () => FirebaseFirestore.instance
+                            .collection('station_owners')
+                            .where('status', isEqualTo: 'approved'),
+                      ),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator());
@@ -983,7 +997,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                         DataCell(Row(
                                           children: [
                                             IconButton(
-                                              icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                              icon: const Icon(Icons.location_on, color: Color(0xFF087693)),
                                               tooltip: "View on Map",
                                               onPressed: () {
                                                 if (lat != null && lng != null) {
@@ -995,7 +1009,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                               },
                                             ),
                                             IconButton(
-                                              icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                              icon: const Icon(Icons.description, color: Color(0xFF087693)),
                                               tooltip: "View Compliance Report",
                                               onPressed: () {
                                                 // Show compliance details immediately on first click
@@ -1073,14 +1087,14 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.assignment_turned_in, color: Colors.blueAccent, size: 32),
+                  Icon(Icons.assignment_turned_in, color: Color(0xFF087693), size: 32),
                   const SizedBox(width: 12),
                   Text(
                     "Compliance Report Details",
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1976D2),
+                      color: Color.fromARGB(255, 0, 92, 118),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -1106,7 +1120,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            const Icon(Icons.person, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.person, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Owner: ",
@@ -1124,7 +1138,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.location_on, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.location_on, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Address: ",
@@ -1142,7 +1156,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.phone, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.phone, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Contact: ",
@@ -1157,7 +1171,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.email, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.email, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Email: ",
@@ -1175,7 +1189,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.calendar_today, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Date of Compliance: ",
@@ -1190,7 +1204,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.verified, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.verified, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Status: ",
@@ -1238,6 +1252,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
   }
 }
 
+// ...existing code...
+
 // Sidebar button widget
 // ignore: unused_element
 class _SidebarButton extends StatelessWidget {
@@ -1270,12 +1286,12 @@ class _SidebarButton extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: selected ? Color(0xFF1976D2) : Colors.white, size: 22),
+              Icon(icon, color: selected ? Color(0xFF087693) : Colors.white, size: 22),
               const SizedBox(width: 12),
               Text(
                 label,
                 style: TextStyle(
-                  color: selected ? Color(0xFF1976D2) : Colors.white,
+                  color: selected ? Color.fromARGB(255, 0, 92, 118) : Colors.white,
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
@@ -1301,11 +1317,11 @@ class _SummaryCard extends StatelessWidget {
       width: 200,
       height: 130, // Increased height to prevent overflow
       decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD), // Set box background to 0xFFE3F2FD
+        color: const Color.fromARGB(255, 234, 248, 255), // Set box background to 0xFFE3F2FD
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.08),
+            color: Color(0xFF087693).withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1320,7 +1336,7 @@ class _SummaryCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 15,
-              color: Color(0xFF1976D2), // Text color blue
+              color: Color.fromARGB(255, 0, 92, 118), // Text color blue
               fontWeight: FontWeight.w500
             ),
           ),
@@ -1329,7 +1345,7 @@ class _SummaryCard extends StatelessWidget {
             value,
             style: const TextStyle(
               fontSize: 28,
-              color: Color(0xFF1976D2), // Text color blue
+              color: Color.fromARGB(255, 0, 92, 118), // Text color blue
               fontWeight: FontWeight.bold
             ),
           ),
@@ -1352,17 +1368,17 @@ class _ChartPlaceholder extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1976D2)),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color.fromARGB(255, 0, 92, 118)),
         ),
         const SizedBox(height: 10),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.blueAccent.withOpacity(0.3),
+              color: Color(0xFF087693).withOpacity(0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withOpacity(0.4)),
+              child: Icon(Icons.bar_chart, size: 60, color: Color(0xFF087693).withOpacity(0.4)),
             ),
           ),
         ),
@@ -1388,9 +1404,9 @@ class _StationCountBox extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(name, style: TextStyle(fontSize: 13, color: Color(0xFF1976D2))),
+          Text(name, style: TextStyle(fontSize: 13, color: Color.fromARGB(255, 0, 92, 118))),
           const SizedBox(height: 4),
-          Text(count.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1976D2))),
+          Text(count.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color.fromARGB(255, 0, 92, 118))),
         ],
       ),
     );

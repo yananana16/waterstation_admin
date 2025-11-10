@@ -1,0 +1,284 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // === Helper Functions ===
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      // Admin + cho_lgu both treated as admin
+      return user.role == "admin" || user.role == "cho_lgu";
+    }
+
+    function isDistrictPresident() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.district_president == true;
+    }
+
+    function isFederatedPresident() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.federated_president == true;
+    }
+
+    function isCustomer() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "customer";
+    }
+
+    function isOwner() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner";
+    }
+
+    function isInspector() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "inspector";
+    }
+
+    // === Allow collectionGroup queries on any 'inspections' subcollection ===
+    // This match enables queries that use collectionGroup('inspections') across the DB.
+    // Inspectors can read inspection documents only when the inspection's
+    // officerId refers to an inspector document whose `uid` equals the
+    // authenticated user's uid. Admins keep full read access.
+    match /{path=**}/inspections/{inspectionId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || (
+          isInspector() &&
+          // Ensure the inspection's officerId points to an inspector doc
+          // whose `uid` matches the authenticated user.
+          (resource.data.officerId is string &&
+            get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
+        )
+      );
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // === station_owners ===
+    match /station_owners/{stationOwnerId} {
+
+      // Owner creates own document
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // Owner reads/updates/deletes own doc
+      allow read, update, delete: if isSignedIn() &&
+        request.auth.uid == resource.data.userId;
+
+      // Inspectors may read station owner documents to perform inspections
+      // This grants read-only access for users identified as inspectors.
+      allow read: if isSignedIn() && isInspector();
+
+      // Admin or cho_lgu full access
+      allow read, update, delete: if isAdmin();
+
+      // District president & customers can read
+      allow read: if isDistrictPresident() || isCustomer();
+
+      // --- products subcollection ---
+      match /products/{productId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isCustomer()
+        );
+        allow write, delete: if isSignedIn() &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId;
+      }
+
+      // --- orders subcollection ---
+      match /orders/{orderId} {
+        allow create: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isCustomer() || isAdmin()
+        );
+
+        allow read: if isSignedIn() && (
+          request.auth.uid == resource.data.customerId ||
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isAdmin()
+        );
+
+        allow update: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isAdmin()
+        );
+
+        allow delete: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isAdmin()
+        );
+      }
+
+      // --- sales subcollection ---
+      match /sales/{saleId} {
+        allow read, write: if isSignedIn() &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId || isOwner();
+        allow read, write: if isAdmin();
+      }
+
+      // --- inventory subcollection ---
+      match /inventory/{docId} {
+        allow read, write: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+          isAdmin()
+        );
+
+        match /{subPath=**} {
+          allow read, write: if isSignedIn() && (
+            request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId ||
+            isAdmin()
+          );
+        }
+      }
+
+      // --- notifications subcollection ---
+      match /notifications/{notificationId} {
+        allow create, read, update: if isSignedIn() && (
+          isAdmin() ||
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(stationOwnerId)).data.userId
+        );
+        allow delete: if isSignedIn() && isAdmin();
+      }
+
+      // --- inspections subcollection ---
+      match /inspections/{inspectionId} {
+        allow read: if isSignedIn() && (
+          isAdmin() || (
+            isInspector() &&
+            (resource.data.officerId is string &&
+              get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
+          )
+        );
+        allow create, update, delete: if isSignedIn() && isAdmin();
+      }
+    }
+
+    // === inspections (top-level) ===
+    match /inspections/{inspectionId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || (
+          isInspector() &&
+          (resource.data.officerId is string &&
+            get(/databases/$(database)/documents/inspectors/$(resource.data.officerId)).data.uid == request.auth.uid)
+        )
+      );
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // === orders (top-level) ===
+    match /orders/{orderId} {
+      allow create: if isSignedIn() && (isCustomer() || isOwner());
+
+      allow read: if isSignedIn() && (
+        (isOwner() &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+        ) ||
+        request.auth.uid == resource.data.customerId ||
+        isAdmin() || isOwner()
+      );
+
+      allow update: if isSignedIn() && (
+        (isOwner() &&
+          request.auth.uid == get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+        ) ||
+        isAdmin() || isOwner()
+      );
+
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // === users ===
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && (
+        request.auth.uid == userId || isAdmin()
+      );
+    }
+
+    // === inspectors ===
+    match /inspectors/{inspectorId} {
+      // Allow inspectors to read their own inspector document (so client code
+      // can lookup the inspector `id` by matching on auth uid). Admins keep
+      // full management rights. Creation/updates/deletes remain admin-only.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        // the inspector document is expected to include the auth uid in `uid`
+        // field; allow the authenticated inspector to read their own doc
+        (resource.data.uid is string && request.auth.uid == resource.data.uid)
+      );
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // === station_recommendations ===
+    match /station_recommendations/{document=**} {
+      allow read, write: if true; // open for testing
+    }
+
+    // === districts ===
+    match /districts/{districtId} {
+      allow read: if true;
+      allow update: if isSignedIn() && (isAdmin() || isDistrictPresident());
+      allow create, delete: if isSignedIn() && isAdmin();
+
+      match /barangays/{barangayId} {
+        allow read: if true;
+        allow create, update: if isSignedIn() && (isAdmin() || isDistrictPresident());
+        allow delete: if isSignedIn() && isAdmin();
+      }
+    }
+
+    // === compliance_uploads ===
+    match /compliance_uploads/{uploadId} {
+      allow create, update: if isSignedIn();
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.userId);
+      allow delete: if isSignedIn() && (isAdmin() || request.auth.uid == resource.data.userId);
+    }
+
+    // === top-level notifications ===
+    match /notifications/{notificationId} {
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.resource.data.stationOwnerId is string &&
+          request.auth.uid ==
+            get(/databases/$(database)/documents/station_owners/$(request.resource.data.stationOwnerId)).data.userId
+        )
+      );
+
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (
+          resource.data.stationOwnerId is string &&
+          request.auth.uid ==
+            get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+        )
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          resource.data.stationOwnerId is string &&
+          request.auth.uid ==
+            get(/databases/$(database)/documents/station_owners/$(resource.data.stationOwnerId)).data.userId
+        )
+      );
+
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // === customers ===
+    match /customers/{customerId} {
+      allow write: if isSignedIn() && request.auth.uid == customerId;
+      allow read: if isSignedIn() && (isOwner() || request.auth.uid == customerId);
+
+      match /address/{addressId} {
+        allow read, write: if isSignedIn() && request.auth.uid == customerId;
+      }
+
+      match /cart/{cartItemId} {
+        allow create, read, update, delete: if isSignedIn() && request.auth.uid == customerId;
+      }
+    }
+
+    // === Catch-all: deny everything else ===
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

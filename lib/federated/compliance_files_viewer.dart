@@ -1,7 +1,11 @@
+// All imports are now at the top
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_repository.dart';
+
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/email_sender.dart';
 
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
@@ -13,6 +17,121 @@ class ComplianceFilesViewer extends StatefulWidget {
 }
 
 class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
+  DateTime? _tryParseFlexibleDate(String s) {
+    s = s.trim();
+    if (s.isEmpty) return null;
+    final isoMatch = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(s);
+    if (isoMatch != null) {
+      final y = int.tryParse(isoMatch.group(1)!);
+      final m = int.tryParse(isoMatch.group(2)!);
+      final d = int.tryParse(isoMatch.group(3)!);
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    final parts = s.split('/');
+    if (parts.length == 3) {
+      final mm = int.tryParse(parts[0]);
+      final dd = int.tryParse(parts[1]);
+      final yy = int.tryParse(parts[2]);
+      if (mm != null && dd != null && yy != null) {
+        try {
+          return DateTime(yy, mm, dd);
+        } catch (_) {}
+      }
+    } else if (parts.length == 2) {
+      final mm = int.tryParse(parts[0]);
+      final yy = int.tryParse(parts[1]);
+      if (mm != null && yy != null) {
+        try {
+          return DateTime(yy, mm, 1);
+        } catch (_) {}
+      }
+    }
+    final rawDigits = RegExp(r'^(\d{8})$').firstMatch(s);
+    if (rawDigits != null) {
+      final str = rawDigits.group(1)!;
+      final y = int.tryParse(str.substring(0, 4));
+      final m = int.tryParse(str.substring(4, 6));
+      final d = int.tryParse(str.substring(6, 8));
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    return null;
+  }
+
+  String _formatIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> sendFailedFilesEmail(Map<String, dynamic> complianceStatuses) async {
+    // Fetch owner info
+    final ownerDoc = await FirestoreRepository.instance.getDocumentOnce(
+      'station_owners/${widget.stationOwnerDocId}',
+      () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+    );
+  final ownerData = ownerDoc.data() as Map<String, dynamic>?;
+  final recipientEmail = ownerData?['email']?.toString() ?? '';
+  final stationName = ownerData?['stationName']?.toString() ?? '';
+    if (recipientEmail.isEmpty) return;
+
+    // Collect failed files with details (normalize dates to ISO where possible)
+    final failedFiles = complianceStatuses.entries
+        .where((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'))
+        .map((e) {
+          final key = e.key.replaceAll('_status', '');
+          final category = key.replaceAll('_', ' ').replaceFirst(key[0], key[0].toUpperCase());
+          final rawDate = (complianceStatuses['${key}_date_issued'] ?? '').toString();
+          final rawValid = (complianceStatuses['${key}_valid_until'] ?? '').toString();
+          final parsedDate = _tryParseFlexibleDate(rawDate);
+          final parsedValid = _tryParseFlexibleDate(rawValid);
+          return {
+            'category': category,
+            'dateIssued': parsedDate != null ? _formatIso(parsedDate) : rawDate,
+            'validUntil': parsedValid != null ? _formatIso(parsedValid) : rawValid,
+          };
+        })
+        .toList();
+    if (failedFiles.isEmpty) return;
+
+    // Build HTML table rows
+    final rows = failedFiles.map((f) =>
+      '<tr>'
+        '<td style="padding:8px 12px;border:1px solid #e0e0e0;">${f['category']}</td>'
+        '<td style="padding:8px 12px;border:1px solid #e0e0e0;">${f['dateIssued']}</td>'
+      '</tr>'
+    ).join();
+
+    final body = '''
+    <div style="font-family: Arial, sans-serif; background: #f4f8fb; padding: 32px;">
+      <div style="max-width: 520px; margin: auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 32px 24px;">
+        <div style="text-align: center; margin-bottom: 18px;">
+          <div style="font-size: 48px; color: #c62828;">⚠️</div>
+          <h2 style="color: #c62828; margin: 0 0 8px 0;">Compliance File(s) Failed</h2>
+        </div>
+        <p style="font-size: 16px; color: #222; margin-bottom: 18px;">Dear Station Owner,</p>
+        <p style="font-size: 15px; color: #444; margin-bottom: 18px;">
+          The following compliance file(s) for your station <b>${stationName.isNotEmpty ? stationName : ''}</b> did not meet the necessary requirements. Please check the validity and the date issued, and re-upload the correct documents.
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+          <thead>
+            <tr style="background:#fbe9e7;">
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Category</th>
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Date Issued</th>
+              <th style="padding:10px 12px;border:1px solid #e0e0e0;text-align:left;">Valid Until</th>
+            </tr>
+          </thead>
+          <tbody>
+            $rows
+          </tbody>
+        </table>
+        <p style="font-size: 15px; color: #555; margin-bottom: 0;">Thank you for your attention.<br><b>H2OGO Compliance Team</b></p>
+      </div>
+    </div>
+    ''';
+    sendApprovalEmail(
+      recipientEmail,
+      stationName,
+      customBody: body,
+      customSubject: 'Some Compliance Files Failed Requirements',
+    );
+  }
+  bool get _hasFailedFiles => complianceStatuses.entries.any((e) => e.key.endsWith('_status') && (e.value?.toString().toLowerCase() == 'failed'));
   List<FileObject> uploadedFiles = [];
   bool isLoading = true;
   // ignore: unused_field
@@ -52,13 +171,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   Future<void> fetchComplianceStatuses(String docId) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(docId)
-          .get();
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'compliance_uploads/$docId',
+        () => FirebaseFirestore.instance.collection('compliance_uploads').doc(docId),
+      );
       if (doc.exists) {
         setState(() {
-          complianceStatuses = doc.data() ?? {};
+          complianceStatuses = (doc.data() as Map<String, dynamic>?) ?? {};
         });
       }
     } catch (e) {
@@ -78,12 +197,12 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       });
 
       // After updating, check statuses
-      final doc = await FirebaseFirestore.instance
-          .collection('compliance_uploads')
-          .doc(widget.stationOwnerDocId)
-          .get();
-      final data = doc.data() ?? {};
-      final statusValues = data.entries
+      final doc = await FirestoreRepository.instance.getDocumentOnce(
+        'compliance_uploads/${widget.stationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('compliance_uploads').doc(widget.stationOwnerDocId),
+      );
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final statusValues = data.entries
           .where((e) => e.key.endsWith('_status'))
           .map((e) => (e.value ?? '').toString().toLowerCase())
           .toList();
@@ -95,8 +214,8 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         stationStatus = 'district_approved';
         message = 'Station marked as District Approved.';
       } else if (statusValues.any((s) => s == 'failed')) {
-        stationStatus = 'failed';
-        message = 'Station marked as Failed.';
+        stationStatus = 'submitted';
+        message = 'Station marked as Submit Failed.';
       } else if (statusValues.any((s) => s == 'pending')) {
         stationStatus = 'pending_approval';
         message = 'Station marked as Pending Approval.';
@@ -109,19 +228,33 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       }
 
       // Fetch previous status before updating
-      final prevStationDoc = await FirebaseFirestore.instance
-          .collection('station_owners')
-          .doc(widget.stationOwnerDocId)
-          .get();
-      final prevStatus = prevStationDoc.data()?['status']?.toString() ?? '';
+      final prevStationDoc = await FirestoreRepository.instance.getDocumentOnce(
+        'station_owners/${widget.stationOwnerDocId}',
+        () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+      );
+      final prevStatus = (prevStationDoc.data() as Map<String, dynamic>?)?['status']?.toString() ?? '';
 
       await FirebaseFirestore.instance
           .collection('station_owners')
           .doc(widget.stationOwnerDocId)
           .update({'status': stationStatus});
 
-      // Only show dialog if status actually changed
+      // Only show dialog and send email if status actually changed
       if (prevStatus != stationStatus) {
+        // Send email if approved
+        if (stationStatus == 'approved') {
+          // Fetch email and station name from Firestore
+          final ownerDoc = await FirestoreRepository.instance.getDocumentOnce(
+            'station_owners/${widget.stationOwnerDocId}',
+            () => FirebaseFirestore.instance.collection('station_owners').doc(widget.stationOwnerDocId),
+          );
+          final ownerData = ownerDoc.data() as Map<String, dynamic>?;
+          final recipientEmail = ownerData?['email']?.toString() ?? '';
+          final stationName = ownerData?['station_name']?.toString() ?? '';
+          if (recipientEmail.isNotEmpty) {
+            sendApprovalEmail(recipientEmail, stationName);
+          }
+        }
         showDialog(
           context: context,
           builder: (context) => Dialog(
@@ -134,14 +267,14 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle_outline, color: Colors.blueAccent, size: 48),
+                    Icon(Icons.check_circle_outline, color: Color(0xFF087693), size: 48),
                     const SizedBox(height: 16),
                     Text(
                       'Status Updated',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
-                        color: Colors.blue[900],
+                        color: Color.fromARGB(255, 0, 92, 118),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -155,7 +288,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
+                          backgroundColor: Color(0xFF0094c3),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -315,7 +448,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                     Expanded(
                       child: Text(
                         file.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color.fromARGB(255, 0, 92, 118)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -363,7 +496,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                 ? Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.description, color: Colors.blue, size: 64),
+                                      const Icon(Icons.description, color: Color(0xFF087693), size: 64),
                                       const SizedBox(height: 16),
                                       ElevatedButton.icon(
                                         icon: const Icon(Icons.open_in_new),
@@ -388,7 +521,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                   icon: const Icon(Icons.download),
                   label: const Text('Download'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: Color(0xFF0094c3),
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -423,7 +556,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         return const Color(0xFFF9A825); // amber
       case 'partially':
       default:
-        return const Color(0xFF1565C0); // blue
+        return const Color(0xFF087693); // blue
     }
   }
 
@@ -449,7 +582,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         return const Color(0xFFD32F2F);
       case 'doc':
       case 'docx':
-        return const Color(0xFF1565C0);
+        return const Color(0xFF087693);
       case 'png':
       case 'jpg':
       case 'jpeg':
@@ -498,6 +631,19 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
               ? const Center(child: Text('No uploaded compliance files found.'))
               : Column(
                   children: [
+                    if (_hasFailedFiles)
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.email),
+                          label: const Text('Send Email'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () => sendFailedFilesEmail(complianceStatuses),
+                        ),
+                      ),
                     Expanded(
                       child: Scrollbar(
                         controller: _horizontalScrollController,
@@ -530,9 +676,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                               final icon = _fileIcon(extension);
                               final iconColor = _fileIconColor(extension);
 
-                              // New: read-only date fields
-                              final dateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
-                              final validUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              // New: read-only date fields (normalize to ISO if possible)
+                              final rawDateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
+                              final rawValidUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              final parsedDateIssued = _tryParseFlexibleDate(rawDateIssued);
+                              final parsedValidUntil = _tryParseFlexibleDate(rawValidUntil);
+                              final dateIssued = parsedDateIssued != null ? _formatIso(parsedDateIssued) : rawDateIssued;
+                              final validUntil = parsedValidUntil != null ? _formatIso(parsedValidUntil) : rawValidUntil;
 
                               return Card(
                                 elevation: 4,
@@ -548,7 +698,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                       end: Alignment.bottomRight,
                                       colors: [
                                         Colors.white,
-                                        const Color(0xFFF7FAFF),
+                                        const Color.fromARGB(255, 247, 252, 255),
                                       ],
                                     ),
                                     boxShadow: [
@@ -593,7 +743,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                   overflow: TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontWeight: FontWeight.w800,
-                                                    color: Color(0xFF0D47A1),
+                                                    color: Color.fromARGB(255, 0, 92, 118),
                                                     fontSize: 14,
                                                     height: 1.2,
                                                   ),
@@ -627,8 +777,8 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 _showFileDialog(file, fileUrl, isImage, isPdf, isWord);
                                               },
                                               style: OutlinedButton.styleFrom(
-                                                foregroundColor: const Color(0xFF1565C0),
-                                                side: const BorderSide(color: Color(0xFFBBDEFB)),
+                                                foregroundColor: const Color(0xFF0094c3),
+                                                side: const BorderSide(color: Color.fromARGB(255, 187, 229, 251)),
                                                 padding: const EdgeInsets.symmetric(vertical: 10),
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                                 textStyle: const TextStyle(fontWeight: FontWeight.w600),
@@ -681,7 +831,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                             icon: Icon(Icons.keyboard_arrow_down_rounded, color: accent),
                                             menuMaxHeight: 320,
                                             // Only set initialValue if it is a supported option
-                                            initialValue: const ['Pending', 'Passed', 'Partially', 'Failed'].contains(status) ? status : null,
+                                            value: const ['Pending', 'Passed', 'Partially', 'Failed'].contains(status) ? status : null,
                                             decoration: InputDecoration(
                                               labelText: 'Status',
                                               labelStyle: const TextStyle(fontWeight: FontWeight.w600),

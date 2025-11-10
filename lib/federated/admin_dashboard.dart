@@ -2,15 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, EmailAuthPr
 import 'package:flutter/material.dart';
 import 'district_management_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../auth_service.dart';
 import '../login_screen.dart'; // <-- Add this import if RoleSelectionScreen is defined in this file
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'compliance_page.dart';
 import 'change_password_dialog.dart'; // <-- Add this import
-import 'compliance_files_viewer.dart'; // <-- Add this import
+// <-- Add this import
 import 'logout_dialog.dart'; // <-- Add this import
 import 'registered_stations_page.dart'; // <-- Add this import
 
@@ -140,21 +138,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Container(
             width: 250,
             decoration: BoxDecoration(
-              color: const Color(0xFFD6E8FD),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: const Color.fromARGB(255, 226, 244, 255),
+              // boxShadow: [
+              //   BoxShadow(
+              //     color: Colors.black.withOpacity(0.10),
+              //     blurRadius: 12,
+              //     offset: const Offset(0, 4),
+              //   ),
+              // ],
             ),
             child: Column(
               children: [
                 // Logo, App Name, Tagline
                 Container(
                   width: double.infinity,
-                  color: const Color(0xFFD6E8FD), // Match sidebar background
+                  color: const Color.fromARGB(255, 226, 244, 255), // Match sidebar background
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
                     children: [
@@ -165,31 +163,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 // User Info
                 Container(
                   width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
+                  color: const Color.fromARGB(255, 226, 244, 255),
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 32,
                         backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
+                        child: Icon(Icons.person, size: 40, color: Color(0xFF087693)),
                       ),
                       const SizedBox(height: 10),
                       const Text(
                         "Admin",
-                        style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 20, color: Color.fromARGB(255, 0, 92, 118), fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         FirebaseAuth.instance.currentUser?.email ?? "user@gmail.com",
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                        style: const TextStyle(fontSize: 13, color: Color.fromARGB(255, 0, 92, 118)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 // Navigation Items
-                const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+                const Divider(color: Color(0xFF087693), thickness: 1, height: 10),
                 _sidebarNavItem("Dashboard", 0),
                 _sidebarNavItem("Water Stations", 1),
                 _sidebarNavItem("District Presidents", 2),
@@ -203,15 +201,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     width: 160,
                     height: 44,
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.logout, color: Color(0xFF004687)),
-                      label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                      icon: const Icon(Icons.logout, color: Color(0xFF087693)),
+                      label: const Text("Log out", style: TextStyle(color: Color.fromARGB(255, 0, 92, 118))),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         elevation: 2,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
-                        side: const BorderSide(color: Color(0xFFD6E8FD)),
+                        side: const BorderSide(color: Color.fromARGB(255, 226, 244, 255)),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       onPressed: () => _logout(context),
@@ -230,14 +228,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   height: 60,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD6E8FD), // <-- Match sidebar background
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    color: const Color.fromARGB(255, 226, 244, 255), // <-- Match sidebar background
+                    // boxShadow: [
+                    //   BoxShadow(
+                    //     color: Colors.black.withOpacity(0.18),
+                    //     blurRadius: 18,
+                    //     offset: const Offset(0, 6),
+                    //   ),
+                    // ],
                   ),
                   child: Row(
                     children: [
@@ -251,7 +249,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
+                        icon: const Icon(Icons.settings, color: Color(0xFF087693), size: 28),
                         onPressed: () {
                           setState(() {
                             _showSettingsPage = true;
@@ -263,7 +261,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Stack(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
+                            icon: const Icon(Icons.notifications, color: Color(0xFF087693), size: 28),
                             onPressed: () {
                               setState(() {
                                 _showNotificationsPage = true;
@@ -354,12 +352,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
           child: Row(
             children: [
-              Icon(icon, color: isSelected ? Color(0xFF004687) : Colors.blueGrey, size: 22),
+              Icon(icon, color: isSelected ? Color(0xFF087693) : Colors.blueGrey, size: 22),
               const SizedBox(width: 16),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Color(0xFF004687) : Colors.blueGrey,
+                  color: isSelected ? Color.fromARGB(255, 0, 92, 118) : Colors.blueGrey,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 15,
                 ),
@@ -439,14 +437,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Row(
             children: [
-              const Icon(Icons.calendar_today, color: Colors.blueAccent),
+              const Icon(Icons.calendar_today, color: Color(0xFF087693)),
               const SizedBox(width: 8),
               Text(
                 "Monday, May 5, 2025",
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const Spacer(),
-              const Icon(Icons.access_time, color: Colors.blueAccent),
+              const Icon(Icons.access_time, color: Color(0xFF087693)),
               const SizedBox(width: 8),
               Text(
                 "11:25 AM PST",
@@ -473,13 +471,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           child: const Text(
             "Hello, User!",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
           ),
         ),
         // Main dashboard content
         Expanded(
           child: Container(
-            color: const Color(0xFFF5F8FE),
+            color: const Color.fromARGB(255, 243, 250, 255),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: Row(
@@ -514,7 +512,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   children: const [
                                     Text(
                                       "Trends in Water Refilling Station Openings",
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color.fromARGB(255, 0, 92, 118)),
                                     ),
                                     Spacer(),
                                     Text("2025", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
@@ -531,7 +529,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Center(
-                                    child: Icon(Icons.show_chart, size: 60, color: Colors.blueAccent.withOpacity(0.25)),
+                                    child: Icon(Icons.show_chart, size: 60, color: Color(0xFF087693).withOpacity(0.25)),
                                   ),
                                 ),
                               ],
@@ -571,7 +569,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         children: [
                                           const Text(
                                             "Top 3 Districts with High Number of WRS",
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color.fromARGB(255, 0, 92, 118)),
                                           ),
                                           const SizedBox(height: 10),
                                           for (int i = 0; i < top3.length; i++)
@@ -664,7 +662,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 18,
-                                        color: Color(0xFF1976D2),
+                                        color: Color.fromARGB(255, 0, 92, 118),
                                       ),
                                     ),
                                     const SizedBox(height: 16),
@@ -730,7 +728,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     SizedBox(width: 8),
                                     Text(
                                       "Compliance Overview",
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1976D2)),
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color.fromARGB(255, 0, 92, 118)),
                                     ),
                                   ],
                                 ),
@@ -771,7 +769,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                           "Approved Today",
                                           "5",
                                           color: Color(0xFFE3F2FD),
-                                          textColor: Color(0xFF1976D2),
+                                          textColor: Color(0xFF087693),
                                           icon: Icons.check_circle,
                                         ),
                                       ),
@@ -861,7 +859,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.blueAccent, size: 32),
+                icon: const Icon(Icons.close, color: Color(0xFF087693), size: 32),
                 onPressed: () {
                   setState(() {
                     _showComplianceReportDetails = false;
@@ -876,7 +874,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1976D2),
+                  color: Color.fromARGB(255, 0, 92, 118),
                   letterSpacing: 0.7,
                 ),
               ),
@@ -889,7 +887,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1976D2),
+              color: Color.fromARGB(255, 0, 92, 118),
             ),
           ),
           const SizedBox(height: 16),
@@ -928,7 +926,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Icon(Icons.info, color: Colors.blueAccent, size: 22),
+                          Icon(Icons.info, color: Color(0xFF087693), size: 22),
                           const SizedBox(width: 8),
                           const Text("Status", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(width: 8),
@@ -961,7 +959,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.blueAccent, size: 22),
+          Icon(icon, color: Color(0xFF087693), size: 22),
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(width: 8),
@@ -1026,7 +1024,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               children: [
                                 const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
                                 IconButton(
-                                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
+                                  icon: const Icon(Icons.edit, size: 18, color: Color(0xFF087693)),
                                   onPressed: () {
                                     // Handle profile picture change
                                   },
@@ -1085,7 +1083,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                           );
                                         },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blueAccent,
+                                    backgroundColor: Color(0xFF0094c3),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(24),
                                     ),
@@ -1105,10 +1103,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 width: 250,
                                 height: 45,
                                 child: OutlinedButton.icon(
-                                  icon: const Icon(Icons.lock, color: Colors.blueAccent),
-                                  label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                                  icon: const Icon(Icons.lock, color: Color(0xFF087693)),
+                                  label: const Text("Change Password", style: TextStyle(fontSize: 16, color: Color.fromARGB(255, 0, 92, 118))),
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.blueAccent),
+                                    side: const BorderSide(color: Color(0xFF0094c3)),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(24),
                                     ),
@@ -1143,7 +1141,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           width: 140,
           padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFE3F2FD),
+            color: const Color.fromARGB(255, 226, 244, 255),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(8),
               bottomLeft: Radius.circular(8),
@@ -1155,7 +1153,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFB6D6F6),
+              color: const Color.fromARGB(255, 226, 244, 255),
               borderRadius: const BorderRadius.only(
                 topRight: Radius.circular(8),
                 bottomRight: Radius.circular(8),
@@ -1177,7 +1175,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 if (enabled)
                   IconButton(
-                    icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
+                    icon: const Icon(Icons.edit, size: 18, color: Color(0xFF087693)),
                     onPressed: () {
                       // Optionally focus the field or handle edit
                     },
@@ -1190,18 +1188,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // Settings Page UI
+
   Widget _buildSettingsPage() {
     return Column(
       children: [
         // Header
         Container(
           padding: const EdgeInsets.all(16),
-          color: const Color(0xFFE3F2FD),
+          color: Colors.white,
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF087693)),
                 onPressed: () {
                   setState(() {
                     _showSettingsPage = false;
@@ -1211,7 +1209,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(width: 8),
               const Text(
                 "Settings",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
               ),
               // Spacer to push any future widgets to the right
               Expanded(child: Container()),
@@ -1255,7 +1253,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       child: Row(
         children: [
           const SizedBox(width: 24),
-          Icon(icon, size: 32, color: Colors.blueAccent),
+          Icon(icon, size: 32, color: Color(0xFF087693)),
           const SizedBox(width: 24),
           Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
         ],
@@ -1274,7 +1272,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+                icon: const Icon(Icons.arrow_back, color: Color(0xFF087693)),
                 onPressed: () {
                   setState(() {
                     _showNotificationsPage = false;
@@ -1284,7 +1282,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(width: 8),
               const Text(
                 "Notifications",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
               ),
               Expanded(child: Container()),
             ],
@@ -1300,7 +1298,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   _notificationItem(
                     icon: Icons.check_circle,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "New Compliance Submission Pending Approval",
                     time: "Today | 10:30 AM",
                     description:
@@ -1308,7 +1306,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     trailing: ElevatedButton(
                       onPressed: () {},
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: Color(0xFF0094c3),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         minimumSize: const Size(60, 36),
                         elevation: 0,
@@ -1320,7 +1318,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _divider(),
                   _notificationItem(
                     icon: Icons.lock,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "Non-Compliant Station",
                     time: "02 April, 2025 | 11:20 PM",
                     description:
@@ -1329,7 +1327,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _divider(),
                   _notificationItem(
                     icon: Icons.check_circle,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "Compliance Report Generation Failed",
                     time: "02 April, 2025 | 11:20 PM",
                     description:
@@ -1338,7 +1336,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _divider(),
                   _notificationItem(
                     icon: Icons.check_circle,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "Compliance Rules Updated",
                     time: "02 April, 2025 | 06:20 PM",
                     description:
@@ -1347,7 +1345,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _divider(),
                   _notificationItem(
                     icon: Icons.check_circle,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "New District User Registered",
                     time: "03 April, 2025 | 11:20 AM",
                     description:
@@ -1356,7 +1354,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _divider(),
                   _notificationItem(
                     icon: Icons.check_circle,
-                    iconColor: Colors.blueAccent,
+                    iconColor: Color(0xFF087693),
                     title: "Scheduled System Maintenance Tomorrow at 12:30P.M",
                     time: "03 April, 2025 | 11:20 AM",
                     description:
@@ -1446,11 +1444,11 @@ class _SummaryCard extends StatelessWidget {
       width: 200,
       height: 130, // Increased height to prevent overflow
       decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD), // Set box background to 0xFFE3F2FD
+        color: const Color.fromARGB(255, 226, 244, 255), 
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueAccent.withOpacity(0.08),
+            color: Color(0xFF087693).withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1465,7 +1463,7 @@ class _SummaryCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 15,
-              color: Color(0xFF1976D2), // Text color blue
+              color: Color.fromARGB(255, 0, 92, 118), // Text color blue
               fontWeight: FontWeight.w500
             ),
           ),
@@ -1474,7 +1472,7 @@ class _SummaryCard extends StatelessWidget {
             value,
             style: const TextStyle(
               fontSize: 28,
-              color: Color(0xFF1976D2), // Text color blue
+              color: Color.fromARGB(255, 0, 92, 118), // Text color blue
               fontWeight: FontWeight.bold
             ),
           ),
@@ -1498,17 +1496,17 @@ class _ChartPlaceholder extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1976D2)),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color.fromARGB(255, 0, 92, 118)),
         ),
         const SizedBox(height: 10),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.blueAccent.withOpacity(0.3),
+              color: Color(0xFF087693).withOpacity(0.3),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Icon(Icons.bar_chart, size: 60, color: Colors.blueAccent.withOpacity(0.4)),
+              child: Icon(Icons.bar_chart, size: 60, color: Color(0xFF087693).withOpacity(0.4)),
             ),
           ),
         ),
@@ -1535,9 +1533,9 @@ class _StationCountTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600, fontSize: 15)),
+          Text(label, style: const TextStyle(color: Color.fromARGB(255, 0, 92, 118), fontWeight: FontWeight.w600, fontSize: 15)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.bold, fontSize: 20)),
+          Text(value, style: const TextStyle(color: Color.fromARGB(255, 0, 92, 118), fontWeight: FontWeight.bold, fontSize: 20)),
         ],
       ),
     );
@@ -1596,12 +1594,12 @@ class _DistrictStationTile extends StatelessWidget {
                 topLeft: Radius.circular(6),
                 bottomLeft: Radius.circular(6),
               ),
-              border: Border.all(color: Color(0xFF1976D2), width: 0.5),
+              border: Border.all(color: Color(0xFF087693), width: 0.5),
             ),
             child: Text(
               district,
               style: const TextStyle(
-                color: Color(0xFF004687),
+                color: Color.fromARGB(255, 0, 92, 118),
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
@@ -1613,7 +1611,7 @@ class _DistrictStationTile extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Color(0xFF004687),
+            color: Color(0xFF087693),
             borderRadius: const BorderRadius.only(
               topRight: Radius.circular(6),
               bottomRight: Radius.circular(6),

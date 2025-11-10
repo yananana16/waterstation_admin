@@ -27,7 +27,7 @@ class _CompliancePageState extends State<CompliancePage> {
         .get();
     if (doc.exists) {
       setState(() {
-        selectedStationData = doc.data() as Map<String, dynamic>?;
+        selectedStationData = doc.data();
       });
     }
   }
@@ -45,12 +45,12 @@ class _CompliancePageState extends State<CompliancePage> {
           // Header Section
           Container(
             padding: const EdgeInsets.all(16),
-            color: const Color(0xFFE3F2FD),
+            color: const Color.fromARGB(255, 234, 248, 255),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF087693)),
                   onPressed: () {
                     setState(() {
                       showComplianceReport = false;
@@ -62,7 +62,7 @@ class _CompliancePageState extends State<CompliancePage> {
                 const SizedBox(width: 8),
                 Text(
                   complianceTitle,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
                 ),
               ],
             ),
@@ -132,7 +132,7 @@ class _CompliancePageState extends State<CompliancePage> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                  const Icon(Icons.calendar_today, color: Color(0xFF087693)),
                   const SizedBox(width: 8),
                   Text(
                     formattedDate,
@@ -142,7 +142,7 @@ class _CompliancePageState extends State<CompliancePage> {
               ),
               Row(
                 children: [
-                  const Icon(Icons.access_time, color: Colors.blueAccent),
+                  const Icon(Icons.access_time, color: Color(0xFF087693)),
                   const SizedBox(width: 8),
                   Text(
                     "$formattedTime PST",
@@ -159,7 +159,7 @@ class _CompliancePageState extends State<CompliancePage> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           child: Text(
             "Compliance Report",
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 92, 118)),
           ),
         ),
         // Tab selector
@@ -189,7 +189,7 @@ class _CompliancePageState extends State<CompliancePage> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       color: complianceStatusFilter == 'pending_approval'
-                          ? const Color(0xFFE3EAFD)
+                          ? const Color.fromARGB(255, 234, 248, 255)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -199,7 +199,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: complianceStatusFilter == 'pending_approval'
-                              ? Colors.blueAccent
+                              ? Color.fromARGB(255, 0, 92, 118)
                               : Colors.black54,
                           fontSize: 16,
                         ),
@@ -219,7 +219,7 @@ class _CompliancePageState extends State<CompliancePage> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       color: complianceStatusFilter == 'approved'
-                          ? const Color(0xFFE3EAFD)
+                          ? const Color.fromARGB(255, 234, 248, 255)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -229,7 +229,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: complianceStatusFilter == 'approved'
-                              ? Colors.blueAccent
+                              ? Color.fromARGB(255, 0, 92, 118)
                               : Colors.black54,
                           fontSize: 16,
                         ),
@@ -250,7 +250,7 @@ class _CompliancePageState extends State<CompliancePage> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       color: complianceStatusFilter == 'district_approved'
-                          ? const Color(0xFFE3EAFD)
+                          ? const Color.fromARGB(255, 234, 248, 255)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -260,7 +260,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: complianceStatusFilter == 'district_approved'
-                              ? Colors.blueAccent
+                              ? Color.fromARGB(255, 0, 92, 118)
                               : Colors.black54,
                           fontSize: 16,
                         ),
@@ -331,7 +331,7 @@ class _CompliancePageState extends State<CompliancePage> {
                           ),
                         ],
                         border: isSelected
-                            ? Border.all(color: Colors.blueAccent, width: 2)
+                            ? Border.all(color: Color(0xFF087693), width: 2)
                             : Border.all(color: Colors.transparent),
                       ),
                       child: Padding(
@@ -382,7 +382,7 @@ class _CompliancePageState extends State<CompliancePage> {
                                 });
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueAccent,
+                                backgroundColor: Color(0xFF0094c3),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                               ),
@@ -419,14 +419,14 @@ class _CompliancePageState extends State<CompliancePage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.assignment_turned_in, color: Colors.blueAccent, size: 32),
+                  Icon(Icons.assignment_turned_in, color: Color(0xFF087693), size: 32),
                   const SizedBox(width: 12),
                   Text(
                     "Compliance Report Details",
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1976D2),
+                      color: Color.fromARGB(255, 0, 92, 118),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -451,7 +451,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            const Icon(Icons.person, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.person, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Owner: ",
@@ -469,7 +469,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.location_on, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.location_on, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Address: ",
@@ -487,7 +487,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.phone, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.phone, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Contact: ",
@@ -502,7 +502,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.email, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.email, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Email: ",
@@ -520,7 +520,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.calendar_today, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Date of Compliance: ",
@@ -535,7 +535,7 @@ class _CompliancePageState extends State<CompliancePage> {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.verified, color: Colors.blueAccent, size: 18),
+                            const Icon(Icons.verified, color: Color(0xFF087693), size: 18),
                             const SizedBox(width: 8),
                             Text(
                               "Status: ",
@@ -549,7 +549,7 @@ class _CompliancePageState extends State<CompliancePage> {
                                     : (data['status'] == 'pending_approval')
                                         ? Colors.orange
                                         : (data['status'] == 'district_approved')
-                                            ? Colors.indigo
+                                            ? Color(0xFF087693)
                                             : Colors.grey,
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -577,3 +577,4 @@ class _CompliancePageState extends State<CompliancePage> {
     );
   }
 }
+
