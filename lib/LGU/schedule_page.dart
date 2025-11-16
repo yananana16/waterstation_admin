@@ -223,12 +223,171 @@ class _SchedulePageState extends State<SchedulePage> {
                             : LayoutBuilder(builder: (context, constraints) {
                                 // allow layout to adapt: when narrow, stack vertically
                                 final isNarrow = constraints.maxWidth < 900;
-                                final availableHeight = constraints.maxHeight; // use to bound inner sections
+                                final availableHeight = constraints.maxHeight;
                                 return isNarrow
                                     ? SingleChildScrollView(
                                         child: Column(
                                           children: [
-                                            // ...existing code for narrow layout (keeps content scrollable)...
+                                            // Quick Access buttons for mobile
+                                            Container(
+                                              padding: EdgeInsets.all(16 * scale),
+                                              margin: EdgeInsets.only(bottom: 16 * scale),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(12 * scale),
+                                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text('Quick Access', style: TextStyle(fontSize: 18 * scale, fontWeight: FontWeight.bold, color: const Color(0xFF0B63B7))),
+                                                  SizedBox(height: 16 * scale),
+                                                  Wrap(
+                                                    spacing: 16,
+                                                    runSpacing: 16,
+                                                    alignment: WrapAlignment.spaceEvenly,
+                                                    children: [
+                                                      _ScheduleActionButton(icon: Icons.check_circle, label: 'Inspection', onPressed: _openInspection, scale: scale),
+                                                      _ScheduleActionButton(icon: Icons.calendar_month, label: 'Add', scale: scale, onPressed: _openAddSchedule),
+                                                      _ScheduleActionButton(icon: Icons.people, label: 'Staff', onPressed: _openStaff, scale: scale),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            // Inspection preview for mobile
+                                            Container(
+                                              padding: EdgeInsets.all(16 * scale),
+                                              margin: EdgeInsets.only(bottom: 16 * scale),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(12 * scale),
+                                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Text('Inspection', style: TextStyle(color: const Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 18 * scale)),
+                                                      TextButton(
+                                                        onPressed: _openInspection,
+                                                        child: Text('See More', style: TextStyle(color: const Color(0xFF0B63B7), decoration: TextDecoration.underline)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  SizedBox(height: 8 * scale),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        '${_selectedMonth.year} • ${_selectedMonth.month.toString().padLeft(2, '0')}',
+                                                        style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w500, fontSize: 14 * scale),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      OutlinedButton(
+                                                        onPressed: () async {
+                                                          final picked = await showDatePicker(
+                                                            context: context,
+                                                            initialDate: _selectedMonth,
+                                                            firstDate: DateTime(2020),
+                                                            lastDate: DateTime(2030),
+                                                            helpText: 'Select month',
+                                                          );
+                                                          if (picked != null) setState(() => _selectedMonth = DateTime(picked.year, picked.month));
+                                                        },
+                                                        child: const Text('Change'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  SizedBox(height: 12 * scale),
+                                                  // Preview list (show first few items)
+                                                  StreamBuilder<QuerySnapshot>(
+                                                    stream: FirebaseFirestore.instance.collection('station_owners').orderBy('districtName').limit(5).snapshots(),
+                                                    builder: (context, snap) {
+                                                      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                                                      final docs = snap.data!.docs;
+                                                      if (docs.isEmpty) return const Center(child: Text('No stations'));
+                                                      return Column(
+                                                        children: docs.map((doc) {
+                                                          final sId = doc.id;
+                                                          final sName = (doc.data() as Map<String, dynamic>)['stationName'] ?? 'Unknown';
+                                                          final sLoc = (doc.data() as Map<String, dynamic>)['districtName'] ?? '';
+                                                          return Container(
+                                                            margin: EdgeInsets.only(bottom: 8 * scale),
+                                                            padding: EdgeInsets.all(12 * scale),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFF7FBFF),
+                                                              borderRadius: BorderRadius.circular(8 * scale),
+                                                              border: Border.all(color: const Color(0xFFE0E0E0)),
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                Expanded(
+                                                                  child: Column(
+                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                    children: [
+                                                                      Text(sName.toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14 * scale), overflow: TextOverflow.ellipsis),
+                                                                      SizedBox(height: 4 * scale),
+                                                                      Text(sLoc.toString(), style: TextStyle(color: Colors.black54, fontSize: 12 * scale), overflow: TextOverflow.ellipsis),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                FutureBuilder<String>(
+                                                                  future: _getMonthStatus(sId, _selectedMonth),
+                                                                  builder: (context, statusSnap) {
+                                                                    final raw = statusSnap.data ?? 'pending';
+                                                                    final status = raw.toString().toLowerCase();
+                                                                    final display = status.isNotEmpty ? (status[0].toUpperCase() + status.substring(1)) : 'Pending';
+                                                                    return Container(
+                                                                      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
+                                                                      decoration: BoxDecoration(
+                                                                        color: (status == 'done') ? const Color(0xFF4CAF50) : const Color(0xFFFFC107),
+                                                                        borderRadius: BorderRadius.circular(6 * scale),
+                                                                      ),
+                                                                      child: Text(display, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11 * scale)),
+                                                                    );
+                                                                  },
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          );
+                                                        }).toList(),
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            // Assigned Inspectors for mobile
+                                            Container(
+                                              padding: EdgeInsets.all(16 * scale),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(12 * scale),
+                                                border: Border.all(color: const Color(0xFFE0E0E0)),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text('Number of Assigned Inspectors', style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF0B63B7), fontSize: 16 * scale)),
+                                                  SizedBox(height: 12 * scale),
+                                                  ...assignedLocations.map((loc) => Padding(
+                                                        padding: EdgeInsets.symmetric(vertical: 6 * scale),
+                                                        child: Row(
+                                                          children: [
+                                                            Expanded(child: Text(loc['name'].toString(), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14 * scale))),
+                                                            Container(
+                                                              padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 8 * scale),
+                                                              decoration: BoxDecoration(color: const Color(0xFF0B63B7), borderRadius: BorderRadius.circular(6 * scale)),
+                                                              child: Text(loc['count'].toString(), style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14 * scale)),
+                                                            )
+                                                          ],
+                                                        ),
+                                                      )),
+                                                ],
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       )

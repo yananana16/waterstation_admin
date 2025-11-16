@@ -507,76 +507,90 @@ class _CompliancePageState extends State<CompliancePage> {
                   );
                 }
 
-                // Desktop: Table-style list (unchanged)
+                // Desktop: Table-style list with horizontal scroll
                 return Column(
                   children: [
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.vertical,
-                        child: DataTable(
-                          columnSpacing: 18,
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFFE3F2FD)),
-                          columns: const [
-                            DataColumn(label: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Address', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                            DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
-                          ],
-                          rows: pageDocs.map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final stationName = data['stationName'] ?? '';
-                            final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                            final district = data['districtName'] ?? '';
-                            final address = data['address'] ?? '';
-                            final status = data['status'] ?? '';
-                            final stationOwnerDocId = doc.id;
-                            return DataRow(
-                              cells: [
-                                DataCell(Text(stationName, style: const TextStyle(color: Colors.blueAccent))),
-                                DataCell(Text(ownerName)),
-                                DataCell(Text(district)),
-                                DataCell(Text(address)),
-                                DataCell(
-                                  Text(
-                                    status,
-                                    style: TextStyle(
-                                      color: _statusColor(status),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        isLoading = true;
-                                      });
-                                      Future.delayed(const Duration(milliseconds: 300), () {
-                                        setState(() {
-                                          isLoading = false;
-                                          showComplianceReport = true;
-                                          complianceTitle = stationName;
-                                          selectedStationData = data;
-                                          selectedStationOwnerDocId = stationOwnerDocId;
-                                        });
-                                      });
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blueAccent,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                    ),
-                                    child: const Text(
-                                      "View Details",
-                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                  ),
-                                ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 1000),
+                            child: DataTable(
+                              columnSpacing: 24,
+                              horizontalMargin: 20,
+                              headingRowColor: WidgetStateProperty.all(const Color(0xFFE3F2FD)),
+                              columns: const [
+                                DataColumn(label: SizedBox(width: 180, child: Text('Station Name', style: TextStyle(fontWeight: FontWeight.bold)))),
+                                DataColumn(label: SizedBox(width: 150, child: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold)))),
+                                DataColumn(label: SizedBox(width: 120, child: Text('District', style: TextStyle(fontWeight: FontWeight.bold)))),
+                                DataColumn(label: SizedBox(width: 200, child: Text('Address', style: TextStyle(fontWeight: FontWeight.bold)))),
+                                DataColumn(label: SizedBox(width: 120, child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold)))),
+                                DataColumn(label: SizedBox(width: 130, child: Text('Action', style: TextStyle(fontWeight: FontWeight.bold)))),
                               ],
-                            );
-                          }).toList(),
+                              rows: pageDocs.map((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final stationName = data['stationName'] ?? '';
+                                final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+                                final district = data['districtName'] ?? '';
+                                final address = data['address'] ?? '';
+                                final status = data['status'] ?? '';
+                                final stationOwnerDocId = doc.id;
+                                return DataRow(
+                                  cells: [
+                                    DataCell(SizedBox(width: 180, child: Text(stationName, style: const TextStyle(color: Colors.blueAccent), overflow: TextOverflow.ellipsis))),
+                                    DataCell(SizedBox(width: 150, child: Text(ownerName, overflow: TextOverflow.ellipsis))),
+                                    DataCell(SizedBox(width: 120, child: Text(district, overflow: TextOverflow.ellipsis))),
+                                    DataCell(SizedBox(width: 200, child: Text(address, overflow: TextOverflow.ellipsis))),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 120,
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: _statusColor(status),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 130,
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              isLoading = true;
+                                            });
+                                            Future.delayed(const Duration(milliseconds: 300), () {
+                                              setState(() {
+                                                isLoading = false;
+                                                showComplianceReport = true;
+                                                complianceTitle = stationName;
+                                                selectedStationData = data;
+                                                selectedStationOwnerDocId = stationOwnerDocId;
+                                              });
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blueAccent,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          ),
+                                          child: const Text(
+                                            "View",
+                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
                         ),
                       ),
                     ),

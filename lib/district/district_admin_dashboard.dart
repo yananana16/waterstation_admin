@@ -20,7 +20,8 @@ class DistrictAdminDashboard extends StatefulWidget {
 
 class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
   int _selectedIndex = 0;
-  bool _isSidebarCollapsed = false; // sidebar toggle state
+  bool _isSidebarCollapsed = false; // collapse for wide screens
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Add a variable to hold districts data
   late Future<List<Map<String, dynamic>>> _districtsFuture;
@@ -116,233 +117,222 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     final user = FirebaseAuth.instance.currentUser;
     final userEmail = user?.email ?? "Admin Panel";
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.white,
-      body: Row(
+      // On narrow screens we provide a Drawer
+      drawer: Drawer(
+        child: SafeArea(child: _buildSidebarContent(collapsed: false, forDrawer: true)),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 900; // breakpoint
+          final sidebarWidth = isWide ? (_isSidebarCollapsed ? 80.0 : 250.0) : 0.0;
+          return Row(
+            children: [
+              if (isWide)
+                // permanent sidebar on wide screens
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: sidebarWidth,
+                  child: _buildSidebarContent(collapsed: _isSidebarCollapsed),
+                ),
+              // Main Content Area
+              Expanded(
+                child: Column(
+                  children: [
+                    // --- Top Header Bar ---
+                    Container(
+                      height: 70,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD6E8FD),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha((0.18 * 255).round()),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // Menu or collapse button
+                          if (!isWide)
+                            IconButton(
+                              icon: const Icon(Icons.menu, color: Color(0xFF1976D2)),
+                              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                            ),
+                          if (isWide)
+                            IconButton(
+                              icon: Icon(_isSidebarCollapsed ? Icons.chevron_right : Icons.chevron_left, color: const Color(0xFF1976D2)),
+                              onPressed: () {
+                                setState(() {
+                                  _isSidebarCollapsed = !_isSidebarCollapsed;
+                                });
+                              },
+                            ),
+                          const SizedBox(width: 8),
+                          // Logo and tagline (optional, add if needed)
+                          const SizedBox(width: 8),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                          const Spacer(),
+                          const SizedBox(width: 32),
+                        ],
+                      ),
+                    ),
+                    // --- Main Page Content ---
+                    Expanded(
+                      child: _getSelectedPage(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Build sidebar content so it can be used inside Drawer or as permanent sidebar
+  Widget _buildSidebarContent({required bool collapsed, bool forDrawer = false}) {
+    final user = FirebaseAuth.instance.currentUser;
+    final userEmail = user?.email ?? "Admin Panel";
+    // When collapsed show only icons and tooltips
+    return Container(
+      color: const Color(0xFFD6E8FD),
+      child: Column(
         children: [
-          // --- Sidebar (collapsible) ---
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            width: _isSidebarCollapsed ? 80 : 250,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6E8FD),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.10 * 255).round()),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: _isSidebarCollapsed
-                ? Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 20, color: Color(0xFF004687)),
-                      ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            IconButton(
-                              tooltip: 'Dashboard',
-                              icon: Icon(Icons.dashboard, color: _selectedIndex == 0 ? const Color(0xFF004687) : Colors.white),
-                              onPressed: () => setState(() => _selectedIndex = 0),
-                            ),
-                            IconButton(
-                              tooltip: 'Water Stations',
-                              icon: Icon(Icons.local_drink, color: _selectedIndex == 1 ? const Color(0xFF004687) : Colors.white),
-                              onPressed: () => setState(() => _selectedIndex = 1),
-                            ),
-                            IconButton(
-                              tooltip: 'Compliance',
-                              icon: Icon(Icons.article, color: _selectedIndex == 2 ? const Color(0xFF004687) : Colors.white),
-                              onPressed: () => setState(() => _selectedIndex = 2),
-                            ),
-                            // Recommendations removed
-                            IconButton(
-                              tooltip: 'Profile',
-                              icon: Icon(Icons.person, color: _selectedIndex == 3 ? const Color(0xFF004687) : Colors.white),
-                              onPressed: () => setState(() => _selectedIndex = 3),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Log out',
-                        icon: const Icon(Icons.logout, color: Colors.white),
-                        onPressed: () => _logout(context),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  )
+          // Header
+          Container(
+            width: double.infinity,
+            color: const Color(0xFFD6E8FD),
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: collapsed
+                ? const SizedBox(height: 20)
                 : Column(
-                    children: [
-                      // Logo, App Name, Tagline (optional, can add if needed)
-                      Container(
-                        width: double.infinity,
-                        color: const Color(0xFFD6E8FD),
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Column(
-                          children: [
-                            // ...add logo/tagline here if desired...
-                          ],
-                        ),
-                      ),
-                      // User Info
-                      Container(
-                        width: double.infinity,
-                        color: const Color(0xFFD6E8FD),
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 32,
-                              backgroundColor: Colors.white,
-                              child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              "District Admin",
-                              style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              userEmail,
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Navigation Items
-                      const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
-                      _sidebarNavItem("Dashboard", 0),
-                      _sidebarNavItem("Water Stations", 1),
-                      _sidebarNavItem("Compliance", 2),
-                      _sidebarNavItem("Profile", 3),
-                      const Spacer(),
-                      // Log out button
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        child: SizedBox(
-                          width: 160,
-                          height: 44,
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.logout, color: Color(0xFF004687)),
-                            label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              side: const BorderSide(color: Color(0xFFD6E8FD)),
-                              textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: () => _logout(context),
-                          ),
-                        ),
-                      ),
-                    ],
+                    children: [],
                   ),
           ),
-          // --- Main Content Area with Topbar ---
-          Expanded(
-            child: Column(
-              children: [
-                // --- Top Bar copied from admin_dashboard.dart ---
-                Container(
-                  height: 60,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E8FD),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.18 * 255).round()),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+          // User Info
+          if (!collapsed)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFD6E8FD),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(_isSidebarCollapsed ? Icons.menu_open : Icons.menu, color: const Color(0xFF1976D2)),
-                        onPressed: () => setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
-                      ),
-                      const SizedBox(width: 8),
-                      // Logo and tagline (optional, add if needed)
-                      const SizedBox(width: 8),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ...add logo/tagline here if desired...
-                        ],
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
-                        onPressed: () {
-                          // ...handle settings page...
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
-                            onPressed: () {
-                              // ...handle notifications page...
-                            },
-                          ),
-                          Positioned(
-                            right: 8,
-                            top: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 5,
-                                minHeight: 2,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 32),
-                    ],
+                  const SizedBox(height: 10),
+                  const Text(
+                    "District Admin",
+                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                // --- Main Page Content ---
-                Expanded(
-                  child: _getSelectedPage(),
-                ),
-              ],
+                  Text(
+                    userEmail,
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
+          // Navigation Items
+          const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+          // Use icon-only buttons when collapsed
+          _sidebarNavTile("Dashboard", 0, collapsed),
+          _sidebarNavTile("Water Stations", 1, collapsed),
+          _sidebarNavTile("Compliance", 2, collapsed),
+          const Spacer(),
+          if (!collapsed) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 160,
+                height: 42,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.person, color: Color(0xFF004687)),
+                  label: const Text("Profile", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    side: const BorderSide(color: Color(0xFFD6E8FD)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => setState(() => _selectedIndex = 3),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: SizedBox(
+                width: 160,
+                height: 44,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.logout, color: Color(0xFF004687)),
+                  label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    side: const BorderSide(color: Color(0xFFD6E8FD)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () => _logout(context),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  // --- Sidebar navigation item builder copied from admin_dashboard.dart ---
+  // helper to build each nav row respecting collapsed state
+  Widget _sidebarNavTile(String label, int index, bool collapsed) {
+    IconData icon;
+    switch (label) {
+      case "Dashboard":
+        icon = Icons.dashboard;
+        break;
+      case "Water Stations":
+        icon = Icons.local_drink;
+        break;
+      case "Compliance":
+        icon = Icons.article;
+        break;
+      case "Profile":
+        icon = Icons.person;
+        break;
+      default:
+        icon = Icons.circle;
+    }
+    final isSelected = _selectedIndex == index;
+    if (collapsed) {
+      return Tooltip(
+        message: label,
+        child: IconButton(
+          icon: Icon(icon, color: isSelected ? const Color(0xFF004687) : Colors.blueGrey),
+          onPressed: () => setState(() => _selectedIndex = index),
+        ),
+      );
+    }
+    return _sidebarNavItem(label, index);
+  }
+
+  // --- Sidebar navigation item builder ---
   Widget _sidebarNavItem(String label, int index) {
     bool isSelected = _selectedIndex == index;
     IconData icon;
@@ -365,13 +355,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          if (label == "Log out") {
-            _logout(context);
-          } else {
-            setState(() => _selectedIndex = index);
-          }
-        },
+        onTap: () => setState(() => _selectedIndex = index),
         borderRadius: BorderRadius.circular(8),
         child: Container(
           width: double.infinity,

@@ -353,7 +353,9 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
 
   @override
   Widget build(BuildContext context) {
-  final isWide = MediaQuery.of(context).size.width > 800;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
   // Color palette for consistent UI (use shared constants)
   final Color primary = _primary;
   final Color sidebarBg = const Color(0xFFF1F6FB); // softer, neutral sidebar
@@ -454,14 +456,14 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 onPressed: () => Scaffold.of(context).openDrawer(),
               );
             }),
-          const SizedBox(width: 8),
+          const SizedBox(width: 3),
           Expanded(
             child: Row(
               children: [
                 Icon(Icons.calendar_today, color: primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: 3),
                 Text(
-                  DateFormat.yMMMMEEEEd().format(DateTime.now()),
+                  DateFormat.y().format(DateTime.now()),
                   style: TextStyle(fontWeight: FontWeight.bold, color: primary),
                 ),
               ],
@@ -498,14 +500,14 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
     Widget mainContent = Container(
       color: contentBg, // updated page background for softer contrast
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(isWide ? 16.0 : 12.0),
         child: Column(
           children: [
             if (_selectedIndex == 0) ...[
               // Date strip / greeting
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding: EdgeInsets.symmetric(horizontal: isWide ? 18 : 14, vertical: 10),
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -514,28 +516,29 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today, color: primary),
-                    const SizedBox(width: 12),
+                    Icon(Icons.calendar_today, color: primary, size: isWide ? 24 : 20),
+                    SizedBox(width: isWide ? 12 : 8),
                     Expanded(
-                      child: Text('Hello, Inspector!', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: Text('Hello, Inspector!', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: isWide ? 16 : 14)),
                     ),
-                    Text(DateFormat.yMMMMd().format(DateTime.now()), style: const TextStyle(color: Colors.black54)),
+                    Text(DateFormat.yMd().format(DateTime.now()), style: TextStyle(color: Colors.black54, fontSize: isWide ? 14 : 12)),
                   ],
                 ),
               ),
 
-              // Main two-column layout
+              // Main two-column layout (or stacked on mobile)
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left: Assigned stations + reminders
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          // Assigned Stations card with date header
-                          Container(
+                child: isWide 
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Assigned stations + reminders
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            children: [
+                              // Assigned Stations card with date header
+                              Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(0),
                             decoration: BoxDecoration(
@@ -632,7 +635,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                     },
                                     child: _loadingAssigned
                                         ? Center(key: const ValueKey('loading'), child: Padding(padding: const EdgeInsets.all(24.0), child: CircularProgressIndicator(color: _primary)))
-                                        : _buildInspectionsView(_filteredInspections(), key: ValueKey('list_${_currentTab}_${_assignedStations.length}')),
+                                        : _buildInspectionsView(_filteredInspections(), key: ValueKey('list_${_currentTab}_${_assignedStations.length}'), isWide: isWide),
                                   ),
                                 ),
                               ],
@@ -774,7 +777,162 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                       ),
                     ),
                   ],
-                ),
+                )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        children: [
+                          // Summary cards (mobile)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Card(
+                                  color: cardBg,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Done', style: TextStyle(fontSize: 11, color: Color(0xFF2E8B57))),
+                                        const SizedBox(height: 6),
+                                        Text('7', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Card(
+                                  color: cardBg,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Pending', style: TextStyle(fontSize: 11, color: Color(0xFFF39C12))),
+                                        const SizedBox(height: 6),
+                                        Text('3', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[800])),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Card(
+                                  color: cardBg,
+                                  elevation: 1,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Missed', style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
+                                        const SizedBox(height: 6),
+                                        Text('0', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[700])),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Assigned Stations (mobile)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(0),
+                            decoration: BoxDecoration(
+                              color: listBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE6EDF2)),
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.assignment_turned_in, color: primary, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text('Assigned Stations', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      const Spacer(),
+                                      if (!_loadingAssigned)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(color: primary.withAlpha((0.08 * 255).round()), borderRadius: BorderRadius.circular(12)),
+                                          child: Text('${_assignedStations.length}', style: TextStyle(fontSize: 11, color: primary)),
+                                        ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        iconSize: 20,
+                                        tooltip: 'Toggle show all',
+                                        onPressed: () {
+                                          setState(() => _showAllInspections = !_showAllInspections);
+                                          _loadAssignedInspections(all: _showAllInspections);
+                                        },
+                                        icon: Icon(_showAllInspections ? Icons.list : Icons.filter_list, color: primary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(height: 1, color: Color(0xFFECECEC)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: TabBar(
+                                    controller: _tabController,
+                                    labelColor: _primary,
+                                    unselectedLabelColor: Colors.black54,
+                                    indicatorColor: _primary,
+                                    labelStyle: const TextStyle(fontSize: 12),
+                                    tabs: const [
+                                      Tab(text: 'Today'),
+                                      Tab(text: 'Week'),
+                                      Tab(text: 'Month'),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 320,
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 400),
+                                    transitionBuilder: (child, animation) {
+                                      final inAnim = Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation);
+                                      return FadeTransition(opacity: animation, child: SlideTransition(position: inAnim, child: child));
+                                    },
+                                    child: _loadingAssigned
+                                        ? Center(key: const ValueKey('loading'), child: Padding(padding: const EdgeInsets.all(24.0), child: CircularProgressIndicator(color: _primary)))
+                                        : _buildInspectionsView(_filteredInspections(), key: ValueKey('list_${_currentTab}_${_assignedStations.length}'), isWide: false),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Reminders (mobile)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE6EDF2))),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Reminders', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 14)),
+                                SizedBox(height: 8),
+                                Text('• Ten (10) inspections scheduled this week', style: TextStyle(fontSize: 13)),
+                                Text('• Submit inspection reports for five (5) stations', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
               ),
             ] else if (_selectedIndex == 1) ...[
               _whiteCard(
@@ -811,34 +969,41 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                     else
                       // show list of assigned inspections in a table-like layout
                       SizedBox(
-                        height: 360,
+                        height: isWide ? 360 : 400,
                         child: Container(
                           width: double.infinity,
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
                           child: Column(
                             children: [
-                              // header row
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10),
-                                child: Row(
-                                  children: const [
+                              // header row (only on wide screens)
+                              if (isWide)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10),
+                                  child: Row(
+                                    children: const [
                                     Expanded(flex: 3, child: Text('Station', style: TextStyle(fontWeight: FontWeight.bold))),
                                     Expanded(flex: 2, child: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
                                     Expanded(flex: 2, child: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
                                     Expanded(flex: 1, child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
                                     SizedBox(width: 56),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const Divider(height: 1),
+                              if (isWide)
+                                const Divider(height: 1),
                               // rows
                               Expanded(
                                 child: ListView.separated(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  padding: EdgeInsets.symmetric(horizontal: isWide ? 8 : 4),
                                   itemCount: _assignedStations.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  separatorBuilder: (_, __) => isWide ? const Divider(height: 1) : const SizedBox(height: 8),
                                   itemBuilder: (context, i) {
                                     final s = _assignedStations[i];
+                                    if (!isWide) {
+                                      // Mobile: use inspection cards
+                                      return _inspectionCard(s, onTap: () => _showInspectionModal(s));
+                                    }
+                                    // Desktop: use table row
                                     final dt = _toDateTime(s['date']);
                                     final status = (s['status'] ?? 'Pending').toString();
                                     final done = status.toLowerCase().contains('done');
@@ -927,10 +1092,13 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: Text('Email: $_profileEmail')),
-                        ElevatedButton(
-                          onPressed: _saveInspectorProfile,
-                          child: const Text('Save'),
+                        Expanded(child: Text('Email: $_profileEmail', style: TextStyle(fontSize: isWide ? 14 : 13))),
+                        SizedBox(
+                          height: isWide ? 36 : 44,
+                          child: ElevatedButton(
+                            onPressed: _saveInspectorProfile,
+                            child: Text('Save', style: TextStyle(fontSize: isWide ? 14 : 15)),
+                          ),
                         ),
                       ],
                     ),
@@ -961,6 +1129,8 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
         ),
       ),
     );
+      },
+    );
   }
 
   Widget _whiteCard({required Widget child}) {
@@ -984,8 +1154,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
 
 
   /// Build inspections view: responsive layout and empty state
-  Widget _buildInspectionsView(List<Map<String, dynamic>> items, {Key? key}) {
-    final isWide = MediaQuery.of(context).size.width > 900;
+  Widget _buildInspectionsView(List<Map<String, dynamic>> items, {Key? key, bool isWide = true}) {
     if (items.isEmpty) {
       return Container(
         key: key,

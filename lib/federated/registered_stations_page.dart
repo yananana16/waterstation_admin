@@ -362,19 +362,13 @@ class RegisteredStationsPage extends StatelessWidget {
                   return matchesSearch && matchesDistrict;
                 }).toList();
 
-                final totalRows = filteredDocs.length;
-                final totalPages = (totalRows / rowsPerPage).ceil();
-                final startIdx = registeredStationsCurrentPage * rowsPerPage;
-                final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
-                final pageDocs = filteredDocs.sublist(
-                  startIdx < totalRows ? startIdx : 0,
-                  endIdx < totalRows ? endIdx : totalRows,
-                );
+                if (filteredDocs.isEmpty) {
+                  return const Center(child: Text('No station owners found.'));
+                }
 
-                return Column(
-                  children: [
-                    Expanded(
-                      child: ConstrainedBox(
+                return Expanded(
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
   constraints: BoxConstraints(
     minWidth: MediaQuery.of(context).size.width * 0.9, // at least 90% of screen
   ),
@@ -392,99 +386,99 @@ class RegisteredStationsPage extends StatelessWidget {
       ],
     ),
                           child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
-                            dataRowColor: WidgetStateProperty.resolveWith<Color?>(
-                              (Set<WidgetState> states) {
-                                if (states.contains(WidgetState.selected)) {
-                                  return Colors.blueAccent.withAlpha((0.08 * 255).round());
-                                }
-                                return Colors.white;
-                              },
-                            ),
-                            columnSpacing: 64,
-                            horizontalMargin: 32,
-                            dividerThickness: 1.2,
-                            columns: const [
+                              headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
+                              dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                                (Set<WidgetState> states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return Colors.blueAccent.withAlpha((0.08 * 255).round());
+                                  }
+                                  return Colors.white;
+                                },
+                              ),
+                              columnSpacing: 40,
+                              horizontalMargin: 20,
+                              dividerThickness: 1.2,
+                              columns: const [
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
-                                    'Name of Station',
+                                    'Station',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
                                     'Owner',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
                                     'District',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
                                     'Address',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
-                                    'CHO inspection Status',
+                                    'Status',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                               DataColumn(
                                 label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                                   child: Text(
                                     'Actions',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF1976D2),
-                                      fontSize: 15,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
                               ),
                             ],
-                            rows: pageDocs.map((doc) {
+                              rows: filteredDocs.map((doc) {
                               final data = doc.data() as Map<String, dynamic>;
                               final stationName = data['stationName'] ?? '';
                               final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
@@ -514,34 +508,38 @@ class RegisteredStationsPage extends StatelessWidget {
                                 cells: [
                                   DataCell(
                                     Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                      constraints: const BoxConstraints(maxWidth: 220),
                                       child: Text(
                                         stationName,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ),
                                   DataCell(
                                     Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                      child: Text(ownerName, style: const TextStyle(fontSize: 14)),
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                      constraints: const BoxConstraints(maxWidth: 150),
+                                      child: Text(ownerName, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                                     ),
                                   ),
                                   DataCell(
                                     Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                      child: Text(district, style: const TextStyle(fontSize: 14)),
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                      constraints: const BoxConstraints(maxWidth: 140),
+                                      child: Text(district, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                                     ),
                                   ),
                                   DataCell(
                                     Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                      width: 320,
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                      constraints: const BoxConstraints(maxWidth: 280),
                                       child: Text(
                                         address,
-                                        maxLines: 1,
+                                        maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 14),
+                                        style: const TextStyle(fontSize: 13),
                                       ),
                                     ),
                                   ),
@@ -592,13 +590,13 @@ class RegisteredStationsPage extends StatelessWidget {
                                         }
 
                                         return Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                                             decoration: BoxDecoration(color: displayColor, borderRadius: BorderRadius.circular(6)),
                                             child: Text(
                                               displayStatus,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                                             ),
                                           ),
                                         );
@@ -607,10 +605,13 @@ class RegisteredStationsPage extends StatelessWidget {
                                   ),
                                   DataCell(
                                     Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent),
+                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
                                           tooltip: "View on Map",
+                                          padding: const EdgeInsets.all(4),
+                                          constraints: const BoxConstraints(),
                                           onPressed: () {
                                             if (lat != null && lng != null) {
                                               onMapSelectedLocation(LatLng(lat, lng));
@@ -619,8 +620,10 @@ class RegisteredStationsPage extends StatelessWidget {
                                           },
                                         ),
                                         IconButton(
-                                          icon: const Icon(Icons.description, color: Colors.blueAccent),
+                                          icon: const Icon(Icons.description, color: Colors.blueAccent, size: 20),
                                           tooltip: "View Compliance Report",
+                                          padding: const EdgeInsets.all(4),
+                                          constraints: const BoxConstraints(),
                                           onPressed: () {
                                             onShowComplianceReportDetails(
                                               true,
@@ -635,38 +638,12 @@ class RegisteredStationsPage extends StatelessWidget {
                                   ),
                                 ],
                               );
-                            }).toList(),
+                              }).toList(),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    // Pagination controls
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed: registeredStationsCurrentPage > 0
-                                ? () => onCurrentPageChanged(registeredStationsCurrentPage - 1)
-                                : null,
-                          ),
-                          Text(
-                            'Page ${totalPages == 0 ? 0 : (registeredStationsCurrentPage + 1)} of $totalPages',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed: (registeredStationsCurrentPage < totalPages - 1)
-                                ? () => onCurrentPageChanged(registeredStationsCurrentPage + 1)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
+                  );
               },
             ),
           ),
@@ -870,22 +847,10 @@ class RegisteredStationsPage extends StatelessWidget {
                   return const Center(child: Text('No station owners found.'));
                 }
 
-                final totalRows = filteredDocs.length;
-                final totalPages = (totalRows / rowsPerPage).ceil();
-                final startIdx = registeredStationsCurrentPage * rowsPerPage;
-                final endIdx = (startIdx + rowsPerPage) > totalRows ? totalRows : (startIdx + rowsPerPage);
-                final pageDocs = filteredDocs.sublist(
-                  startIdx < totalRows ? startIdx : 0,
-                  endIdx < totalRows ? endIdx : totalRows,
-                );
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: pageDocs.length,
-                        itemBuilder: (ctx, idx) {
-                          final doc = pageDocs[idx];
+                return ListView.builder(
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (ctx, idx) {
+                    final doc = filteredDocs[idx];
                           final data = doc.data() as Map<String, dynamic>;
                           final stationName = data['stationName'] ?? '';
                           final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
@@ -1043,35 +1008,7 @@ class RegisteredStationsPage extends StatelessWidget {
                             ),
                           );
                         },
-                      ),
-                    ),
-                    // Pagination controls
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed: registeredStationsCurrentPage > 0
-                                ? () => onCurrentPageChanged(registeredStationsCurrentPage - 1)
-                                : null,
-                          ),
-                          Text(
-                            'Page ${totalPages == 0 ? 0 : (registeredStationsCurrentPage + 1)} of $totalPages',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed: (registeredStationsCurrentPage < totalPages - 1)
-                                ? () => onCurrentPageChanged(registeredStationsCurrentPage + 1)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
+                      );
               },
             ),
           ),

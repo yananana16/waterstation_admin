@@ -61,6 +61,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
 
   String _formatIso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  bool _isExpired(String? validUntilStr) {
+    if (validUntilStr == null || validUntilStr.isEmpty) return false;
+    final validDate = _tryParseFlexibleDate(validUntilStr);
+    if (validDate == null) return false;
+    return validDate.isBefore(DateTime.now());
+  }
+
   DateTime addMonthsPreserveDay(DateTime dt, int months) {
     int y = dt.year;
     int m = dt.month + months;
@@ -461,6 +468,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
       'sanitary_permit': 'Sanitary Permit',
       'source_bacteriological': 'Source Bacteriological',
       'source_physical_chemical': 'Source Physical Chemical',
+      'health_card': 'Health Card',
     };
 
     // First pass: direct contains on base
@@ -821,6 +829,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
         if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
         break;
       case 'source_bacteriological':
+      case 'health_card':
         // Valid for ~6 months
         valid = addMonthsPreserveDay(issuedDate, 6);
         if (monthYearOnly) valid = DateTime(valid.year, valid.month, 1);
@@ -841,7 +850,8 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
   }
 
   // Visual helpers (copied design)
-  Color _statusColor(String? status) {
+  Color _statusColor(String? status, {bool isExpired = false}) {
+    if (isExpired) return const Color(0xFF8B0000); // dark red for expired
     switch ((status ?? '').toLowerCase()) {
       case 'passed':
         return const Color(0xFF2E7D32); // green
@@ -887,13 +897,34 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
     }
   }
 
-  Widget _buildStatusChip(String? status, {bool compact = false}) {
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Colors.black87),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusChip(String? status, {bool compact = false, bool isExpired = false}) {
     // If backend status is 'submitreq', display as 'Failed' in UI
-    String displayStatus = status ?? 'Partially';
-    if (displayStatus.toLowerCase() == 'submitreq') {
+    String displayStatus = isExpired ? 'Expired' : (status ?? 'Partially');
+    if (!isExpired && displayStatus.toLowerCase() == 'submitreq') {
       displayStatus = 'Failed';
     }
-    final color = _statusColor(displayStatus);
+    final color = _statusColor(displayStatus, isExpired: isExpired);
     final text = displayStatus;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10, vertical: compact ? 2 : 4),
@@ -962,6 +993,38 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                           ),
                         ),
                       ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Status Legend:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 8,
+                              children: [
+                                _buildLegendItem('Passed', const Color(0xFF2E7D32)),
+                                _buildLegendItem('Failed', const Color(0xFFC62828)),
+                                _buildLegendItem('Pending', const Color(0xFFF9A825)),
+                                _buildLegendItem('Partially', const Color(0xFF1565C0)),
+                                _buildLegendItem('Expired', const Color(0xFF8B0000)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     Expanded(
                       child: Scrollbar(
                         controller: _horizontalScrollController,
@@ -991,14 +1054,16 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                   ? '${rawStatus[0].toUpperCase()}${rawStatus.substring(1).toLowerCase()}'
                                   : null;
 
-                              final accent = _statusColor(status);
-                              final icon = _fileIcon(extension);
-                              final iconColor = _fileIconColor(extension);
-
                               // --- Add these lines to get date issued and valid until ---
                               final dateIssued = (complianceStatuses['${categoryKey}_date_issued'] ?? '').toString();
                               final validUntil = (complianceStatuses['${categoryKey}_valid_until'] ?? '').toString();
+                              // Check if file is expired
+                              final isExpired = _isExpired(validUntil);
                               // --------------------------------------------------------- 
+
+                              final accent = _statusColor(status, isExpired: isExpired);
+                              final icon = _fileIcon(extension);
+                              final iconColor = _fileIconColor(extension);
 
                               return Card(
                                 elevation: 4,
@@ -1061,7 +1126,7 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              _buildStatusChip(status),
+                                              _buildStatusChip(status, isExpired: isExpired),
                                             ],
                                           ),
                                           const SizedBox(height: 14),

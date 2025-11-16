@@ -5,6 +5,7 @@ import 'login_screen.dart';
 import 'federated/admin_dashboard.dart';
 import 'district/district_admin_dashboard.dart';
 import 'LGU/lgu_dashboard.dart';
+import 'inspector/inspector_dashboard.dart';
 
 /// AuthWrapper checks if a user is already logged in and routes them
 /// to the appropriate dashboard based on their role.
@@ -53,6 +54,11 @@ class AuthWrapper extends StatelessWidget {
       // Check for CHO/LGU role
       if (userData['role'] == 'cho_lgu') {
         return const LguDashboard();
+      }
+
+      // Check for inspector role
+      if (userData['role'] == 'inspector') {
+        return const InspectorDashboard();
       }
 
       // If role not recognized, logout

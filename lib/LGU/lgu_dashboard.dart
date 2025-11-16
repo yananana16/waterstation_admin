@@ -1,10 +1,9 @@
 // ignore_for_file: unused_element, unused_local_variable
-// import 'package:cloud_firestore/cloud_firestore.dart'; // unused - removed
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // added to fetch real count
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/firestore_repository.dart';
-import 'package:waterstation_admin/LGU/water_stations_page.dart'; // moved Water Stations page to separate file
+import 'package:waterstation_admin/LGU/water_stations_page.dart';
 import 'package:waterstation_admin/LGU/schedule_page.dart';
 import '../federated/logout_dialog.dart';
 
@@ -16,19 +15,15 @@ class LguDashboard extends StatefulWidget {
 }
 
 class _LguDashboardState extends State<LguDashboard> {
-  int selectedIndex = 0; // 0: Dashboard, 1: Water Stations, 2: Schedule, 3: Profile
+  int selectedIndex = 0;
+  bool _isSidebarCollapsed = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // new: real count of station_owners
   int totalOwners = 0;
-
-  // new: counts per district
   Map<String, int> areaCounts = {};
-
-  // new: approved / failed counts
   int approvedCount = 0;
   int failedCount = 0;
 
-  // Add logout method
   void _logout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -36,7 +31,13 @@ class _LguDashboardState extends State<LguDashboard> {
       builder: (context) => const LogoutDialog(),
     );
     if (shouldLogout == true) {
-      Navigator.of(context).pop(); // or pushReplacement to login page if available
+      try {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      } catch (e) {
+        debugPrint('Error signing out: $e');
+      }
     }
   }
 
@@ -46,14 +47,12 @@ class _LguDashboardState extends State<LguDashboard> {
     _fetchTotalOwners();
   }
 
-  // fetch real count of station_owners from Firestore
   Future<void> _fetchTotalOwners() async {
     try {
       final snapshot = await FirestoreRepository.instance.getCollectionOnce(
         'station_owners',
         () => FirebaseFirestore.instance.collection('station_owners'),
       );
-      // compute total and counts per district
       final Map<String, int> counts = {};
       int approved = 0;
       int failed = 0;
@@ -63,8 +62,7 @@ class _LguDashboardState extends State<LguDashboard> {
         if (district.isNotEmpty) {
           counts[district] = (counts[district] ?? 0) + 1;
         }
-        // count status == 'approved' (case-insensitive)
-  final status = (data?['status'] ?? '').toString().toLowerCase();
+        final status = (data?['status'] ?? '').toString().toLowerCase();
         if (status == 'approved') {
           approved++;
         } else {
@@ -78,402 +76,487 @@ class _LguDashboardState extends State<LguDashboard> {
         failedCount = failed;
       });
     } catch (e) {
-      // fail silently; keep totalOwners as 0 (optionally log)
-      // print('Failed to fetch station_owners count: $e');
+      debugPrint('Failed to fetch station_owners count: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF7F9FB),
-      body: Row(
+      drawer: Drawer(
+        child: SafeArea(child: _buildSidebarContent()),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 900;
+          final sidebarWidth = isWide ? (_isSidebarCollapsed ? 80.0 : 250.0) : 0.0;
+          return Row(
+            children: [
+              if (isWide)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: sidebarWidth,
+                  child: _buildSidebarContent(collapsed: _isSidebarCollapsed),
+                ),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildTopBar(isWide),
+                    Expanded(child: _getSelectedPage()),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopBar(bool isWide) {
+    return Container(
+      height: 60,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFD6E8FD),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((0.18 * 255).round()),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          // Sidebar (updated to match DistrictAdminDashboard style)
-          Container(
-            width: 250,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6E8FD),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha((0.10 * 255).round()),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          if (!isWide)
+            IconButton(
+              icon: const Icon(Icons.menu, color: Color(0xFF1976D2)),
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             ),
-            child: Column(
-              children: [
-                // Top area (logo/tagline placeholder)
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Column(
-                    children: [
-                      // ...optionally add logo/tagline...
-                    ],
-                  ),
-                ),
-                // User Info
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFFD6E8FD),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "LGU Admin",
-                        style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'admin@lgu.local', // adjust if dynamic email desired
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
-                // Navigation (reuse existing _SidebarButton widgets)
-                _SidebarButton(
-                  icon: Icons.dashboard,
-                  label: 'Dashboard',
-                  selected: selectedIndex == 0,
-                  onTap: () => setState(() => selectedIndex = 0),
-                ),
-                _SidebarButton(
-                  icon: Icons.local_drink,
-                  label: 'Water Stations',
-                  selected: selectedIndex == 1,
-                  onTap: () => setState(() => selectedIndex = 1),
-                ),
-                _SidebarButton(
-                  icon: Icons.calendar_today,
-                  label: 'Schedule',
-                  selected: selectedIndex == 2,
-                  onTap: () => setState(() => selectedIndex = 2),
-                ),
-                _SidebarButton(
-                  icon: Icons.person,
-                  label: 'Profile',
-                  selected: selectedIndex == 3,
-                  onTap: () => setState(() => selectedIndex = 3),
-                ),
-                const Spacer(),
-                // Log out button
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: SizedBox(
-                    width: 160,
-                    height: 44,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.logout, color: Color(0xFF004687)),
-                      label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        side: const BorderSide(color: Color(0xFFD6E8FD)),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: _logout,
-                    ),
-                  ),
-                ),
-              ],
+          if (isWide)
+            IconButton(
+              icon: Icon(_isSidebarCollapsed ? Icons.chevron_right : Icons.chevron_left, color: const Color(0xFF1976D2)),
+              onPressed: () => setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
             ),
-          ),
-          // Main content
-          Expanded(
-            child: Column(
-              children: [
-                // Top Bar (copied style from DistrictAdminDashboard)
-                Container(
-                  height: 60,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD6E8FD),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.18 * 255).round()),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 32),
-                      const SizedBox(width: 16),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ...optional logo/tagline...
-                        ],
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
-                        onPressed: () {},
-                      ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
-                            onPressed: () {},
-                          ),
-                          Positioned(
-                            right: 8,
-                            top: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 5,
-                                minHeight: 2,
-                              ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 32),
-                    ],
-                  ),
-                ),
-                // Main page content (keeps existing pages but uses the new top bar)
-                Expanded(
-          child: selectedIndex == 0
-            ? Column(
-                          children: [
-                            // Date + time strip
-                            Container(
-                              color: const Color(0xFFF2F4F8),
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.calendar_today, color: Colors.black54, size: 20),
-                                  const SizedBox(width: 8),
-                                  const Text('Monday, May 5, 2025', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
-                                  const Spacer(),
-                                  Icon(Icons.access_time, color: Colors.black54, size: 20),
-                                  const SizedBox(width: 8),
-                                  const Text('11:25 AM PST', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
-                                ],
-                              ),
-                            ),
-                            // Greeting
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 18),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.04 * 255).round()), blurRadius: 8, offset: Offset(0, 2))],
-                                ),
-                                child: const Text("Hello, User!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                              ),
-                            ),
-                            // Main three-column content
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Left: Calendar + Reminders
-                                    Expanded(
-                                      flex: 3,
-                                      child: Column(
-                                        children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(10),
-                                              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
-                                            ),
-                                            padding: const EdgeInsets.all(16),
-                                            child: _CalendarWidget(), // existing calendar widget
-                                          ),
-                                          const SizedBox(height: 18),
-                                          Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.all(16),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(10),
-                                              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                const Text("Reminders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                                                const SizedBox(height: 12),
-                                                _ReminderCard(icon: Icons.circle, text: "Monthly bacteriological water analysis starts this week."),
-                                                const SizedBox(height: 8),
-                                                _ReminderCard(icon: Icons.circle, text: "Physical and chemical water analysis coming up in a month."),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    // Center: vertical stacked stats
-                                    SizedBox(
-                                      width: 160,
-                                      child: Column(
-                                        children: [
-                                          _SummaryCard(
-                                            label: 'Total\nWater Refilling Stations',
-                                            value: totalOwners.toString(),
-                                            color: Colors.white,
-                                            valueColor: const Color(0xFF0B63B7),
-                                            labelColor: const Color(0xFF0B63B7),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          _SummaryCard(
-                                            label: 'Passed',
-                                            value: approvedCount.toString(),
-                                            color: Colors.white,
-                                            valueColor: const Color(0xFF0B63B7),
-                                            labelColor: const Color(0xFF0B63B7),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          _SummaryCard(
-                                            label: 'Failed',
-                                            value: failedCount.toString(),
-                                            color: Colors.white,
-                                            valueColor: const Color(0xFF0B63B7),
-                                            labelColor: const Color(0xFF0B63B7),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    // Right: WRS list with bars
-                                    Expanded(
-                                      flex: 3,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(10),
-                                          boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text("Water Refilling Stations\nIloilo City", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                                            const SizedBox(height: 12),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "La Paz", value: areaCounts['La Paz'] ?? 6, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Mandurriao", value: areaCounts['Mandurriao'] ?? 0, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Molo", value: areaCounts['Molo'] ?? 0, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Lapuz", value: areaCounts['Lapuz'] ?? 0, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Arevalo", value: areaCounts['Arevalo'] ?? 0, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "Jaro", value: areaCounts['Jaro'] ?? 0, maxValue: 30),
-                                            const SizedBox(height: 8),
-                                            _AreaStatRow(label: "City Proper", value: areaCounts['City Proper'] ?? 0, maxValue: 30),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-            : selectedIndex == 1
-              ? const WaterStationsPage()
-                : selectedIndex == 2
-                ? const SchedulePage()
-                : const _ProfilePage(),
-                ),
-              ],
-            ),
-          ),
+          const Spacer(),
         ],
       ),
     );
   }
-}
 
-// Sidebar button widget
-class _SidebarButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-  const _SidebarButton({
-    required this.icon,
-    required this.label,
-    this.selected = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSidebarContent({bool collapsed = false}) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      decoration: selected
-          ? BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            )
-          : null,
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: selected ? const Color(0xFF0B63B7) : Colors.grey, // changed unselected icon color to grey
+      color: const Color(0xFFD6E8FD),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: collapsed ? const SizedBox(height: 20) : Column(children: []),
+          ),
+          if (!collapsed)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "LGU Admin",
+                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    FirebaseAuth.instance.currentUser?.email ?? 'admin@lgu.local',
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          const Divider(color: Color(0xFF004687), thickness: 1, height: 10),
+          _sidebarNavTile('Dashboard', 0, collapsed),
+          _sidebarNavTile('Water Stations', 1, collapsed),
+          _sidebarNavTile('Schedule', 2, collapsed),
+          const Spacer(),
+          if (!collapsed) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 160,
+                height: 42,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.person, color: Color(0xFF004687)),
+                  label: const Text("Profile", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: () => setState(() => selectedIndex = 3),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: SizedBox(
+                width: 160,
+                height: 44,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.logout, color: Color(0xFF004687)),
+                  label: const Text("Log out", style: TextStyle(color: Color(0xFF004687))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: _logout,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sidebarNavTile(String label, int index, bool collapsed) {
+    IconData icon;
+    switch (label) {
+      case 'Dashboard':
+        icon = Icons.dashboard;
+        break;
+      case 'Water Stations':
+        icon = Icons.local_drink;
+        break;
+      case 'Schedule':
+        icon = Icons.calendar_today;
+        break;
+      case 'Profile':
+        icon = Icons.person;
+        break;
+      default:
+        icon = Icons.circle;
+    }
+    final isSelected = selectedIndex == index;
+    if (collapsed) {
+      return Tooltip(
+        message: label,
+        child: IconButton(
+          icon: Icon(icon, color: isSelected ? const Color(0xFF004687) : Colors.blueGrey),
+          onPressed: () => setState(() => selectedIndex = index),
         ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: selected ? const Color(0xFF0B63B7) : Colors.grey, // changed unselected label color to grey
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+      );
+    }
+    return _sidebarNavItem(label, index, icon);
+  }
+
+  Widget _sidebarNavItem(String label, int index, IconData icon) {
+    bool isSelected = selectedIndex == index;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => selectedIndex = index),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+          child: Row(
+            children: [
+              Icon(icon, color: isSelected ? Color(0xFF004687) : Colors.blueGrey, size: 22),
+              const SizedBox(width: 16),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Color(0xFF004687) : Colors.blueGrey,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 15,
+                ),
+              ),
+            ],
           ),
         ),
-        dense: true,
-        onTap: onTap,
       ),
+    );
+  }
+
+  Widget _getSelectedPage() {
+    switch (selectedIndex) {
+      case 0:
+        return _buildDashboardOverview();
+      case 1:
+        return const WaterStationsPage();
+      case 2:
+        return const SchedulePage();
+      case 3:
+        return const _ProfilePage();
+      default:
+        return const Center(child: Text("Page Not Found"));
+    }
+  }
+
+  Widget _buildDashboardOverview() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
+        return Column(
+          children: [
+            // Date + time strip
+            Container(
+              color: const Color(0xFFF2F4F8),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, color: Colors.black54, size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Monday, May 5, 2025',
+                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.access_time, color: Colors.black54, size: 20),
+                  const SizedBox(width: 8),
+                  Text('11:25 AM PST', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
+                ],
+              ),
+            ),
+            // Greeting
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 18),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 8)],
+                ),
+                child: const Text("Hello, User!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+              ),
+            ),
+            // Main content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: isWide ? _buildWideLayout() : _buildNarrowLayout(),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWideLayout() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: _CalendarWidget(),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Reminders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                    const SizedBox(height: 12),
+                    _ReminderCard(icon: Icons.circle, text: "Monthly bacteriological water analysis starts this week."),
+                    const SizedBox(height: 8),
+                    _ReminderCard(icon: Icons.circle, text: "Physical and chemical water analysis coming up in a month."),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 24),
+        SizedBox(
+          width: 160,
+          child: Column(
+            children: [
+              _SummaryCard(
+                label: 'Total\nWater Refilling Stations',
+                value: totalOwners.toString(),
+                color: Colors.white,
+                valueColor: const Color(0xFF0B63B7),
+                labelColor: const Color(0xFF0B63B7),
+              ),
+              const SizedBox(height: 12),
+              _SummaryCard(
+                label: 'Passed',
+                value: approvedCount.toString(),
+                color: Colors.white,
+                valueColor: const Color(0xFF0B63B7),
+                labelColor: const Color(0xFF0B63B7),
+              ),
+              const SizedBox(height: 12),
+              _SummaryCard(
+                label: 'Failed',
+                value: failedCount.toString(),
+                color: Colors.white,
+                valueColor: const Color(0xFF0B63B7),
+                labelColor: const Color(0xFF0B63B7),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 3,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Water Refilling Stations\nIloilo City", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                const SizedBox(height: 12),
+                _AreaStatRow(label: "La Paz", value: areaCounts['La Paz'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "Mandurriao", value: areaCounts['Mandurriao'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "Molo", value: areaCounts['Molo'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "Lapuz", value: areaCounts['Lapuz'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "Arevalo", value: areaCounts['Arevalo'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "Jaro", value: areaCounts['Jaro'] ?? 0, maxValue: 30),
+                const SizedBox(height: 8),
+                _AreaStatRow(label: "City Proper", value: areaCounts['City Proper'] ?? 0, maxValue: 30),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNarrowLayout() {
+    return Column(
+      children: [
+        _SummaryCard(
+          label: 'Total Water Refilling Stations',
+          value: totalOwners.toString(),
+          color: Colors.white,
+          valueColor: const Color(0xFF0B63B7),
+          labelColor: const Color(0xFF0B63B7),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _SummaryCard(
+                label: 'Passed',
+                value: approvedCount.toString(),
+                color: Colors.white,
+                valueColor: const Color(0xFF0B63B7),
+                labelColor: const Color(0xFF0B63B7),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _SummaryCard(
+                label: 'Failed',
+                value: failedCount.toString(),
+                color: Colors.white,
+                valueColor: const Color(0xFF0B63B7),
+                labelColor: const Color(0xFF0B63B7),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: _CalendarWidget(),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Reminders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+              const SizedBox(height: 12),
+              _ReminderCard(icon: Icons.circle, text: "Monthly bacteriological water analysis starts this week."),
+              const SizedBox(height: 8),
+              _ReminderCard(icon: Icons.circle, text: "Physical and chemical water analysis coming up in a month."),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Water Refilling Stations\nIloilo City", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+              const SizedBox(height: 12),
+              _AreaStatRow(label: "La Paz", value: areaCounts['La Paz'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "Mandurriao", value: areaCounts['Mandurriao'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "Molo", value: areaCounts['Molo'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "Lapuz", value: areaCounts['Lapuz'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "Arevalo", value: areaCounts['Arevalo'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "Jaro", value: areaCounts['Jaro'] ?? 0, maxValue: 30),
+              const SizedBox(height: 8),
+              _AreaStatRow(label: "City Proper", value: areaCounts['City Proper'] ?? 0, maxValue: 30),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-// Summary card widget
+// Widget classes remain the same
 class _SummaryCard extends StatelessWidget {
   final String label;
   final String value;
@@ -491,46 +574,37 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 170,
-      height: 120, // Increased height
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 120),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             label,
             style: TextStyle(
               color: labelColor,
-              fontSize: 12, // Smaller font
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
-          Expanded(
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    color: valueColor,
-                    fontSize: 32, // Smaller font
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                color: valueColor,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
@@ -540,37 +614,25 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// Calendar widget (dynamic to current month/day)
 class _CalendarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double cellSize = 44.0;
     final days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
     final now = DateTime.now();
-    final monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+    final monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     final monthName = monthNames[now.month - 1];
     final year = now.year;
-
     final firstDayOfMonth = DateTime(year, now.month, 1);
-    // start index where Sunday=0
     final startIndex = firstDayOfMonth.weekday % 7;
-    // number of days in current month
     final daysInMonth = DateTime(year, now.month + 1, 0).day;
 
-    // build weeks as List<List<String>>
     final List<List<String>> weeks = [];
     int day = 1;
     while (day <= daysInMonth) {
       final week = List<String>.filled(7, '');
       for (int i = 0; i < 7 && day <= daysInMonth; i++) {
-        if (weeks.isEmpty && i < startIndex) {
-          // leading empty cells for first week
-          continue;
-        }
+        if (weeks.isEmpty && i < startIndex) continue;
         if (day <= daysInMonth) {
           week[i] = day.toString();
           day++;
@@ -589,149 +651,40 @@ class _CalendarWidget extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Text(
-                monthName,
-                style: const TextStyle(
-                  color: Color(0xFF0B63B7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
+              Text(monthName, style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 20)),
               const Spacer(),
-              Text(
-                year.toString(),
-                style: const TextStyle(
-                  color: Color(0xFF0B63B7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
+              Text(year.toString(), style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 20)),
             ],
           ),
           const SizedBox(height: 12),
-          // Days of week
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: days
-                .map((d) => SizedBox(
-                      width: cellSize,
-                      child: Text(
-                        d,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ))
-                .toList(),
+            children: days.map((d) => SizedBox(width: cellSize, child: Text(d, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)))).toList(),
           ),
           const SizedBox(height: 8),
-          // Calendar weeks
-          ...weeks.map(
-            (week) => Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: week
-                  .map(
-                    (dayStr) {
-                      final isToday = dayStr.isNotEmpty && int.tryParse(dayStr) == now.day;
-                      return Container(
-                        width: cellSize,
-                        height: cellSize,
-                        alignment: Alignment.center,
-                        decoration: isToday
-                            ? BoxDecoration(
-                                color: const Color(0xFF0B63B7),
-                                borderRadius: BorderRadius.circular(10),
-                              )
-                            : null,
-                        child: Text(
-                          dayStr,
-                          style: TextStyle(
-                            color: isToday ? Colors.white : (dayStr.isEmpty ? Colors.black38 : Colors.black87),
-                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                  .toList(),
-            ),
-          ),
+          ...weeks.map((week) => Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: week.map((dayStr) {
+                  final isToday = dayStr.isNotEmpty && int.tryParse(dayStr) == now.day;
+                  return Container(
+                    width: cellSize,
+                    height: cellSize,
+                    alignment: Alignment.center,
+                    decoration: isToday ? BoxDecoration(color: const Color(0xFF0B63B7), borderRadius: BorderRadius.circular(10)) : null,
+                    child: Text(dayStr, style: TextStyle(color: isToday ? Colors.white : (dayStr.isEmpty ? Colors.black38 : Colors.black87), fontWeight: isToday ? FontWeight.bold : FontWeight.normal)),
+                  );
+                }).toList(),
+              )),
         ],
       ),
     );
   }
 }
 
-// Area stations table widget
-class _AreaStationsTable extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final areas = [
-      ['La Paz', '24'],
-      ['Mandurriao', '36'],
-      ['Molo', '30'],
-      ['Lapuz', '30'],
-      ['Arevalo', '29'],
-      ['Jaro 1', '14'],
-      ['Jaro 2', '16'],
-      ['City Proper 1', '18'],
-      ['City Proper 2', '9'],
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double chipWidth = (constraints.maxWidth - 48) / 4;
-        chipWidth = chipWidth.clamp(90, 140);
-        return Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: areas
-              .map(
-                (area) => Container(
-                  width: chipWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Color(0xFFEAF6FF),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          area[0],
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF0B63B7),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        area[1],
-                        style: const TextStyle(
-                          color: Color(0xFF0B63B7),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-}
-
-// Reminder card widget
 class _ReminderCard extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -751,29 +704,47 @@ class _ReminderCard extends StatelessWidget {
         children: [
           Icon(icon, color: Color(0xFF0B63B7)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: Color(0xFF0B63B7),
-                fontWeight: FontWeight.w500,
-                fontSize: 15,
-              ),
-            ),
-          ),
+          Expanded(child: Text(text, style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.w500, fontSize: 15))),
         ],
       ),
     );
   }
 }
 
-// Compliance Page removed as requested.
+class _AreaStatRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final int maxValue;
+  const _AreaStatRow({required this.label, required this.value, this.maxValue = 30});
 
-// Schedule page moved to `lib/LGU/schedule_page.dart`.
+  @override
+  Widget build(BuildContext context) {
+    final percent = (maxValue == 0) ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
+    return Row(
+      children: [
+        Expanded(flex: 3, child: Text(label, style: const TextStyle(color: Color(0xFF0B63B7)))),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 6,
+          child: Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              Container(height: 28, decoration: BoxDecoration(color: const Color(0xFFEAF6FF), borderRadius: BorderRadius.circular(6))),
+              FractionallySizedBox(
+                widthFactor: percent,
+                child: Container(height: 28, decoration: BoxDecoration(color: const Color(0xFF0B63B7), borderRadius: BorderRadius.circular(6))),
+              ),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(value.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ProfilePage extends StatefulWidget {
   const _ProfilePage();
-
   @override
   State<_ProfilePage> createState() => _ProfilePageState();
 }
@@ -796,52 +767,25 @@ class _ProfilePageState extends State<_ProfilePage> {
     setState(() => _loading = true);
     try {
       final col = FirebaseFirestore.instance.collection('cho_lgu');
-      // If a signed-in user exists, prefer the document with their UID
       final user = FirebaseAuth.instance.currentUser;
-      QuerySnapshot snap;
       if (user != null) {
         final doc = await col.doc(user.uid).get();
         if (doc.exists) {
-          // found the user's document directly
-          final d = doc;
-          final data = d.data();
+          final data = doc.data();
           setState(() {
-            _docId = d.id;
+            _docId = doc.id;
             name = (data?['name'] ?? data?['adminName'] ?? data?['displayName'] ?? '').toString();
             role = (data?['role'] ?? '').toString();
             contact = (data?['contact'] ?? data?['phone'] ?? '').toString();
             email = (data?['email'] ?? '').toString();
           });
-          if (mounted) setState(() => _loading = false);
           return;
-        } else {
-          // fall back to admin:true or first doc
-          var snapTmp = await col.where('admin', isEqualTo: true).limit(1).get();
-          if (snapTmp.docs.isEmpty) {
-            snapTmp = await col.limit(1).get();
-          }
-          if (snapTmp.docs.isNotEmpty) {
-            final d = snapTmp.docs.first;
-            final data = d.data() as Map<String, dynamic>?;
-            setState(() {
-              _docId = d.id;
-              name = (data?['name'] ?? data?['adminName'] ?? data?['displayName'] ?? '').toString();
-              role = (data?['role'] ?? '').toString();
-              contact = (data?['contact'] ?? data?['phone'] ?? '').toString();
-              email = (data?['email'] ?? '').toString();
-            });
-            if (mounted) setState(() => _loading = false);
-            return;
-          }
         }
       }
-      // No user or no matching/user doc found; use existing behavior
-      var snapResult = await col.where('admin', isEqualTo: true).limit(1).get();
-      if (snapResult.docs.isEmpty) {
-        snapResult = await col.limit(1).get();
-      }
-      if (snapResult.docs.isNotEmpty) {
-        final d = snapResult.docs.first;
+      var snap = await col.where('admin', isEqualTo: true).limit(1).get();
+      if (snap.docs.isEmpty) snap = await col.limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first;
         final data = d.data();
         setState(() {
           _docId = d.id;
@@ -849,15 +793,6 @@ class _ProfilePageState extends State<_ProfilePage> {
           role = (data['role'] ?? '').toString();
           contact = (data['contact'] ?? data['phone'] ?? '').toString();
           email = (data['email'] ?? '').toString();
-        });
-      } else {
-        // no existing profile; keep fields empty so user can add
-        setState(() {
-          _docId = null;
-          name = '';
-          role = '';
-          contact = '';
-          email = '';
         });
       }
     } catch (e) {
@@ -871,31 +806,20 @@ class _ProfilePageState extends State<_ProfilePage> {
     setState(() => _loading = true);
     try {
       final col = FirebaseFirestore.instance.collection('cho_lgu');
-      final data = {
-        'name': name,
-        'role': role,
-        'contact': contact,
-        'email': email,
-        'admin': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+      final data = {'name': name, 'role': role, 'contact': contact, 'email': email, 'admin': true, 'updatedAt': FieldValue.serverTimestamp()};
       final user = FirebaseAuth.instance.currentUser;
       if (_docId != null) {
         await col.doc(_docId).set(data, SetOptions(merge: true));
       } else if (user != null) {
-        // ensure email is set to authenticated email if empty
         if ((data['email'] ?? '').toString().isEmpty && user.email != null) data['email'] = user.email!;
-        // create the document under the user's UID so rules allowing owner writes pass
         await col.doc(user.uid).set(data, SetOptions(merge: true));
         _docId = user.uid;
       } else {
-        // fallback to adding a document (may be blocked by rules depending on auth)
         final ref = await col.add(data);
         _docId = ref.id;
       }
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
     } catch (e) {
-      debugPrint('Failed to save LGU profile: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save profile')));
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -905,7 +829,7 @@ class _ProfilePageState extends State<_ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 18.0),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -915,46 +839,83 @@ class _ProfilePageState extends State<_ProfilePage> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
             ),
             child: const Text('Profile', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 18)),
           ),
           const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left column: avatar + change picture + save button
-                  Column(
-                children: [
-                    const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: const [
-                      Icon(Icons.edit, color: Color(0xFF0B63B7), size: 16),
-                      SizedBox(width: 6),
-                      Text('Change Profile Picture', style: TextStyle(color: Color(0xFF0B63B7))),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                      width: 140,
-                      height: 40,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0B63B7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 600;
+              if (isWide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      children: [
+                        const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: const [
+                            Icon(Icons.edit, color: Color(0xFF0B63B7), size: 16),
+                            SizedBox(width: 6),
+                            Text('Change Profile Picture', style: TextStyle(color: Color(0xFF0B63B7))),
+                          ],
                         ),
-                        child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: 140,
+                          height: 40,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _saveProfile,
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
+                            child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 32),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _ProfileFieldRow(label: 'Name:', value: name, onEdit: () async {
+                            final v = await _showEditDialog(context, 'Name', name);
+                            if (v != null) setState(() => name = v);
+                          }),
+                          const SizedBox(height: 12),
+                          _ProfileFieldRow(label: 'Role:', value: role, onEdit: () async {
+                            final v = await _showEditDialog(context, 'Role', role);
+                            if (v != null) setState(() => role = v);
+                          }),
+                          const SizedBox(height: 12),
+                          _ProfileFieldRow(label: 'Contact Number:', value: contact, onEdit: () async {
+                            final v = await _showEditDialog(context, 'Contact Number', contact);
+                            if (v != null) setState(() => contact = v);
+                          }),
+                          const SizedBox(height: 12),
+                          _ProfileFieldRow(label: 'Email:', value: email, onEdit: () async {
+                            final v = await _showEditDialog(context, 'Email', email);
+                            if (v != null) setState(() => email = v);
+                          }),
+                        ],
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(width: 32),
-              // Right column: details list
-              Expanded(
-                child: Column(
+                  ],
+                );
+              } else {
+                return Column(
                   children: [
+                    const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.edit, color: Color(0xFF0B63B7), size: 16),
+                        SizedBox(width: 6),
+                        Text('Change Profile Picture', style: TextStyle(color: Color(0xFF0B63B7))),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
                     _ProfileFieldRow(label: 'Name:', value: name, onEdit: () async {
                       final v = await _showEditDialog(context, 'Name', name);
                       if (v != null) setState(() => name = v);
@@ -974,10 +935,20 @@ class _ProfilePageState extends State<_ProfilePage> {
                       final v = await _showEditDialog(context, 'Email', email);
                       if (v != null) setState(() => email = v);
                     }),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
+                        child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+            },
           ),
         ],
       ),
@@ -1000,144 +971,6 @@ class _ProfilePageState extends State<_ProfilePage> {
   }
 }
 
-// All Stations Table Page
-class _AllStationsTable extends StatelessWidget {
-  const _AllStationsTable();
-
-  @override
-  Widget build(BuildContext context) {
-    final stations = [
-      ['PureFlow Water Station', 'Mark Delacruz', 'Passed'],
-      ['AquaSpring Refilling Hub', 'Julia Fernandez', 'Passed'],
-      ['BlueWave Water Depot', 'Richard Gomez', 'Passed'],
-      ['AquaPrime Refilling Station', 'Carlos Mendoza', 'Passed'],
-      ['HydroPure H2O Haven', 'Isabella Reyes', 'Passed'],
-    ];
-
-    return Column(
-      children: [
-        // Header
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          child: Row(
-            children: [
-              const Text(
-                'All Water Stations',
-                style: TextStyle(
-                  color: Color(0xFF0B63B7),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 28,
-                ),
-              ),
-              const Spacer(),
-              Icon(Icons.settings, color: Color(0xFF0B63B7)),
-              const SizedBox(width: 20),
-              Icon(Icons.notifications_none, color: Color(0xFF0B63B7)),
-              const SizedBox(width: 20),
-              Icon(Icons.person_outline, color: Color(0xFF0B63B7)),
-            ],
-          ),
-        ),
-        // Table
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Color(0xFFE0E0E0)),
-              ),
-              child: Column(
-                children: [
-                  // Table header
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFFE0E0E0)),
-                      ),
-                    ),
-                    child: Row(
-                      children: const [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            'Name of Station',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            'Owner Name',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            'Status',
-                            style: TextStyle(
-                              color: Color(0xFF0B63B7),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Table rows
-                  ...stations.map((row) => Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Color(0xFFE0E0E0)),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text(row[0]),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(row[1]),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                row[2],
-                                style: TextStyle(
-                                  color: row[2] == 'Passed'
-                                      ? Colors.green
-                                      : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Profile field row used on profile page
 class _ProfileFieldRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1148,78 +981,14 @@ class _ProfileFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFF5F7FA), borderRadius: BorderRadius.circular(6)),
       child: Row(
         children: [
-          Expanded(
-            flex: 3,
-            child: Text(label, style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            flex: 6,
-            child: Text(value, style: const TextStyle(color: Colors.black87)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit, color: Color(0xFF0B63B7)),
-            onPressed: onEdit,
-          ),
+          Expanded(flex: 3, child: Text(label, style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.bold))),
+          Expanded(flex: 6, child: Text(value, style: const TextStyle(color: Colors.black87), overflow: TextOverflow.ellipsis)),
+          IconButton(icon: const Icon(Icons.edit, color: Color(0xFF0B63B7)), onPressed: onEdit),
         ],
       ),
     );
   }
 }
-
-// Add helper widget for right-side area bars
-class _AreaStatRow extends StatelessWidget {
-  final String label;
-  final int value;
-  final int maxValue;
-  const _AreaStatRow({required this.label, required this.value, this.maxValue = 30});
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = (maxValue == 0) ? 0.0 : (value / maxValue).clamp(0.0, 1.0);
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: Text(label, style: const TextStyle(color: Color(0xFF0B63B7))),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 6,
-          child: Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              Container(
-                height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF6FF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              FractionallySizedBox(
-                widthFactor: percent,
-                child: Container(
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0B63B7),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(value.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-

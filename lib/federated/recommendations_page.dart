@@ -169,7 +169,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                      colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -177,8 +177,11 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   ),
                   child: const Icon(Icons.psychology, color: Colors.white, size: 20),
                 ),
-                const SizedBox(width: 12),
-                const Text("AI-Powered Recommendations"),
+                const SizedBox(width: 10),
+                const Text(
+                  "AI-Powered Recommendations",
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
             backgroundColor: Colors.white,
@@ -196,7 +199,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
                             strokeWidth: 2.5,
                           ),
                         ),
@@ -204,7 +207,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     : Container(
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                            colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                           ),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -234,59 +237,150 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               const SizedBox(width: 12),
             ],
           ),
-          body: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection("station_recommendations")
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
+          body: Column(
+            children: [
+              // Explanation Card
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF1976D2).withOpacity(0.1),
+                      const Color(0xFF42A5F5).withOpacity(0.05),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF1976D2).withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1976D2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'About These Recommendations',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2D3748),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'These are AI-recommended locations for establishing new water refilling stations based on:',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF4A5568),
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildBulletPoint('Customer density analysis - areas with high demand but limited supply'),
+                    _buildBulletPoint('Sales pattern trends - identifying underserved profitable zones'),
+                    _buildBulletPoint('Geographic distribution - optimal spacing to maximize coverage'),
+                    _buildBulletPoint('District-level insights - strategic expansion opportunities'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.tips_and_updates, size: 18, color: Colors.amber[700]),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Use these recommendations to guide business expansion decisions and identify high-potential locations for new water station investments.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF2D3748),
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Recommendations Stream
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("station_recommendations")
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.radar,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              "No recommendations available",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Click regenerate to create new recommendations",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
                             ),
                           ],
                         ),
-                        child: Icon(
-                          Icons.radar,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        "No recommendations available",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Click regenerate to create new recommendations",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
+                      );
+                    }
 
               final recommendations = snapshot.data!.docs.map((doc) {
                 return Recommendation.fromRaw(
@@ -358,6 +452,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             },
           ),
         ),
+            ],
+          ),
+        ),
         // Loading overlay
         if (_isRunning)
           Container(
@@ -385,7 +482,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                          colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                         ),
                         shape: BoxShape.circle,
                       ),
@@ -462,6 +559,37 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
+  Widget _buildBulletPoint(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Color(0xFF1976D2),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF4A5568),
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Build each recommendation card
   Widget _buildRecommendationCard(
       BuildContext context, Recommendation rec) {
@@ -501,7 +629,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                        colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                       ),
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -518,30 +646,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Do not display the priority chip when priority is "High"
-                  if (rec.priority != "High")
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _priorityColor(rec.priority),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _priorityColor(rec.priority).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        rec.priority,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
                 ],
               ),
               Container(
@@ -595,7 +699,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                        colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -636,20 +740,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
-  /// Helper for chip colors
-  Color _priorityColor(String priority) {
-    switch (priority) {
-      case "High":
-        return Colors.redAccent;
-      case "Medium":
-        return Colors.orange;
-      case "Low":
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
   Future<void> _showMapSheet(BuildContext context, double lat, double lng, String district) async {
     final coords = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
 
@@ -688,7 +778,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                            colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -816,7 +906,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),

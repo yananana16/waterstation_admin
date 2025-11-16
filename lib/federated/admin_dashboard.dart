@@ -226,53 +226,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                           ),
                           const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.settings, color: Color(0xFF1976D2), size: 28),
-                            onPressed: () {
-                              setState(() {
-                                _showSettingsPage = true;
-                                _showNotificationsPage = false;
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          Stack(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.notifications, color: Color(0xFF1976D2), size: 28),
-                                onPressed: () {
-                                  setState(() {
-                                    _showNotificationsPage = true;
-                                    _showSettingsPage = false;
-                                  });
-                                },
-                              ),
-                              Positioned(
-                                right: 8,
-                                top: 2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 5,
-                                    minHeight: 2,
-                                  ),
-                                  child: const Text(
-                                    '3',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(width: 32),
                         ],
                       ),
