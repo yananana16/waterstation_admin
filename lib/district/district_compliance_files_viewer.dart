@@ -1014,7 +1014,6 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                               spacing: 16,
                               runSpacing: 8,
                               children: [
-                                _buildLegendItem('Passed', const Color(0xFF2E7D32)),
                                 _buildLegendItem('Failed', const Color(0xFFC62828)),
                                 _buildLegendItem('Pending', const Color(0xFFF9A825)),
                                 _buildLegendItem('Partially', const Color(0xFF1565C0)),

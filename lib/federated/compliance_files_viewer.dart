@@ -9,8 +9,14 @@ import '../utils/email_sender.dart';
 const String backendUrl = 'https://email-backend-qhq3.onrender.com/send-email';
 class ComplianceFilesViewer extends StatefulWidget {
   final String stationOwnerDocId;
-  final VoidCallback? onStatusChanged; // Add this line
-  const ComplianceFilesViewer({super.key, required this.stationOwnerDocId, this.onStatusChanged});
+  final VoidCallback? onStatusChanged; // callback when a status is saved
+  final bool isDistrictAdmin; // role flag: true => restrict 'Passed' selection & disable when already passed
+  const ComplianceFilesViewer({
+    super.key,
+    required this.stationOwnerDocId,
+    this.onStatusChanged,
+    this.isDistrictAdmin = false,
+  });
 
   @override
   State<ComplianceFilesViewer> createState() => _ComplianceFilesViewerState();
@@ -913,8 +919,13 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                             alignment: Alignment.centerLeft,
                                             icon: Icon(Icons.keyboard_arrow_down_rounded, color: accent),
                                             menuMaxHeight: 320,
-                                            // Only set initialValue if it is a supported option
-                                            initialValue: const ['Pending', 'Passed', 'Partially', 'Failed'].contains(status) ? status : null,
+                                            // Role-based options
+                                            // Federated: Pending, Passed, Partially, Failed
+                                            // District: Pending, Partially, Failed (exclude Passed)
+                                            // If district and status == Passed we disable dropdown entirely.
+                                            initialValue: widget.isDistrictAdmin
+                                                ? (const ['Pending', 'Partially', 'Failed'].contains(status) ? status : null)
+                                                : (const ['Pending', 'Passed', 'Partially', 'Failed'].contains(status) ? status : null),
                                             decoration: InputDecoration(
                                               labelText: 'Status',
                                               labelStyle: const TextStyle(fontWeight: FontWeight.w600),
@@ -937,8 +948,11 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                               ),
                                             ),
                                             selectedItemBuilder: (context) {
-                                              // Must match items length (header + divider + 4 options)
-                                              final opts = ['__header', '__div', 'Pending', 'Passed', 'Partially', 'Failed'];
+                                              // Build list matching item sequence
+                                              final baseOpts = widget.isDistrictAdmin
+                                                  ? ['Pending', 'Partially', 'Failed']
+                                                  : ['Pending', 'Passed', 'Partially', 'Failed'];
+                                              final opts = ['__header', '__div', ...baseOpts];
                                               return opts.map((opt) {
                                                 switch (opt) {
                                                   case '__header':
@@ -975,8 +989,10 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 enabled: false,
                                                 child: Divider(height: 1, thickness: 1),
                                               ),
-                                              // Options (federated keeps Passed)
-                                              ...['Pending', 'Passed', 'Partially', 'Failed'].map((opt) {
+                                              // Role-based options
+                                              ...(widget.isDistrictAdmin
+                                                  ? ['Pending', 'Partially', 'Failed']
+                                                  : ['Pending', 'Passed', 'Partially', 'Failed']).map((opt) {
                                                 final color = _statusColor(opt);
                                                 final subtitle = {
                                                   'Pending': 'Waiting for review',
@@ -1010,15 +1026,21 @@ class _ComplianceFilesViewerState extends State<ComplianceFilesViewer> {
                                                 );
                                               }),
                                             ],
-                                            onChanged: (value) {
-                                              setState(() {
-                                                if (value != null && value != '__header' && value != '__div') {
-                                                  statusEdits[statusKey] = value;
-                                                }
-                                              });
-                                            },
+                                            onChanged: (widget.isDistrictAdmin && (status?.toLowerCase() == 'passed'))
+                                                ? null
+                                                : (value) {
+                                                    setState(() {
+                                                      if (value != null && value != '__header' && value != '__div') {
+                                                        statusEdits[statusKey] = value;
+                                                      }
+                                                    });
+                                                  },
                                             style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
                                             dropdownColor: Colors.white,
+                                            disabledHint: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: _buildStatusChip(status, compact: true),
+                                            ),
                                           ),
 
                                           const SizedBox(height: 10),

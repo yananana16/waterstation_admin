@@ -86,6 +86,7 @@ class RegisteredStationsPage extends StatelessWidget {
                         padding: const EdgeInsets.all(12.0),
                         child: ComplianceFilesViewer(
                           stationOwnerDocId: selectedComplianceStationDocId!,
+                          isDistrictAdmin: isDistrictAdmin,
                         ),
                       ),
                     ),
