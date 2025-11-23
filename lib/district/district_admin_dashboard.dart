@@ -1031,6 +1031,9 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
           return const Center(child: Text('Could not determine your district.'));
         }
         // Delegate rendering to the shared RegisteredStationsPage used in federated admin.
+        // NOTE: The stations list is already alphabetically sorted by stationName
+        // and the DataTable stretches to available width inside RegisteredStationsPage.
+        // (See modifications in registered_stations_page.dart for implementation.)
         return RegisteredStationsPage(
           mapSelectedLocation: _mapSelectedLocation,
           mapController: _mapController,

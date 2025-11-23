@@ -390,7 +390,12 @@ class RegisteredStationsPage extends StatelessWidget {
                       ? true
                       : (data['districtName'] ?? '') == registeredStationsDistrictFilter;
                   return matchesSearch && matchesDistrict;
-                }).toList();
+                }).toList()
+                  ..sort((a, b) {
+                    final aName = (a.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
+                    final bName = (b.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
+                    return aName.compareTo(bName);
+                  });
 
                 if (filteredDocs.isEmpty) {
                   return const Center(child: Text('No station owners found.'));
@@ -938,7 +943,12 @@ class RegisteredStationsPage extends StatelessWidget {
                       ? true
                       : (data['districtName'] ?? '') == registeredStationsDistrictFilter;
                   return matchesSearch && matchesDistrict;
-                }).toList();
+                }).toList()
+                  ..sort((a, b) {
+                    final aName = (a.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
+                    final bName = (b.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
+                    return aName.compareTo(bName);
+                  });
 
                 if (filteredDocs.isEmpty) {
                   return const Center(child: Text('No station owners found.'));
