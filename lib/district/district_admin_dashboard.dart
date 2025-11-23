@@ -1020,31 +1020,44 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
       }
 
   Widget _buildWaterStationsPage() {
-    // Delegate rendering to the shared RegisteredStationsPage used in federated admin.
-    return RegisteredStationsPage(
-      mapSelectedLocation: _mapSelectedLocation,
-      mapController: _mapController,
-      searchController: _searchController,
-      searchQuery: _searchQuery,
-      registeredStationsCurrentPage: _currentPage,
-      registeredStationsDistrictFilter: _userDistrict,
-      showComplianceReportDetails: _showComplianceReportDetails,
-      selectedComplianceStationData: _selectedComplianceStationData,
-      selectedComplianceStationDocId: _selectedComplianceStationDocId,
-      complianceReportTitle: _complianceReportTitle,
-      setState: (fn) => setState(fn),
-      onShowComplianceReportDetails: (show, data, docId, title) {
-        setState(() {
-          _showComplianceReportDetails = show;
-          _selectedComplianceStationData = data;
-          _selectedComplianceStationDocId = docId;
-          _complianceReportTitle = title;
-        });
+    // Wait for user district to load before showing the stations page
+    return FutureBuilder<void>(
+      future: _userDistrictFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (_userDistrict == null) {
+          return const Center(child: Text('Could not determine your district.'));
+        }
+        // Delegate rendering to the shared RegisteredStationsPage used in federated admin.
+        return RegisteredStationsPage(
+          mapSelectedLocation: _mapSelectedLocation,
+          mapController: _mapController,
+          searchController: _searchController,
+          searchQuery: _searchQuery,
+          registeredStationsCurrentPage: _currentPage,
+          registeredStationsDistrictFilter: _userDistrict,
+          showComplianceReportDetails: _showComplianceReportDetails,
+          selectedComplianceStationData: _selectedComplianceStationData,
+          selectedComplianceStationDocId: _selectedComplianceStationDocId,
+          complianceReportTitle: _complianceReportTitle,
+          setState: (fn) => setState(fn),
+          onShowComplianceReportDetails: (show, data, docId, title) {
+            setState(() {
+              _showComplianceReportDetails = show;
+              _selectedComplianceStationData = data;
+              _selectedComplianceStationDocId = docId;
+              _complianceReportTitle = title;
+            });
+          },
+          onMapSelectedLocation: (loc) => setState(() => _mapSelectedLocation = loc),
+          onSearchQueryChanged: (q) => setState(() => _searchQuery = q.toLowerCase()),
+          onDistrictFilterChanged: (d) => setState(() => _userDistrict = d),
+          onCurrentPageChanged: (p) => setState(() => _currentPage = p),
+          isDistrictAdmin: true, // District admin should see district name, not filter dropdown
+        );
       },
-      onMapSelectedLocation: (loc) => setState(() => _mapSelectedLocation = loc),
-      onSearchQueryChanged: (q) => setState(() => _searchQuery = q.toLowerCase()),
-      onDistrictFilterChanged: (d) => setState(() => _userDistrict = d),
-      onCurrentPageChanged: (p) => setState(() => _currentPage = p),
     );
   }
 

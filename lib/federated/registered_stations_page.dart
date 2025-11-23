@@ -26,6 +26,7 @@ class RegisteredStationsPage extends StatelessWidget {
   final void Function(String) onSearchQueryChanged;
   final void Function(String?) onDistrictFilterChanged;
   final void Function(int) onCurrentPageChanged;
+  final bool isDistrictAdmin; // New parameter to control filter visibility
 
   const RegisteredStationsPage({
     super.key,
@@ -45,6 +46,7 @@ class RegisteredStationsPage extends StatelessWidget {
     required this.onSearchQueryChanged,
     required this.onDistrictFilterChanged,
     required this.onCurrentPageChanged,
+    this.isDistrictAdmin = false, // Default to false for federated admin
   });
 
   @override
@@ -106,7 +108,7 @@ class RegisteredStationsPage extends StatelessWidget {
       children: [
         // Map Section with shadow and rounded corners
         Container(
-          height: 280,
+          height: 200,
           width: double.infinity,
           margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -197,7 +199,7 @@ class RegisteredStationsPage extends StatelessWidget {
         ),
         // Search and filter UI
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -235,102 +237,130 @@ class RegisteredStationsPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // Filter pill (right)
-              SizedBox(
-                width: 320,
-                child: FutureBuilder<QuerySnapshot>(
-                  future: FirestoreRepository.instance.getCollectionOnce(
-                    'districts',
-                    () => FirebaseFirestore.instance.collection('districts'),
+              // District display (read-only for district admin) or Filter pill (for federated admin)
+              if (isDistrictAdmin)
+                // Show district name as read-only text for district admin
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.blueAccent.withAlpha((0.3 * 255).round())),
                   ),
-                  builder: (context, snapshot) {
-                    final docs = snapshot.data?.docs ?? [];
-                    // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
-                    final districts = docs
-                        .map((doc) => doc['districtName']?.toString() ?? '')
-                        .where((d) => d.isNotEmpty)
-                        .toSet()
-                        .toList()
-                      ..sort();
-                    return Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha((0.08 * 255).round()),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade300),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_on, color: Colors.blue[800], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        registeredStationsDistrictFilter ?? 'District',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.blue[900],
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                // If the selected filter is null or empty, pass null as value so the hint is shown
-                                value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
-                                    ? null
-                                    : registeredStationsDistrictFilter,
-                                hint: const Text("Filter"),
-                                isExpanded: true,
-                                items: districts
-                                    .map((district) => DropdownMenuItem<String>(
-                                          value: district,
-                                          child: Text(district),
-                                        ))
-                                    .toList(),
-                                onChanged: (value) => onDistrictFilterChanged(value),
-                                style: const TextStyle(fontSize: 15, color: Colors.black87),
-                                icon: const SizedBox.shrink(),
+                    ],
+                  ),
+                )
+              else
+                // Show filter dropdown for federated admin
+                SizedBox(
+                  width: 320,
+                  child: FutureBuilder<QuerySnapshot>(
+                    future: FirestoreRepository.instance.getCollectionOnce(
+                      'districts',
+                      () => FirebaseFirestore.instance.collection('districts'),
+                    ),
+                    builder: (context, snapshot) {
+                      final docs = snapshot.data?.docs ?? [];
+                      // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
+                      final districts = docs
+                          .map((doc) => doc['districtName']?.toString() ?? '')
+                          .where((d) => d.isNotEmpty)
+                          .toSet()
+                          .toList()
+                        ..sort();
+                      return Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha((0.08 * 255).round()),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  // If the selected filter is null or empty, pass null as value so the hint is shown
+                                  value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
+                                      ? null
+                                      : registeredStationsDistrictFilter,
+                                  hint: const Text("Filter"),
+                                  isExpanded: true,
+                                  items: districts
+                                      .map((district) => DropdownMenuItem<String>(
+                                            value: district,
+                                            child: Text(district),
+                                          ))
+                                      .toList(),
+                                  onChanged: (value) => onDistrictFilterChanged(value),
+                                  style: const TextStyle(fontSize: 15, color: Colors.black87),
+                                  icon: const SizedBox.shrink(),
+                                ),
                               ),
                             ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Icon(Icons.filter_alt, color: Colors.blue[800]),
-                          ),
-                          // Clear filters button
-                          Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: TextButton.icon(
-                              onPressed: () {
-                                // Clear the search input and district filter, then refresh parent state
-                                searchController.clear();
-                                onSearchQueryChanged('');
-                                onDistrictFilterChanged(null);
-                                try {
-                                  setState(() {});
-                                } catch (_) {}
-                              },
-                              icon: const Icon(Icons.clear, size: 18, color: Colors.blueAccent),
-                              label: const Text(
-                                'Clear',
-                                style: TextStyle(color: Colors.blueAccent, fontSize: 13),
-                              ),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                minimumSize: const Size(0, 0),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Icon(Icons.filter_alt, color: Colors.blue[800]),
+                            ),
+                            // Clear filters button
+                            Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  // Clear the search input and district filter, then refresh parent state
+                                  searchController.clear();
+                                  onSearchQueryChanged('');
+                                  onDistrictFilterChanged(null);
+                                  try {
+                                    setState(() {});
+                                  } catch (_) {}
+                                },
+                                icon: const Icon(Icons.clear, size: 18, color: Colors.blueAccent),
+                                label: const Text(
+                                  'Clear',
+                                  style: TextStyle(color: Colors.blueAccent, fontSize: 13),
+                                ),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  minimumSize: const Size(0, 0),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
             ],
           ),
         ),
         // Table-based Station List
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
             child: FutureBuilder<QuerySnapshot>(
               future: FirestoreRepository.instance.getCollectionOnce(
                 'station_owners',
@@ -366,118 +396,141 @@ class RegisteredStationsPage extends StatelessWidget {
                   return const Center(child: Text('No station owners found.'));
                 }
 
-                return Expanded(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-  constraints: BoxConstraints(
-    minWidth: MediaQuery.of(context).size.width * 0.9, // at least 90% of screen
-  ),
-  child: Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
-      borderRadius: BorderRadius.circular(8),
-      boxShadow: [
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
                       BoxShadow(
-          color: Colors.black.withAlpha((0.06 * 255).round()),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-                          child: DataTable(
-                              headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
-                              dataRowColor: WidgetStateProperty.resolveWith<Color?>(
-                                (Set<WidgetState> states) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return Colors.blueAccent.withAlpha((0.08 * 255).round());
-                                  }
-                                  return Colors.white;
-                                },
-                              ),
-                              columnSpacing: 40,
-                              horizontalMargin: 20,
-                              dividerThickness: 1.2,
-                              columns: const [
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Station',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                        color: Colors.black.withAlpha((0.06 * 255).round()),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  width: double.infinity,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
+                          dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                            (Set<WidgetState> states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return Colors.blueAccent.withAlpha((0.08 * 255).round());
+                              }
+                              return Colors.white;
+                            },
+                          ),
+                          columnSpacing: 24,
+                          horizontalMargin: 16,
+                          dividerThickness: 1.2,
+                          dataRowMinHeight: 48,
+                          dataRowMaxHeight: 56,
+                          columns: [
+                          DataColumn(
+                            label: SizedBox(
+                              width: 180,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'Station',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Owner',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 150,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'Owner',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'District',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 120,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'District',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Address',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 250,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'Address',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Status',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 100,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'Status',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Actions',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1976D2),
-                                      fontSize: 14,
-                                    ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 150,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Text(
+                                  'Actions',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1976D2),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
-                            ],
+                            ),
+                          ),
+                        ],
                               rows: filteredDocs.map((doc) {
                               final data = doc.data() as Map<String, dynamic>;
                               final stationName = data['stationName'] ?? '';
@@ -507,45 +560,54 @@ class RegisteredStationsPage extends StatelessWidget {
                               return DataRow(
                                 cells: [
                                   DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                      constraints: const BoxConstraints(maxWidth: 220),
-                                      child: Text(
-                                        stationName,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                        overflow: TextOverflow.ellipsis,
+                                    SizedBox(
+                                      width: 180,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                        child: Text(
+                                          stationName,
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
                                   ),
                                   DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                      constraints: const BoxConstraints(maxWidth: 150),
-                                      child: Text(ownerName, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                      constraints: const BoxConstraints(maxWidth: 140),
-                                      child: Text(district, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                      constraints: const BoxConstraints(maxWidth: 280),
-                                      child: Text(
-                                        address,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 13),
+                                    SizedBox(
+                                      width: 150,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                        child: Text(ownerName, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
                                       ),
                                     ),
                                   ),
                                   DataCell(
-                                    // Show CHO inspection status by querying the inspections subcollection for the latest inspection
-                                    FutureBuilder<QuerySnapshot>(
+                                    SizedBox(
+                                      width: 120,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                        child: Text(district, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 250,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                        child: Text(
+                                          address,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 100,
+                                      child: FutureBuilder<QuerySnapshot>(
                                       future: () async {
                                         final now = DateTime.now();
                                         final ym = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
@@ -602,11 +664,14 @@ class RegisteredStationsPage extends StatelessWidget {
                                         );
                                       },
                                     ),
+                                    ),
                                   ),
                                   DataCell(
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
+                                    SizedBox(
+                                      width: 150,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                         IconButton(
                                           icon: const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
                                           tooltip: "View on Map",
@@ -635,6 +700,7 @@ class RegisteredStationsPage extends StatelessWidget {
                                         ),
                                       ],
                                     ),
+                                    ),
                                   ),
                                 ],
                               );
@@ -642,8 +708,10 @@ class RegisteredStationsPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ),
-                  );
+                      );
+                    },
+                  ),
+                );
               },
             ),
           ),
@@ -751,62 +819,91 @@ class RegisteredStationsPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              FutureBuilder<QuerySnapshot>(
-                future: FirestoreRepository.instance.getCollectionOnce(
-                  'districts',
-                  () => FirebaseFirestore.instance.collection('districts'),
-                ),
-                builder: (context, snapshot) {
-                  final docs = snapshot.data?.docs ?? [];
-                  final districts = docs
-                      .map((doc) => doc['districtName']?.toString() ?? '')
-                      .where((d) => d.isNotEmpty)
-                      .toSet()
-                      .toList()
-                    ..sort();
-                  return Row(
+              // District display (read-only for district admin) or Filter (for federated admin)
+              if (isDistrictAdmin)
+                // Show district name as read-only for district admin
+                Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.blueAccent.withAlpha((0.3 * 255).round())),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Container(
-                          height: 44,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
-                                  ? null
-                                  : registeredStationsDistrictFilter,
-                              hint: const Text('Filter'),
-                              isExpanded: true,
-                              items: districts
-                                  .map((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
-                                  .toList(),
-                              onChanged: (v) => onDistrictFilterChanged(v),
+                      Icon(Icons.location_on, color: Colors.blue[800], size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        registeredStationsDistrictFilter ?? 'District',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.blue[900],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                // Show filter dropdown for federated admin
+                FutureBuilder<QuerySnapshot>(
+                  future: FirestoreRepository.instance.getCollectionOnce(
+                    'districts',
+                    () => FirebaseFirestore.instance.collection('districts'),
+                  ),
+                  builder: (context, snapshot) {
+                    final docs = snapshot.data?.docs ?? [];
+                    final districts = docs
+                        .map((doc) => doc['districtName']?.toString() ?? '')
+                        .where((d) => d.isNotEmpty)
+                        .toSet()
+                        .toList()
+                      ..sort();
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 44,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
+                                    ? null
+                                    : registeredStationsDistrictFilter,
+                                hint: const Text('Filter'),
+                                isExpanded: true,
+                                items: districts
+                                    .map((d) => DropdownMenuItem<String>(value: d, child: Text(d)))
+                                    .toList(),
+                                onChanged: (v) => onDistrictFilterChanged(v),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () {
-                          searchController.clear();
-                          onSearchQueryChanged('');
-                          onDistrictFilterChanged(null);
-                          try {
-                            setState(() {});
-                          } catch (_) {}
-                        },
-                        icon: const Icon(Icons.clear, color: Colors.blueAccent),
-                        label: const Text('Clear', style: TextStyle(color: Colors.blueAccent)),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () {
+                            searchController.clear();
+                            onSearchQueryChanged('');
+                            onDistrictFilterChanged(null);
+                            try {
+                              setState(() {});
+                            } catch (_) {}
+                          },
+                          icon: const Icon(Icons.clear, color: Colors.blueAccent),
+                          label: const Text('Clear', style: TextStyle(color: Colors.blueAccent)),
+                        ),
+                      ],
+                    );
+                  },
+                ),
             ],
           ),
         ),
