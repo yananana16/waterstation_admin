@@ -482,9 +482,6 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 child: Row(
                   children: [
                     Text(_currentTime, style: TextStyle(fontWeight: FontWeight.w600, color: primary)),
-                    const SizedBox(width: 12),
-                    IconButton(onPressed: () {}, icon: Icon(Icons.settings, color: primary)),
-                    IconButton(onPressed: () {}, icon: Icon(Icons.notifications_none, color: primary)),
                   ],
                 ),
               ),
@@ -643,20 +640,6 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                           ),
                           const SizedBox(height: 12),
                           // Reminders card
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE6EDF2))),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text('Reminders', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
-                                SizedBox(height: 8),
-                                Text('• Ten (10) inspections scheduled this week'),
-                                Text('• Submit inspection reports for five (5) stations'),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -683,7 +666,19 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('This Week', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
                                         const SizedBox(height: 8),
-                                        Text('10', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue[800])),
+                                        Text(
+                                          (() {
+                                            final now = DateTime.now();
+                                            final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+                                            final endOfWeek = startOfWeek.add(const Duration(days: 7));
+                                            return _assignedStations.where((s) {
+                                              final dt = _toDateTime(s['date']);
+                                              if (dt == null) return false;
+                                              return dt.isAfter(startOfWeek) && dt.isBefore(endOfWeek);
+                                            }).length.toString();
+                                          })(),
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue[800]),
+                                        ),
                                         const SizedBox(height: 4),
                                         Text('Scheduled', style: TextStyle(fontSize: 12, color: Colors.black54)),
                                       ],
@@ -704,7 +699,20 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('Pending', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
                                         const SizedBox(height: 8),
-                                        Text('3', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange[800])),
+                                        Text(
+                                          (() {
+                                            final now = DateTime.now();
+                                            final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+                                            final endOfWeek = startOfWeek.add(const Duration(days: 7));
+                                            return _assignedStations.where((s) {
+                                              final status = (s['status'] ?? '').toString().toLowerCase();
+                                              final dt = _toDateTime(s['date']);
+                                              if (dt == null) return false;
+                                              return status == 'pending' && dt.isAfter(startOfWeek) && dt.isBefore(endOfWeek);
+                                            }).length.toString();
+                                          })(),
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange[800]),
+                                        ),
                                         const SizedBox(height: 4),
                                         Text('Needs action', style: TextStyle(fontSize: 12, color: Colors.black54)),
                                       ],
@@ -725,9 +733,22 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('Completed', style: TextStyle(fontSize: 12, color: Color(0xFF0B63B7))),
                                         const SizedBox(height: 8),
-                                        Text('7', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                                        Text(
+                                          (() {
+                                            final now = DateTime.now();
+                                            final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+                                            final endOfWeek = startOfWeek.add(const Duration(days: 7));
+                                            return _assignedStations.where((s) {
+                                              final status = (s['status'] ?? '').toString().toLowerCase();
+                                              final dt = _toDateTime(s['date']);
+                                              if (dt == null) return false;
+                                              return status == 'done' && dt.isAfter(startOfWeek) && dt.isBefore(endOfWeek);
+                                            }).length.toString();
+                                          })(),
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green[700]),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text('This month', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                        Text('This week', style: TextStyle(fontSize: 12, color: Colors.black54)),
                                       ],
                                     ),
                                   ),
@@ -760,16 +781,13 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Color(0xFFE0E0E0))),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
-                                SizedBox(height: 8),
-                                Text('Name: Inspector'),
-                                Text('Role: Sanitary Inspector'),
-                                Text('Contact Number: (+63) 912 345 6789'),
-                                Text('Email: inspector@example.com'),
+                              children: [
+                                const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Text('Email: ${_profileEmail.isNotEmpty ? _profileEmail : "-"}'),
                               ],
                             ),
                           ),
@@ -797,7 +815,16 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('Done', style: TextStyle(fontSize: 11, color: Color(0xFF2E8B57))),
                                         const SizedBox(height: 6),
-                                        Text('7', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                                        Text(
+                                          _assignedStations.where((s) {
+                                            final status = (s['status'] ?? '').toString().toLowerCase();
+                                            final dt = _toDateTime(s['date']);
+                                            if (dt == null) return false;
+                                            final now = DateTime.now();
+                                            return status == 'done' && dt.month == now.month && dt.year == now.year;
+                                          }).length.toString(),
+                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[700]),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -816,7 +843,10 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('Pending', style: TextStyle(fontSize: 11, color: Color(0xFFF39C12))),
                                         const SizedBox(height: 6),
-                                        Text('3', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[800])),
+                                        Text(
+                                          _assignedStations.where((s) => (s['status'] ?? '').toString().toLowerCase() == 'pending').length.toString(),
+                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[800]),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -835,7 +865,13 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                       children: [
                                         const Text('Missed', style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
                                         const SizedBox(height: 6),
-                                        Text('0', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[700])),
+                                        Text(
+                                          _assignedStations.where((s) {
+                                            final status = (s['status'] ?? '').toString().toLowerCase();
+                                            return status == 'missed';
+                                          }).length.toString(),
+                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red[700]),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -916,20 +952,6 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                           ),
                           const SizedBox(height: 12),
                           // Reminders (mobile)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE6EDF2))),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text('Reminders', style: TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold, fontSize: 14)),
-                                SizedBox(height: 8),
-                                Text('• Ten (10) inspections scheduled this week', style: TextStyle(fontSize: 13)),
-                                Text('• Submit inspection reports for five (5) stations', style: TextStyle(fontSize: 13)),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1075,30 +1097,18 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                   children: [
                     const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Full name', border: OutlineInputBorder()),
-                    ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _roleController,
                       decoration: const InputDecoration(labelText: 'Role', border: OutlineInputBorder()),
+                      enabled: false,
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _contactController,
-                      decoration: const InputDecoration(labelText: 'Contact number', border: OutlineInputBorder()),
-                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(child: Text('Email: $_profileEmail', style: TextStyle(fontSize: isWide ? 14 : 13))),
                         SizedBox(
-                          height: isWide ? 36 : 44,
-                          child: ElevatedButton(
-                            onPressed: _saveInspectorProfile,
-                            child: Text('Save', style: TextStyle(fontSize: isWide ? 14 : 15)),
-                          ),
                         ),
                       ],
                     ),

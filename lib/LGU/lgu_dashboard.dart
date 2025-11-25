@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import '../services/firestore_repository.dart';
 import 'package:waterstation_admin/LGU/water_stations_page.dart';
 import 'package:waterstation_admin/LGU/schedule_page.dart';
@@ -302,6 +303,9 @@ class _LguDashboardState extends State<LguDashboard> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
+        final now = DateTime.now();
+        final formattedDate = DateFormat('EEEE, MMMM d, yyyy').format(now);
+        final formattedTime = DateFormat('hh:mm a').format(now);
         return Column(
           children: [
             // Date + time strip
@@ -310,19 +314,19 @@ class _LguDashboardState extends State<LguDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Row(
                 children: [
-                  Icon(Icons.calendar_today, color: Colors.black54, size: 20),
+                  Icon(Icons.calendar_today, color: Color(0xFF0B63B7), size: 20),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      'Monday, May 5, 2025',
-                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+                      formattedDate,
+                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: Color(0xFF0B63B7)),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const Spacer(),
-                  Icon(Icons.access_time, color: Colors.black54, size: 20),
+                  Icon(Icons.access_time, color: Color(0xFF0B63B7), size: 20),
                   const SizedBox(width: 8),
-                  Text('11:25 AM PST', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
+                  Text(formattedTime, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16, color: Color(0xFF0B63B7))),
                 ],
               ),
             ),
