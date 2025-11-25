@@ -89,7 +89,7 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
   Widget _buildDistrictDropdown() {
     return DropdownButtonFormField<String>(
       isExpanded: true,
-      value: selectedDistrict,
+      initialValue: selectedDistrict,
       items: ['All Districts', 'La Paz', 'Mandurriao', 'Molo', 'Lapuz', 'Arevalo', 'Jaro', 'City Proper']
           .map((district) => DropdownMenuItem(
                 value: district,

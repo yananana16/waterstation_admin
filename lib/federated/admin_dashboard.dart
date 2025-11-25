@@ -13,6 +13,7 @@ import 'change_password_dialog.dart'; // <-- Add this import
 import 'logout_dialog.dart'; // <-- Add this import
 import 'registered_stations_page.dart'; // <-- Add this import
 import 'recommendations_page.dart';
+import 'package:intl/intl.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -503,6 +504,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildDashboardOverview() {
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth >= 900;
+      final now = DateTime.now();
+      final String dateText = DateFormat('EEEE, MMM d, y').format(now);
+      final String timeText = "${DateFormat('h:mm a').format(now)} ${now.timeZoneName}";
       // Common header and welcome widgets
       final header = Container(
         width: double.infinity,
@@ -513,14 +517,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const Icon(Icons.calendar_today, color: Colors.blueAccent),
             const SizedBox(width: 8),
             Text(
-              "Monday, May 5, 2025",
+              dateText,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const Spacer(),
             const Icon(Icons.access_time, color: Colors.blueAccent),
             const SizedBox(width: 8),
             Text(
-              "11:25 AM PST",
+              timeText,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],

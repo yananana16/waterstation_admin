@@ -16,6 +16,9 @@ class Recommendation {
   final int rangeRadius;
   final String priority;
   final String insight;
+  final String districtSentiment;
+  final double districtSentimentScore;
+  final Map<String, dynamic> districtSentimentCount;
 
   Recommendation({
     required this.district,
@@ -24,14 +27,31 @@ class Recommendation {
     required this.rangeRadius,
     required this.priority,
     required this.insight,
+    required this.districtSentiment,
+    required this.districtSentimentScore,
+    required this.districtSentimentCount,
   });
 
   /// Transform raw backend data into federated-safe insights
   factory Recommendation.fromRaw(Map<String, dynamic> data) {
     String priority = "";
-
     String safeInsight =
         "Recommended Location identified in ${data['district']} district";
+
+    // Extract sentiment fields from backend
+    String sentiment = data['district_sentiment'] ?? 'neutral';
+    double sentimentScore = 0.0;
+    if (data['district_sentiment_score'] != null) {
+      try {
+        sentimentScore = (data['district_sentiment_score'] as num).toDouble();
+      } catch (_) {
+        sentimentScore = 0.0;
+      }
+    }
+    Map<String, dynamic> sentimentCount = {};
+    if (data['district_sentiment_count'] != null && data['district_sentiment_count'] is Map) {
+      sentimentCount = Map<String, dynamic>.from(data['district_sentiment_count']);
+    }
 
     return Recommendation(
       district: data['district'] ?? "Unknown",
@@ -40,6 +60,9 @@ class Recommendation {
       rangeRadius: data['range_radius'] ?? 50,
       priority: priority,
       insight: safeInsight,
+      districtSentiment: sentiment,
+      districtSentimentScore: sentimentScore,
+      districtSentimentCount: sentimentCount,
     );
   }
 }
@@ -55,6 +78,7 @@ class RecommendationsPage extends StatefulWidget {
 class _RecommendationsPageState extends State<RecommendationsPage> {
   bool _isRunning = false;
   http.Client? _httpClient;
+  bool _showAbout = true;
 
   /// Trigger FastAPI backend to regenerate recommendations
   Future<void> _triggerServicePy() async {
@@ -239,10 +263,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
           ),
           body: Column(
             children: [
-              // Explanation Card
+              // Toggleable Explanation Card
               Container(
                 margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(0),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -261,71 +285,136 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1976D2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.info_outline, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'About These Recommendations',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2D3748),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'These are AI-recommended locations for establishing new water refilling stations based on:',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF4A5568),
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildBulletPoint('Customer density analysis - areas with high demand but limited supply'),
-                    _buildBulletPoint('Sales pattern trends - identifying underserved profitable zones'),
-                    _buildBulletPoint('Geographic distribution - optimal spacing to maximize coverage'),
-                    _buildBulletPoint('District-level insights - strategic expansion opportunities'),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300, width: 0.5),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.tips_and_updates, size: 18, color: Colors.amber[700]),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Text(
-                              'Use these recommendations to guide business expansion decisions and identify high-potential locations for new water station investments.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF2D3748),
-                                fontWeight: FontWeight.w500,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
+                    InkWell(
+                                        borderRadius: BorderRadius.circular(16),
+                                        onTap: () {
+                                          setState(() {
+                                            _showAbout = !_showAbout;
+                                          });
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1976D2),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              const Text(
+                                                'About These Recommendations',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF2D3748),
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              Icon(_showAbout ? Icons.expand_less : Icons.expand_more, color: Color(0xFF1976D2)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      AnimatedCrossFade(
+                                        firstChild: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'These locations are generated by AI using multiple factors, including customer density, sales trends, and geographic distribution. Each recommendation is tailored to maximize business potential and coverage.',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Color(0xFF4A5568),
+                                                  height: 1.5,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              _buildBulletPoint('Customer density analysis – areas with high demand but limited supply'),
+                                              _buildBulletPoint('Sales pattern trends – identifying underserved profitable zones'),
+                                              _buildBulletPoint('Geographic distribution – optimal spacing to maximize coverage'),
+                                              _buildBulletPoint('District-level insights – strategic expansion opportunities'),
+                                              const SizedBox(height: 16),
+                                              Container(
+                                                padding: const EdgeInsets.all(12),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withOpacity(0.7),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: Colors.grey.shade300, width: 0.5),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.tips_and_updates, size: 18, color: Colors.amber[700]),
+                                                        const SizedBox(width: 10),
+                                                        const Expanded(
+                                                          child: Text(
+                                                            'Use these recommendations to guide business expansion decisions and identify high-potential locations for new water station investments.',
+                                                            style: TextStyle(
+                                                              /* Lines 341-344 omitted */
+                                                              height: 1.4,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Icon(Icons.emoji_objects, color: Color(0xFF1976D2), size: 18),
+                                                        SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: RichText(
+                                                            text: TextSpan(
+                                                              text: '• Positive',
+                                                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700]),
+                                                              children: [
+                                                                TextSpan(
+                                                                  text: ' – Customers are happy with service/location.',
+                                                                  style: TextStyle(fontWeight: FontWeight.normal, color: Color(0xFF4A5568)),
+                                                                ),
+                                                                TextSpan(
+                                                                  text: '\n• Neutral',
+                                                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange[700]),
+                                                                ),
+                                                                TextSpan(
+                                                                  text: ' – Customers are neither satisfied nor dissatisfied.',
+                                                                  style: TextStyle(fontWeight: FontWeight.normal, color: Color(0xFF4A5568)),
+                                                                ),
+                                                                TextSpan(
+                                                                  text: '\n• Negative',
+                                                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[700]),
+                                                                ),
+                                                                TextSpan(
+                                                                  text: ' – Customers express dissatisfaction or concerns about service or location.',
+                                                                  style: TextStyle(fontWeight: FontWeight.normal, color: Color(0xFF4A5568)),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        secondChild: const SizedBox.shrink(),
+                                        crossFadeState: _showAbout ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                                        duration: const Duration(milliseconds: 250),
+                                      ),
+                                    ],
+                                  ),
+                                ),
               // Recommendations Stream
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
@@ -387,67 +476,317 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     doc.data() as Map<String, dynamic>);
               }).toList();
 
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  bool isWide = constraints.maxWidth > 600;
 
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: isWide
-                        ? GridView.builder(
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 20,
-                              crossAxisSpacing: 20,
-                              childAspectRatio: 2.6,
-                            ),
-                            itemCount: recommendations.length,
-                            itemBuilder: (context, index) {
-                              return AnimatedScale(
-                                scale: 1.0,
-                                duration: Duration(milliseconds: 300 + (index * 50)),
-                                child: Align(
-                                  alignment: Alignment.topCenter,
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 520,
-                                      minWidth: 300,
-                                      maxHeight: 250,
+
+                // Build a map of district -> sentiment info for the table (from recommendations)
+                final Map<String, Map<String, dynamic>> districtSentiments = {};
+                for (var r in recommendations) {
+                  districtSentiments[r.district] = {
+                    'sentiment': r.districtSentiment,
+                    'score': r.districtSentimentScore,
+                    'counts': r.districtSentimentCount,
+                  };
+                }
+
+                // Small card with a horizontally-scrollable DataTable summarizing sentiments.
+                // This also fetches `station_owners` to show per-station `average_sentiment`, grouped by district.
+                Widget sentimentTable = Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance.collection('station_owners').get(),
+                      builder: (context, ownersSnap) {
+                        if (ownersSnap.connectionState == ConnectionState.waiting) {
+                          return const SizedBox(
+                            height: 80,
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)),
+                          );
+                        }
+
+                        // countsPerDistrict: { district: { 'positive': n, 'neutral': n, 'negative': n } }
+                        final Map<String, Map<String, int>> countsPerDistrict = {};
+                        // stationsPerDistrict: { district: [ 'Name (sentiment)', ... ] }
+                        final Map<String, List<String>> stationsPerDistrict = {};
+
+                        if (ownersSnap.hasData) {
+                          for (var doc in ownersSnap.data!.docs) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final avg = (data['average_sentiment'] as String?)?.toLowerCase();
+                            if (avg == null || avg.trim().isEmpty) continue; // skip nulls
+
+                            final district = (data['districtName'] ?? data['district'] ?? data['districtName'] ?? 'Unknown') as String;
+
+                            countsPerDistrict.putIfAbsent(district, () => {'positive': 0, 'neutral': 0, 'negative': 0});
+                            if (avg == 'positive') {
+                              countsPerDistrict[district]!['positive'] = countsPerDistrict[district]!['positive']! + 1;
+                            } else if (avg == 'neutral') {
+                              countsPerDistrict[district]!['neutral'] = countsPerDistrict[district]!['neutral']! + 1;
+                            } else if (avg == 'negative') {
+                              countsPerDistrict[district]!['negative'] = countsPerDistrict[district]!['negative']! + 1;
+                            }
+
+                            stationsPerDistrict.putIfAbsent(district, () => []);
+                            final first = (data['firstName'] as String?) ?? '';
+                            final last = (data['lastName'] as String?) ?? '';
+                            final name = (first + ' ' + last).trim();
+                            final displayName = name.isNotEmpty ? name : (data['email'] as String?) ?? doc.id;
+                            stationsPerDistrict[district]!.add('$displayName (${avg})');
+                          }
+                        }
+
+                        // Combine district keys from recommendations and station owners
+                        final districts = <String>{...districtSentiments.keys, ...countsPerDistrict.keys}.toList();
+                        districts.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+                        // Improved, responsive card-based table with chips
+                        final width = MediaQuery.of(context).size.width;
+                        final tableWidth = width > 1000 ? 760.0 : (width * 0.85);
+
+                        // Split the view: left card for District + Counts, right card for Stations (separate column)
+                        return Center(
+                          child: Container(
+                            width: tableWidth,
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                            child: LayoutBuilder(builder: (ctx, box) {
+                              final isWide = box.maxWidth > 700;
+
+                              Widget leftCard = Card(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: 2,
+                                color: Colors.white, // Set white background
+                                child: SizedBox(
+                                  height: 220,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Districts', style: TextStyle(fontWeight: FontWeight.w700)),
+                                        const SizedBox(height: 8),
+                                        const Divider(height: 1),
+                                        const SizedBox(height: 8),
+                                        Expanded(
+                                          child: Scrollbar(
+                                            thumbVisibility: true,
+                                            child: ListView.separated(
+                                              itemCount: districts.length,
+                                              separatorBuilder: (_, __) => const Divider(height: 1),
+                                              itemBuilder: (context, idx) {
+                                                final d = districts[idx];
+                                                final c = countsPerDistrict[d];
+                                                final pos = c == null ? 0 : (c['positive'] ?? 0);
+                                                final neu = c == null ? 0 : (c['neutral'] ?? 0);
+                                                final neg = c == null ? 0 : (c['negative'] ?? 0);
+
+                                                return Padding(
+                                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(flex: 3, child: Text(d, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                                                      Expanded(
+                                                        flex: 2,
+                                                        child: Row(
+                                                          children: [
+                                                            if (pos > 0) Padding(
+                                                              padding: const EdgeInsets.only(right: 6.0),
+                                                              child: Chip(
+                                                                backgroundColor: Colors.green.shade50,
+                                                                label: Text('P $pos', style: TextStyle(color: Colors.green.shade800)),
+                                                                visualDensity: VisualDensity.compact,
+                                                              ),
+                                                            ),
+                                                            if (neu > 0) Padding(
+                                                              padding: const EdgeInsets.only(right: 6.0),
+                                                              child: Chip(
+                                                                backgroundColor: Colors.orange.shade50,
+                                                                label: Text('N $neu', style: TextStyle(color: Colors.orange.shade800)),
+                                                                visualDensity: VisualDensity.compact,
+                                                              ),
+                                                            ),
+                                                            if (neg > 0) Padding(
+                                                              padding: const EdgeInsets.only(right: 6.0),
+                                                              child: Chip(
+                                                                backgroundColor: Colors.red.shade50,
+                                                                label: Text('Neg $neg', style: TextStyle(color: Colors.red.shade800)),
+                                                                visualDensity: VisualDensity.compact,
+                                                              ),
+                                                            ),
+                                                            if (pos + neu + neg == 0) const Text('-', style: TextStyle(color: Colors.grey)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    child: _buildRecommendationCard(
-                                        context, recommendations[index]),
                                   ),
                                 ),
                               );
-                            },
-                          )
-                        : ListView.builder(
-                            itemCount: recommendations.length,
-                            itemBuilder: (context, index) {
-                              return AnimatedOpacity(
-                                opacity: 1.0,
-                                duration: Duration(milliseconds: 300 + (index * 50)),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 12.0),
-                                  child: Align(
-                                    alignment: Alignment.topCenter,
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 700,
-                                        minWidth: 280,
-                                        maxHeight: 220,
-                                      ),
-                                      child: _buildRecommendationCard(
-                                          context, recommendations[index]),
+
+                              Widget rightCard = Card(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: 2,
+                                color: Colors.white, // Set white background
+                                child: SizedBox(
+                                  height: 220,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Stations', style: TextStyle(fontWeight: FontWeight.w700)),
+                                        const SizedBox(height: 8),
+                                        const Divider(height: 1),
+                                        const SizedBox(height: 8),
+                                        Expanded(
+                                          child: Scrollbar(
+                                            thumbVisibility: true,
+                                            child: ListView.builder(
+                                              itemCount: districts.length,
+                                              itemBuilder: (context, idx) {
+                                                final d = districts[idx];
+                                                final stations = stationsPerDistrict[d] ?? [];
+                                                return ExpansionTile(
+                                                  title: Text(d, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                                  children: stations.map((s) {
+                                                    final lower = s.toLowerCase();
+                                                    Color fg = Colors.grey.shade700;
+                                                    if (lower.contains('(positive)')) fg = Colors.green.shade700;
+                                                    if (lower.contains('(neutral)')) fg = Colors.orange.shade700;
+                                                    if (lower.contains('(negative)')) fg = Colors.red.shade700;
+                                                    return ListTile(
+                                                      title: Text(s.replaceAll(RegExp(r"\s*\(positive\)|\s*\(neutral\)|\s*\(negative\)", caseSensitive: false), ''), overflow: TextOverflow.ellipsis),
+                                                      trailing: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                        decoration: BoxDecoration(
+                                                          color: fg.withOpacity(0.12),
+                                                          borderRadius: BorderRadius.circular(8),
+                                                        ),
+                                                        child: Text(s.split('(').last.replaceAll(')', '').toUpperCase(), style: TextStyle(color: fg)),
+                                                      ),
+                                                    );
+                                                  }).toList(),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
                               );
-                            },
+
+                              if (isWide) {
+                                return Container(
+                                  color: const Color(0xFFF5F7FA), // Match Scaffold background
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(flex: 2, child: leftCard),
+                                      const SizedBox(width: 12),
+                                      Expanded(flex: 3, child: rightCard),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              // stacked for narrow screens
+                              return Container(
+                                color: const Color(0xFFF5F7FA), // Match Scaffold background
+                                child: Column(
+                                  children: [
+                                    leftCard,
+                                    const SizedBox(height: 12),
+                                    rightCard,
+                                  ],
+                                ),
+                              );
+                            }),
                           ),
-                  );
-                },
+                        );
+                      },
+                    ),
+                  ),
+                );
+
+              return Column(
+                children: [
+                  sentimentTable,
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        bool isWide = constraints.maxWidth > 600;
+
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: isWide
+                              ? GridView.builder(
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 20,
+                                    crossAxisSpacing: 20,
+                                    childAspectRatio: 2.6,
+                                  ),
+                                  itemCount: recommendations.length,
+                                  itemBuilder: (context, index) {
+                                    return AnimatedScale(
+                                      scale: 1.0,
+                                      duration: Duration(milliseconds: 300 + (index * 50)),
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 520,
+                                            minWidth: 300,
+                                            maxHeight: 250,
+                                          ),
+                                          child: _buildRecommendationCard(
+                                              context, recommendations[index]),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : ListView.builder(
+                                  itemCount: recommendations.length,
+                                  itemBuilder: (context, index) {
+                                    return AnimatedOpacity(
+                                      opacity: 1.0,
+                                      duration: Duration(milliseconds: 300 + (index * 50)),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(bottom: 12.0),
+                                        child: Align(
+                                          alignment: Alignment.topCenter,
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 700,
+                                              minWidth: 280,
+                                              maxHeight: 220,
+                                            ),
+                                            child: _buildRecommendationCard(
+                                                context, recommendations[index]),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -590,6 +929,16 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
+  Color _sentimentColor(String sentiment) {
+    final s = sentiment.toLowerCase();
+    if (s.contains('positive')) return Colors.green.shade100;
+    if (s.contains('neutral')) return Colors.orange.shade100;
+    if (s.contains('negative')) return Colors.red.shade100;
+    return Colors.grey.shade200;
+  }
+
+  
+
   /// Build each recommendation card
   Widget _buildRecommendationCard(
       BuildContext context, Recommendation rec) {
@@ -662,8 +1011,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     Expanded(
                       child: Text(
                         rec.insight,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
-                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -679,14 +1026,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'AI-powered analysis based on customer density, sales patterns, and geographic distribution',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                          fontStyle: FontStyle.italic,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
+                        'Sentiment: Sentiment for this whole district is ${rec.districtSentiment} ',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF4A5568)),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -696,43 +1037,23 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1976D2),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        onTap: () {
-                          _showMapSheet(context, rec.lat, rec.lng, rec.district);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.map, color: Colors.white, size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                "View on Map",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('View Map', style: TextStyle(fontWeight: FontWeight.w600)),
+                    onPressed: () {
+                      _showMapSheet(context, rec.lat, rec.lng, rec.district);
+                    },
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),
