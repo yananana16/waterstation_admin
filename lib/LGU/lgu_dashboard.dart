@@ -303,7 +303,7 @@ class _LguDashboardState extends State<LguDashboard> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
-        final now = DateTime.now();
+        final now = DateTime.now().toUtc().add(const Duration(hours: 8));
         final formattedDate = DateFormat('EEEE, MMMM d, yyyy').format(now);
         final formattedTime = DateFormat('hh:mm a').format(now);
         return Column(
@@ -623,7 +623,7 @@ class _CalendarWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     const double cellSize = 44.0;
     final days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
     final monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     final monthName = monthNames[now.month - 1];
     final year = now.year;

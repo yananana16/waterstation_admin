@@ -668,7 +668,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                         const SizedBox(height: 8),
                                         Text(
                                           (() {
-                                            final now = DateTime.now();
+                                            final now = DateTime.now().toUtc().add(const Duration(hours: 8));
                                             final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
                                             final endOfWeek = startOfWeek.add(const Duration(days: 7));
                                             return _assignedStations.where((s) {
@@ -701,7 +701,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                         const SizedBox(height: 8),
                                         Text(
                                           (() {
-                                            final now = DateTime.now();
+                                            final now = DateTime.now().toUtc().add(const Duration(hours: 8));
                                             final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
                                             final endOfWeek = startOfWeek.add(const Duration(days: 7));
                                             return _assignedStations.where((s) {
@@ -735,7 +735,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                                         const SizedBox(height: 8),
                                         Text(
                                           (() {
-                                            final now = DateTime.now();
+                                            final now = DateTime.now().toUtc().add(const Duration(hours: 8));
                                             final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
                                             final endOfWeek = startOfWeek.add(const Duration(days: 7));
                                             return _assignedStations.where((s) {

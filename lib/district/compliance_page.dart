@@ -16,6 +16,7 @@ class CompliancePage extends StatefulWidget {
 }
 
 class _CompliancePageState extends State<CompliancePage> {
+    bool showSubmitReqOnly = false;
   bool showComplianceReport = false;
   String complianceTitle = "";
   bool isLoading = false;
@@ -120,7 +121,7 @@ class _CompliancePageState extends State<CompliancePage> {
         ),
         const SizedBox(height: 18),
 
-        // Status Toggle (pending, approved, district_approved)
+        // Status Toggle (pending, approved, district_approved, submitreq)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Container(
@@ -129,42 +130,55 @@ class _CompliancePageState extends State<CompliancePage> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() { complianceStatusFilter = 'pending_approval'; complianceCurrentPage = 0; }),
+                    onTap: () => setState(() { complianceStatusFilter = 'pending_approval'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: complianceStatusFilter == 'pending_approval' ? Colors.blueAccent : Colors.transparent,
+                        color: complianceStatusFilter == 'pending_approval' && !showSubmitReqOnly ? Colors.blueAccent : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
                       child: Center(
-                        child: Text('Pending Approval', style: TextStyle(color: complianceStatusFilter == 'pending_approval' ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: Text('Pending Approval', style: TextStyle(color: complianceStatusFilter == 'pending_approval' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                   ),
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() { complianceStatusFilter = 'approved'; complianceCurrentPage = 0; }),
+                    onTap: () => setState(() { complianceStatusFilter = 'approved'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: complianceStatusFilter == 'approved' ? Colors.blueAccent : Colors.transparent,
+                        color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.blueAccent : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
-                      child: Center(child: Text('Approved', style: TextStyle(color: complianceStatusFilter == 'approved' ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
+                      child: Center(child: Text('Approved', style: TextStyle(color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
                     ),
                   ),
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() { complianceStatusFilter = 'district_approved'; complianceCurrentPage = 0; }),
+                    onTap: () => setState(() { complianceStatusFilter = 'district_approved'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: complianceStatusFilter == 'district_approved' ? Colors.blueAccent : Colors.transparent,
+                        color: complianceStatusFilter == 'district_approved' && !showSubmitReqOnly ? Colors.blueAccent : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
-                      child: Center(child: Text('District Approved', style: TextStyle(color: complianceStatusFilter == 'district_approved' ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
+                      child: Center(child: Text('District Approved', style: TextStyle(color: complianceStatusFilter == 'district_approved' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { showSubmitReqOnly = true; complianceCurrentPage = 0; }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: showSubmitReqOnly ? Colors.orangeAccent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: Center(child: Text('Need to Submit', style: TextStyle(color: showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
                     ),
                   ),
                 ),
@@ -216,8 +230,17 @@ class _CompliancePageState extends State<CompliancePage> {
                   return district == widget.userDistrict.toLowerCase();
                 }).toList();
 
+                // Filter for submitreq label if needed
+                final submitReqDocs = showSubmitReqOnly
+                  ? baseDocs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final labels = (data['labels'] ?? []) as List<dynamic>;
+                      return labels.contains('submitreq');
+                    }).toList()
+                  : baseDocs;
+
                 // apply search over stationName, owner, email
-                final filteredDocs = baseDocs.where((doc) {
+                final filteredDocs = submitReqDocs.where((doc) {
                   if (searchQuery.isEmpty) return true;
                   final data = doc.data() as Map<String, dynamic>;
                   final stationName = (data['stationName'] ?? '').toString().toLowerCase();
