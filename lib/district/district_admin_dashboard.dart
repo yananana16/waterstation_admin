@@ -231,15 +231,70 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "District Admin",
-                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    userEmail,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
-                    overflow: TextOverflow.ellipsis,
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: (() async {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user == null) return null;
+
+                      // Prefer exact match by userId
+                      final byId = await FirebaseFirestore.instance
+                          .collection('station_owners')
+                          .where('userId', isEqualTo: user.uid)
+                          .limit(1)
+                          .get();
+                      if (byId.docs.isNotEmpty) return byId.docs.first.data() as Map<String, dynamic>?;
+
+                      // Fallback: try matching by email if available
+                      if (user.email != null && user.email!.isNotEmpty) {
+                        final byEmail = await FirebaseFirestore.instance
+                            .collection('station_owners')
+                            .where('email', isEqualTo: user.email)
+                            .limit(1)
+                            .get();
+                        if (byEmail.docs.isNotEmpty) return byEmail.docs.first.data() as Map<String, dynamic>?;
+                      }
+
+                      // No matching station_owner for logged-in user
+                      return null;
+                    })(),
+                    builder: (context, snap) {
+                      final user = FirebaseAuth.instance.currentUser;
+                      String displayName = 'District Admin';
+                      String contactText = userEmail;
+                      if (snap.hasData && snap.data != null) {
+                        final data = snap.data!;
+                        final fname = data['firstName']?.toString();
+                        final phone = data['phone']?.toString();
+                        if (fname != null && fname.isNotEmpty) displayName = fname;
+                        if (phone != null && phone.isNotEmpty) contactText = phone;
+                      } else if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+                        displayName = user.displayName!;
+                      }
+                      // Show: Name, then email, then "District President of <district>"
+                      final districtLabel = _userDistrict ?? '';
+                      final emailLine = FirebaseAuth.instance.currentUser?.email ?? userEmail;
+                      return Column(
+                        children: [
+                          Text(
+                            displayName,
+                            style: const TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            emailLine,
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            districtLabel.isNotEmpty ? 'District President of $districtLabel' : 'District President',
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF004687)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1070,16 +1125,59 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     // If not signed in, show message
     if (user == null) return const Center(child: Text('Not signed in'));
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: (() async {
+        // Fetch user doc
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final userData = userDoc.exists ? userDoc.data() : null;
+
+        // Find station_owner that belongs to the logged-in user.
+        Map<String, dynamic>? stationData;
+        // Prefer match by userId
+        final byId = await FirebaseFirestore.instance
+            .collection('station_owners')
+            .where('userId', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+        if (byId.docs.isNotEmpty) {
+          stationData = byId.docs.first.data() as Map<String, dynamic>?;
+        } else if (user.email != null && user.email!.isNotEmpty) {
+          // Fallback to match by email
+          final byEmail = await FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('email', isEqualTo: user.email)
+              .limit(1)
+              .get();
+          if (byEmail.docs.isNotEmpty) stationData = byEmail.docs.first.data() as Map<String, dynamic>?;
+        }
+
+        return {
+          'user': userData,
+          'station': stationData,
+        };
+      })(),
       builder: (context, snapshot) {
         String adminName = "";
         String contact = "";
         String email = user.email ?? "";
-        if (snapshot.hasData && snapshot.data != null && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-          adminName = data['admin_name']?.toString() ?? "";
-          contact = data['contact']?.toString() ?? "";
+        if (snapshot.hasData && snapshot.data != null) {
+          final data = snapshot.data!;
+          final userData = data['user'] as Map<String, dynamic>?;
+          final stationData = data['station'] as Map<String, dynamic>?;
+
+          // Prefer station_owners values if available
+          if (stationData != null) {
+            adminName = stationData['firstName']?.toString() ?? "";
+            contact = stationData['phone']?.toString() ?? "";
+          }
+
+          // Fallback to users collection values
+          if (adminName.isEmpty && userData != null) {
+            adminName = userData['admin_name']?.toString() ?? "";
+          }
+          if (contact.isEmpty && userData != null) {
+            contact = userData['contact']?.toString() ?? "";
+          }
         }
 
         final TextEditingController nameController = TextEditingController(text: adminName);
@@ -1107,18 +1205,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                               radius: 55,
                               backgroundColor: Colors.grey[200],
                               child: const Icon(Icons.person, size: 70, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Text("Change Profile Picture", style: TextStyle(fontSize: 13)),
-                                IconButton(
-                                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueAccent),
-                                  onPressed: () {
-                                    // Handle profile picture change (not implemented)
-                                  },
-                                ),
-                              ],
                             ),
                           ],
                         ),
