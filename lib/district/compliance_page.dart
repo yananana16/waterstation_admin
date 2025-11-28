@@ -121,13 +121,26 @@ class _CompliancePageState extends State<CompliancePage> {
         ),
         const SizedBox(height: 18),
 
-        // Status Toggle (pending, approved, district_approved, submitreq)
+        // Status Toggle (Need to Submit, Pending Approval, District Approved, Approved)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Container(
             decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(32)),
             child: Row(
               children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { showSubmitReqOnly = true; complianceCurrentPage = 0; }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: showSubmitReqOnly ? Colors.orangeAccent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                      child: Center(child: Text('Need to Submit', style: TextStyle(color: showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16)) ),
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() { complianceStatusFilter = 'pending_approval'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
@@ -140,19 +153,6 @@ class _CompliancePageState extends State<CompliancePage> {
                       child: Center(
                         child: Text('Pending Approval', style: TextStyle(color: complianceStatusFilter == 'pending_approval' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() { complianceStatusFilter = 'approved'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.blueAccent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(32),
-                      ),
-                      child: Center(child: Text('Approved', style: TextStyle(color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
                     ),
                   ),
                 ),
@@ -171,14 +171,14 @@ class _CompliancePageState extends State<CompliancePage> {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() { showSubmitReqOnly = true; complianceCurrentPage = 0; }),
+                    onTap: () => setState(() { complianceStatusFilter = 'approved'; complianceCurrentPage = 0; showSubmitReqOnly = false; }),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: showSubmitReqOnly ? Colors.orangeAccent : Colors.transparent,
+                        color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.blueAccent : Colors.transparent,
                         borderRadius: BorderRadius.circular(32),
                       ),
-                      child: Center(child: Text('Need to Submit', style: TextStyle(color: showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
+                      child: Center(child: Text('Approved', style: TextStyle(color: complianceStatusFilter == 'approved' && !showSubmitReqOnly ? Colors.white : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 16))),
                     ),
                   ),
                 ),

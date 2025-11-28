@@ -457,18 +457,6 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               );
             }),
           const SizedBox(width: 3),
-          Expanded(
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, color: primary),
-                const SizedBox(width: 3),
-                Text(
-                  DateFormat.y().format(DateTime.now()),
-                  style: TextStyle(fontWeight: FontWeight.bold, color: primary),
-                ),
-              ],
-            ),
-          ),
           Row(
             children: [
               // place date/time strip look similar to LGU dashboard (small rounded container)

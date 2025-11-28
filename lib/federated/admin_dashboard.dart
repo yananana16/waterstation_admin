@@ -335,10 +335,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "Admin",
-                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+                  FutureBuilder<DocumentSnapshot?>(
+                    future: FirebaseAuth.instance.currentUser != null
+                        ? FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get()
+                        // ignore: null_argument_to_non_null_type
+                        : Future.value(null),
+                    builder: (context, snap) {
+                      String name = 'Admin';
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (snap.hasData && snap.data != null && snap.data!.exists) {
+                        final data = snap.data!.data() as Map<String, dynamic>? ?? {};
+                        final fetched = data['admin_name']?.toString();
+                        if (fetched != null && fetched.isNotEmpty) name = fetched;
+                      } else if (user?.displayName != null && user!.displayName!.isNotEmpty) {
+                        name = user.displayName!;
+                      }
+                      return Text(
+                        name,
+                        style: const TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
                   ),
                   Text(
                     FirebaseAuth.instance.currentUser?.email ?? "user@gmail.com",
@@ -506,7 +523,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final isWide = constraints.maxWidth >= 900;
       final now = DateTime.now();
       final String dateText = DateFormat('EEEE, MMM d, y').format(now);
-      final String timeText = "${DateFormat('h:mm a').format(now)} ${now.timeZoneName}";
+      final String timeText = "${DateFormat('h:mm a').format(now)}";
       // Common header and welcome widgets
       final header = Container(
         width: double.infinity,
@@ -1370,7 +1387,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           child: Column(
                             children: [
                               _profileField(
-                                label: "User Name:",
+                                label: "Name:",
                                 controller: nameController,
                                 enabled: true,
                               ),
