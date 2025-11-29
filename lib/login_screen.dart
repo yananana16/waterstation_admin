@@ -127,6 +127,96 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Show dialog to reset password. Pre-fills username field if available.
+  void _showPasswordResetDialog() {
+    final TextEditingController _resetEmailController = TextEditingController(text: _usernameController.text.trim());
+    bool _isSending = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Reset Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Enter the email associated with your account.'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: _isSending
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                      },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: _isSending
+                    ? null
+                    : () async {
+                        final email = _resetEmailController.text.trim();
+                        if (email.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Please enter your email.'),
+                            backgroundColor: Colors.redAccent,
+                          ));
+                          return;
+                        }
+                        setState(() {
+                          _isSending = true;
+                        });
+                        try {
+                          await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                          if (!mounted) return;
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Password reset email sent. Check your inbox.'),
+                            backgroundColor: Colors.green,
+                          ));
+                        } on FirebaseAuthException catch (e) {
+                          setState(() {
+                            _isSending = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(e.message ?? 'Failed to send reset email.'),
+                            backgroundColor: Colors.redAccent,
+                          ));
+                        } catch (_) {
+                          setState(() {
+                            _isSending = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('An unexpected error occurred.'),
+                            backgroundColor: Colors.redAccent,
+                          ));
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+                child: _isSending
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Send'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -282,9 +372,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: GestureDetector(
-                              onTap: () {
-                                // Handle password reset logic
-                              },
+                              onTap: () => _showPasswordResetDialog(),
                               child: Text(
                                 'Forgot Password? Reset',
                                 style: TextStyle(

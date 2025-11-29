@@ -76,9 +76,14 @@ class Recommendation {
           if (entry is Map) {
             final actual = entry['actual_m3'];
             final forecast = entry['forecast_m3'];
-            if (actual != null) {
+            final hasActual = actual != null;
+            final hasForecast = forecast != null;
+            if (hasActual && hasForecast) {
+              // If both actual and forecast are present, sum them as requested.
+              v = parseDouble(actual) + parseDouble(forecast);
+            } else if (hasActual) {
               v = parseDouble(actual);
-            } else if (forecast != null) {
+            } else if (hasForecast) {
               v = parseDouble(forecast);
             }
           }
@@ -205,8 +210,15 @@ class OverallSummary {
           if (entry is Map) {
             final actual = entry['actual_m3'];
             final forecast = entry['forecast_m3'];
-            if (actual != null) v = parseDouble(actual);
-            else if (forecast != null) v = parseDouble(forecast);
+            final hasActual = actual != null;
+            final hasForecast = forecast != null;
+            if (hasActual && hasForecast) {
+              v = parseDouble(actual) + parseDouble(forecast);
+            } else if (hasActual) {
+              v = parseDouble(actual);
+            } else if (hasForecast) {
+              v = parseDouble(forecast);
+            }
           }
           out.add(v);
         }
@@ -1482,9 +1494,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         if (entry is Map) {
           final actual = entry['actual_m3'];
           final forecast = entry['forecast_m3'];
-          if (actual != null) {
+          final hasActual = actual != null;
+          final hasForecast = forecast != null;
+          if (hasActual && hasForecast) {
+            v = (double.tryParse(actual.toString()) ?? 0.0) + (double.tryParse(forecast.toString()) ?? 0.0);
+          } else if (hasActual) {
             v = double.tryParse(actual.toString()) ?? 0.0;
-          } else if (forecast != null) {
+          } else if (hasForecast) {
             v = double.tryParse(forecast.toString()) ?? 0.0;
           }
         }
@@ -1665,19 +1681,29 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 // (sparkline removed — use _OverviewLineChart for larger/consistent charts)
 
 // Overview line chart using fl_chart
-class _OverviewLineChart extends StatelessWidget {
+class _OverviewLineChart extends StatefulWidget {
   final List<double> points;
-  _OverviewLineChart({Key? key, required this.points}) : super(key: key);
+  const _OverviewLineChart({Key? key, required this.points}) : super(key: key);
+
+  @override
+  State<_OverviewLineChart> createState() => _OverviewLineChartState();
+}
+
+class _OverviewLineChartState extends State<_OverviewLineChart> {
+  Offset? _touchPosition; // local position inside the chart
+  FlSpot? _touchedSpot;
+  bool _showTooltip = false;
+  Timer? _hideTooltipTimer;
 
   List<FlSpot> _toSpots() {
-    return List.generate(points.length, (i) => FlSpot(i.toDouble(), points[i]));
+    return List.generate(widget.points.length, (i) => FlSpot(i.toDouble(), widget.points[i]));
   }
 
   @override
   Widget build(BuildContext context) {
     final spots = _toSpots();
-    double minY = points.reduce((a, b) => a < b ? a : b);
-    double maxY = points.reduce((a, b) => a > b ? a : b);
+    double minY = widget.points.reduce((a, b) => a < b ? a : b);
+    double maxY = widget.points.reduce((a, b) => a > b ? a : b);
 
     // ensure a non-zero span so fl_chart doesn't crash
     if ((maxY - minY).abs() < 0.0001) {
@@ -1686,58 +1712,180 @@ class _OverviewLineChart extends StatelessWidget {
     }
 
     final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
     final Color chartColor = kPrimaryColor;
-    return LineChart(
-      LineChartData(
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: (maxY - minY) / 4,
-          getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.12), strokeWidth: 1),
-        ),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 44, interval: (maxY - minY) / 4, getTitlesWidget: (v, meta) {
-            return Text(v.toStringAsFixed(0), style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11));
-          })),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              interval: 1,
-              getTitlesWidget: (value, meta) {
-                final idx = value.toInt();
-                if (idx < 0 || idx >= months.length) return const SizedBox.shrink();
-                // show fewer labels when narrow
-                final textStyle = const TextStyle(fontSize: 10, color: Color(0xFF6B7280));
-                return Text(months[idx], style: textStyle);
-              },
+
+    // Use a LayoutBuilder + Stack so we can compute chart dimensions and render
+    // a tooltip overlay without clipping the surrounding UI.
+    return SizedBox(
+      height: 150,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final chartWidth = constraints.maxWidth;
+          final chartHeight = constraints.maxHeight;
+          const double padH = 8.0;
+          const double padV = 8.0;
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // The chart itself
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+                  child: LineChart(
+                    LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.12), strokeWidth: 1),
+                  ),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        getTitlesWidget: (value, meta) {
+                          final idx = value.toInt();
+                          final label = (idx >= 0 && idx < months.length) ? months[idx] : '';
+                          return Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54));
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  minY: minY,
+                  maxY: maxY,
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      // we handle touches and tooltip rendering ourselves to avoid
+                      // fl_chart drawing built-in vertical guideline that can affect
+                      // the visual layout. Disable the built-in touch handling.
+                      handleBuiltInTouches: false,
+                      touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
+                        Offset? localPos;
+                        try {
+                          localPos = event.localPosition;
+                        } catch (_) {
+                          localPos = null;
+                        }
+
+                        if (response != null && response.lineBarSpots != null && response.lineBarSpots!.isNotEmpty) {
+                          // Cancel any pending hide
+                          _hideTooltipTimer?.cancel();
+                          final touched = response.lineBarSpots!.first;
+                          final spot = FlSpot(touched.x, touched.y);
+                          setState(() {
+                            _showTooltip = true;
+                            _touchedSpot = spot;
+                            // localPos is relative to the LineChart internal drawing area. Adjust
+                            // it by the padding so it becomes relative to the Stack.
+                            if (localPos != null) _touchPosition = localPos + const Offset(padH, padV);
+                          });
+                        } else {
+                          // Defer hiding slightly to avoid flicker when hovering between events
+                          _hideTooltipTimer?.cancel();
+                          _hideTooltipTimer = Timer(const Duration(milliseconds: 250), () {
+                            if (mounted) {
+                              setState(() {
+                                _showTooltip = false;
+                                _touchedSpot = null;
+                              });
+                            }
+                          });
+                        }
+                      },
+                    // Don't let fl_chart draw the touched-spot indicator (we show our
+                    // own tooltip overlay). Returning an empty list prevents the
+                    // library from drawing the vertical guideline.
+                    getTouchedSpotIndicator: (barData, spotIndexes) {
+                      return <TouchedSpotIndicatorData>[];
+                    },
+                    touchTooltipData: LineTouchTooltipData(getTooltipItems: (touchedSpots) => []),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: false,
+                      color: chartColor,
+                      barWidth: 2,
+                      dotData: FlDotData(show: true),
+                      belowBarData: BarAreaData(show: true, color: chartColor.withOpacity(0.12)),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: false),
-        minY: minY,
-        maxY: maxY,
-        lineTouchData: LineTouchData(enabled: true),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: false,
-            color: chartColor,
-            barWidth: 2.4,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 3.2, color: Colors.white, strokeWidth: 2, strokeColor: chartColor),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              color: chartColor.withOpacity(0.08),
-            ),
-          )
-        ],
+
+              // Custom tooltip overlay
+              if (_showTooltip && _touchedSpot != null)
+                Positioned(
+                  // If we have a captured local touch position, use it; otherwise estimate using the spot's x index
+                  left: _calculateTooltipLeft(chartWidth, _touchPosition, _touchedSpot!, spots.length),
+                  top: _calculateTooltipTop(chartHeight, _touchPosition),
+                  child: IgnorePointer(
+                    child: Material(
+                      elevation: 6,
+                      color: Colors.transparent,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(6)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              // month + value
+                              '${_formatMonthLabel(_touchedSpot!, months)}\n${_touchedSpot!.y.toStringAsFixed(1)} m³',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _hideTooltipTimer?.cancel();
+    super.dispose();
+  }
+
+  double _calculateTooltipLeft(double width, Offset? localPos, FlSpot spot, int pointsCount) {
+    // If we have a local pointer, use it
+    if (localPos != null) {
+      // clamp so the tooltip doesn't go off-screen
+      final left = localPos.dx - 40;
+      return left.clamp(6.0, width - 120.0);
+    }
+    // fallback: estimate position based on spot.x relative index
+    final fraction = (spot.x / (pointsCount - 1)).clamp(0.0, 1.0);
+    return (fraction * width).clamp(6.0, width - 120.0);
+  }
+
+  double _calculateTooltipTop(double height, Offset? localPos) {
+    if (localPos != null) {
+      final top = localPos.dy - 60;
+      return top.clamp(6.0, height - 30.0);
+    }
+    // fallback: show near top of chart
+    return 8.0;
+  }
+
+  String _formatMonthLabel(FlSpot spot, List<String> months) {
+    final idx = spot.x.round();
+    if (idx >= 0 && idx < months.length) return '${months[idx]}';
+    return '';
   }
 }
  
