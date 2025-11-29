@@ -9,6 +9,10 @@ import 'compliance_files_viewer.dart';
 const double _kMobileBreakpoint = 800.0;
 const double _kTabletBreakpointLower = 600.0;
 
+// Persisted sort state for the registered stations table (file-scoped)
+int _registeredStationsSortColumnIndex = 0;
+bool _registeredStationsSortAscending = true;
+
 class RegisteredStationsPage extends StatelessWidget {
   final LatLng? mapSelectedLocation;
   final MapController mapController;
@@ -104,629 +108,440 @@ class RegisteredStationsPage extends StatelessWidget {
   // If small screen, render mobile-friendly stacked layout
   final isMobile = screenWidth < _kMobileBreakpoint;
 
-  return isMobile ? _buildMobileLayout(context, rowsPerPage) : Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Map Section with shadow and rounded corners
-        Container(
-          height: 200,
-          width: double.infinity,
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blueAccent.withAlpha((0.2 * 255).round()), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blueAccent.withAlpha((0.07 * 255).round()),
-                blurRadius: 12,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: FutureBuilder<QuerySnapshot>(
-              future: FirestoreRepository.instance.getCollectionOnce(
-                'station_owners',
-                () => FirebaseFirestore.instance.collection('station_owners'),
-              ),
-              builder: (context, snapshot) {
-                final center = mapSelectedLocation ?? LatLng(10.7202, 122.5621);
-                List<Marker> markers = [];
-                if (snapshot.hasData) {
-                  final docs = snapshot.data!.docs;
-                  for (final doc in docs) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    double? lat, lng;
-                    if (data['geopoint'] != null) {
-                      final geo = data['geopoint'];
-                      lat = geo.latitude?.toDouble();
-                      lng = geo.longitude?.toDouble();
-                    } else if (data['location'] != null && data['location'] is Map) {
-                      lat = (data['location']['latitude'] as num?)?.toDouble();
-                      lng = (data['location']['longitude'] as num?)?.toDouble();
-                    } else {
-                      lat = (data['latitude'] as num?)?.toDouble();
-                      lng = (data['longitude'] as num?)?.toDouble();
-                    }
-                    final stationName = data['stationName'] ?? '';
-                    if (lat != null && lng != null) {
-                      markers.add(
-                        Marker(
-                          width: 44,
-                          height: 44,
-                          point: LatLng(lat, lng),
-                          child: Tooltip(
-                            message: stationName,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blueAccent.withAlpha((0.15 * 255).round()),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
+  // Desktop / wide layout: left column = table, right column = map
+  return isMobile
+      ? _buildMobileLayout(context, rowsPerPage)
+      : Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left: Table and controls (smaller)
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Search & filter (kept similar to previous layout)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Row(
+                        children: [
+                        Expanded(
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(22),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha((0.06 * 255).round()),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: TextField(
+                              controller: searchController,
+                              onChanged: (value) => onSearchQueryChanged(value.toLowerCase()),
+                              decoration: const InputDecoration(
+                                hintText: "Search",
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12),
                               ),
-                              child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32),
                             ),
                           ),
                         ),
-                      );
-                    }
-                  }
-                }
-                return FlutterMap(
-                  mapController: mapController,
-                  options: MapOptions(
-                    initialCenter: center,
-                    initialZoom: mapSelectedLocation != null ? 16.0 : 12.0,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c'],
-                      userAgentPackageName: 'com.example.app',
-                    ),
-                    MarkerLayer(markers: markers),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-        // Search and filter UI
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Search pill (left)
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.08 * 255).round()),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: searchController,
-                          onChanged: (value) => onSearchQueryChanged(value.toLowerCase()),
-                          decoration: const InputDecoration(
-                            hintText: "Search",
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // District display (read-only for district admin) or Filter pill (for federated admin)
-              if (isDistrictAdmin)
-                // Show district name as read-only text for district admin
-                Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.blueAccent.withAlpha((0.3 * 255).round())),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.location_on, color: Colors.blue[800], size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        registeredStationsDistrictFilter ?? 'District',
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: Colors.blue[900],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                // Show filter dropdown for federated admin
-                SizedBox(
-                  width: 320,
-                  child: FutureBuilder<QuerySnapshot>(
-                    future: FirestoreRepository.instance.getCollectionOnce(
-                      'districts',
-                      () => FirebaseFirestore.instance.collection('districts'),
-                    ),
-                    builder: (context, snapshot) {
-                      final docs = snapshot.data?.docs ?? [];
-                      // Build a deduplicated, sorted list of district names to avoid duplicate DropdownMenuItem values
-                      final districts = docs
-                          .map((doc) => doc['districtName']?.toString() ?? '')
-                          .where((d) => d.isNotEmpty)
-                          .toSet()
-                          .toList()
-                        ..sort();
-                      return Container(
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha((0.08 * 255).round()),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                        const SizedBox(width: 8),
+                        if (isDistrictAdmin)
+                          Container(
+                            height: 44,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE3F2FD),
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: Colors.blueAccent.withAlpha((0.3 * 255).round())),
                             ),
-                          ],
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  // If the selected filter is null or empty, pass null as value so the hint is shown
-                                  value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
-                                      ? null
-                                      : registeredStationsDistrictFilter,
-                                  hint: const Text("Filter"),
-                                  isExpanded: true,
-                                  items: districts
-                                      .map((district) => DropdownMenuItem<String>(
-                                            value: district,
-                                            child: Text(district),
-                                          ))
-                                      .toList(),
-                                  onChanged: (value) => onDistrictFilterChanged(value),
-                                  style: const TextStyle(fontSize: 15, color: Colors.black87),
-                                  icon: const SizedBox.shrink(),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.location_on, color: Colors.blue[800], size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  registeredStationsDistrictFilter ?? 'District',
+                                  style: TextStyle(fontSize: 15, color: Colors.blue[900], fontWeight: FontWeight.w500),
                                 ),
+                              ],
+                            ),
+                          )
+                        else
+                          SizedBox(
+                            width: 280,
+                            child: FutureBuilder<QuerySnapshot>(
+                              future: FirestoreRepository.instance.getCollectionOnce(
+                                'districts',
+                                () => FirebaseFirestore.instance.collection('districts'),
                               ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Icon(Icons.filter_alt, color: Colors.blue[800]),
-                            ),
-                            // Clear filters button
-                            Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: TextButton.icon(
-                                onPressed: () {
-                                  // Clear the search input and district filter, then refresh parent state
-                                  searchController.clear();
-                                  onSearchQueryChanged('');
-                                  onDistrictFilterChanged(null);
-                                  try {
-                                    setState(() {});
-                                  } catch (_) {}
-                                },
-                                icon: const Icon(Icons.clear, size: 18, color: Colors.blueAccent),
-                                label: const Text(
-                                  'Clear',
-                                  style: TextStyle(color: Colors.blueAccent, fontSize: 13),
-                                ),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                  minimumSize: const Size(0, 0),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // Table-based Station List
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
-            child: FutureBuilder<QuerySnapshot>(
-              future: FirestoreRepository.instance.getCollectionOnce(
-                'station_owners',
-                () => FirebaseFirestore.instance.collection('station_owners'),
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error loading station owners: ${snapshot.error}'));
-                }
-                final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return const Center(child: Text('No station owners found.'));
-                }
-                final filteredDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final stationName = (data['stationName'] ?? '').toString().toLowerCase();
-                  final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
-                  final district = (data['districtName'] ?? '').toString().toLowerCase();
-                  final matchesSearch = searchQuery.isEmpty ||
-                      stationName.contains(searchQuery) ||
-                      ownerName.contains(searchQuery) ||
-                      district.contains(searchQuery);
-                  final matchesDistrict = registeredStationsDistrictFilter == null || registeredStationsDistrictFilter!.isEmpty
-                      ? true
-                      : (data['districtName'] ?? '') == registeredStationsDistrictFilter;
-                  return matchesSearch && matchesDistrict;
-                }).toList()
-                  ..sort((a, b) {
-                    final aName = (a.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
-                    final bName = (b.data() as Map<String, dynamic>)['stationName']?.toString().toLowerCase() ?? '';
-                    return aName.compareTo(bName);
-                  });
-
-                if (filteredDocs.isEmpty) {
-                  return const Center(child: Text('No station owners found.'));
-                }
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((0.06 * 255).round()),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  width: double.infinity,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
-                          dataRowColor: WidgetStateProperty.resolveWith<Color?>(
-                            (Set<WidgetState> states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return Colors.blueAccent.withAlpha((0.08 * 255).round());
-                              }
-                              return Colors.white;
-                            },
-                          ),
-                          columnSpacing: 24,
-                          horizontalMargin: 16,
-                          dividerThickness: 1.2,
-                          dataRowMinHeight: 48,
-                          dataRowMaxHeight: 56,
-                          columns: [
-                          DataColumn(
-                            label: SizedBox(
-                              width: 180,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'Station',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
+                              builder: (context, snapshot) {
+                                final docs = snapshot.data?.docs ?? [];
+                                final districts = docs
+                                    .map((doc) => doc['districtName']?.toString() ?? '')
+                                    .where((d) => d.isNotEmpty)
+                                    .toSet()
+                                    .toList()
+                                  ..sort();
+                                return Container(
+                                  height: 44,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(color: Colors.grey.shade300),
                                   ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: SizedBox(
-                              width: 150,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'Owner',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: SizedBox(
-                              width: 120,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'District',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: SizedBox(
-                              width: 250,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'Address',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: SizedBox(
-                              width: 100,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'Status',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataColumn(
-                            label: SizedBox(
-                              width: 150,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                                child: Text(
-                                  'Actions',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1976D2),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                              rows: filteredDocs.map((doc) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final stationName = data['stationName'] ?? '';
-                              final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                              final district = data['districtName'] ?? '';
-                              final address = data['address'] ?? '';
-                              double? lat, lng;
-                              if (data['geopoint'] != null) {
-                                final geo = data['geopoint'];
-                                lat = geo.latitude?.toDouble();
-                                lng = geo.longitude?.toDouble();
-                              } else if (data['location'] != null && data['location'] is Map) {
-                                lat = (data['location']['latitude'] as num?)?.toDouble();
-                                lng = (data['location']['longitude'] as num?)?.toDouble();
-                              } else {
-                                lat = (data['latitude'] as num?)?.toDouble();
-                                lng = (data['longitude'] as num?)?.toDouble();
-                              }
-                // Normalize status to only show 'Done' or 'Pending'.
-                // Any value equal to 'done' (case-insensitive) => 'Done', otherwise => 'Pending'.
-                final rawStatus = (data['status'] ?? '').toString();
-                final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
-                final statusColor = statusNormalized == 'Done'
-                  ? const Color(0xFF4CAF50)
-                  : const Color(0xFFFFC107);
-
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    SizedBox(
-                                      width: 180,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                        child: Text(
-                                          stationName,
-                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 150,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                        child: Text(ownerName, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                        child: Text(district, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 250,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                        child: Text(
-                                          address,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 100,
-                                      child: FutureBuilder<QuerySnapshot>(
-                                      future: () async {
-                                        final now = DateTime.now();
-                                        final ym = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
-                                        return FirebaseFirestore.instance
-                                            .collection('station_owners')
-                                            .doc(doc.id)
-                                            .collection('inspections')
-                                            .where('monthlyInspectionMonth', isEqualTo: ym)
-                                            .limit(1)
-                                            .get();
-                                      }(),
-                                      builder: (ctx, inspSnap) {
-                                        String displayStatus = statusNormalized; // fallback to owner doc status
-                                        Color displayColor = statusColor;
-                                        if (inspSnap.connectionState == ConnectionState.waiting) {
-                                          return SizedBox(
-                                            width: 90,
-                                            child: Row(
-                                              children: const [
-                                                SizedBox(
-                                                  width: 16,
-                                                  height: 16,
-                                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                                ),
-                                                SizedBox(width: 8),
-                                                Text('Loading', style: TextStyle(fontSize: 12)),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                        if (inspSnap.hasError) {
-                                          // on error, fallback to owner status
-                                          displayStatus = statusNormalized;
-                                          displayColor = statusColor;
-                                        } else if (inspSnap.hasData && inspSnap.data!.docs.isNotEmpty) {
-                                          final inspDoc = inspSnap.data!.docs.first;
-                                          final inspData = inspDoc.data() as Map<String, dynamic>;
-                                          final rawInspStatus = (inspData['status'] ?? '').toString();
-                                          final inspNormalized = rawInspStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
-                                          displayStatus = inspNormalized;
-                                          displayColor = inspNormalized == 'Done' ? const Color(0xFF4CAF50) : const Color(0xFFFFC107);
-                                        }
-
-                                        return Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                            decoration: BoxDecoration(color: displayColor, borderRadius: BorderRadius.circular(6)),
-                                            child: Text(
-                                              displayStatus,
-                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                            ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: (registeredStationsDistrictFilter == null || (registeredStationsDistrictFilter?.isEmpty ?? true))
+                                                ? null
+                                                : registeredStationsDistrictFilter,
+                                            hint: const Text('Filter'),
+                                            isExpanded: true,
+                                            items: districts.map((d) => DropdownMenuItem<String>(value: d, child: Text(d))).toList(),
+                                            onChanged: (v) => onDistrictFilterChanged(v),
                                           ),
-                                        );
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Icon(Icons.filter_alt, color: Colors.blue[800], size: 20),
+                                      const SizedBox(width: 8),
+                                      TextButton.icon(
+                                        onPressed: () {
+                                          searchController.clear();
+                                          onSearchQueryChanged('');
+                                          onDistrictFilterChanged(null);
+                                          try {
+                                            setState(() {});
+                                          } catch (_) {}
+                                        },
+                                        icon: const Icon(Icons.clear, size: 18, color: Colors.blueAccent),
+                                        label: const Text('Clear', style: TextStyle(color: Colors.blueAccent, fontSize: 13)),
+                                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), minimumSize: const Size(0, 0)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Table area
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                      child: FutureBuilder<QuerySnapshot>(
+                        future: FirestoreRepository.instance.getCollectionOnce(
+                          'station_owners',
+                          () => FirebaseFirestore.instance.collection('station_owners'),
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (snapshot.hasError) {
+                            return Center(child: Text('Error loading station owners: ${snapshot.error}'));
+                          }
+                          final docs = snapshot.data?.docs ?? [];
+                          if (docs.isEmpty) {
+                            return const Center(child: Text('No station owners found.'));
+                          }
+                          final filteredDocs = docs.where((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final stationName = (data['stationName'] ?? '').toString().toLowerCase();
+                            final ownerName = ('${data['firstName'] ?? ''} ${data['lastName'] ?? ''}').toLowerCase();
+                            final district = (data['districtName'] ?? '').toString().toLowerCase();
+                            final matchesSearch = searchQuery.isEmpty || stationName.contains(searchQuery) || ownerName.contains(searchQuery) || district.contains(searchQuery);
+                            final matchesDistrict = registeredStationsDistrictFilter == null || registeredStationsDistrictFilter!.isEmpty
+                                ? true
+                                : (data['districtName'] ?? '') == registeredStationsDistrictFilter;
+                            return matchesSearch && matchesDistrict;
+                          }).toList();
+
+                          // Apply sort based on persistent column/index state (Station=0, District=1, Status=2)
+                          filteredDocs.sort((a, b) {
+                            final aMap = a.data() as Map<String, dynamic>;
+                            final bMap = b.data() as Map<String, dynamic>;
+
+                            int cmp = 0;
+                            if (_registeredStationsSortColumnIndex == 0) {
+                              final aName = (aMap['stationName'] ?? '').toString().toLowerCase();
+                              final bName = (bMap['stationName'] ?? '').toString().toLowerCase();
+                              cmp = aName.compareTo(bName);
+                            } else if (_registeredStationsSortColumnIndex == 1) {
+                              final aDistrict = (aMap['districtName'] ?? '').toString().toLowerCase();
+                              final bDistrict = (bMap['districtName'] ?? '').toString().toLowerCase();
+                              cmp = aDistrict.compareTo(bDistrict);
+                            } else if (_registeredStationsSortColumnIndex == 2) {
+                              int mapStatus(Map<String, dynamic> m) {
+                                final s = (m['status'] ?? '').toString().toLowerCase();
+                                return s == 'done' ? 0 : 1;
+                              }
+                              cmp = mapStatus(aMap).compareTo(mapStatus(bMap));
+                            }
+
+                            return _registeredStationsSortAscending ? cmp : -cmp;
+                          });
+
+                          if (filteredDocs.isEmpty) {
+                            return const Center(child: Text('No station owners found.'));
+                          }
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: Colors.blueGrey.shade100, width: 1.5),
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha((0.06 * 255).round()),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            width: double.infinity,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                                child: SingleChildScrollView(
+                                scrollDirection: Axis.vertical,
+                                child: DataTable(
+                                  // enable sorting state
+                                  sortColumnIndex: _registeredStationsSortColumnIndex,
+                                  sortAscending: _registeredStationsSortAscending,
+                                  headingRowColor: WidgetStateProperty.all(const Color(0xFFD6E8FD)),
+                                  dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                                    (Set<WidgetState> states) {
+                                      if (states.contains(WidgetState.selected)) {
+                                        return Colors.blueAccent.withAlpha((0.08 * 255).round());
+                                      }
+                                      return Colors.white;
+                                    },
+                                  ),
+                                  columnSpacing: 24,
+                                  horizontalMargin: 16,
+                                  dividerThickness: 1.2,
+                                  dataRowMinHeight: 48,
+                                  dataRowMaxHeight: 56,
+                                  columns: [
+                                    DataColumn(
+                                      label: SizedBox(
+                                        width: 240,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          child: Text('Station', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 12)),
+                                        ),
+                                      ),
+                                      onSort: (colIndex, ascending) {
+                                        _registeredStationsSortColumnIndex = colIndex;
+                                        _registeredStationsSortAscending = ascending;
+                                        try {
+                                          setState(() {});
+                                        } catch (_) {}
                                       },
                                     ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 150,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
-                                          tooltip: "View on Map",
-                                          padding: const EdgeInsets.all(4),
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            if (lat != null && lng != null) {
-                                              onMapSelectedLocation(LatLng(lat, lng));
-                                              mapController.move(LatLng(lat, lng), 16.0);
-                                            }
-                                          },
+                                    DataColumn(
+                                      label: SizedBox(
+                                        width: 120,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          child: Text('District', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 12)),
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.description, color: Colors.blueAccent, size: 20),
-                                          tooltip: "View Compliance Report",
-                                          padding: const EdgeInsets.all(4),
-                                          constraints: const BoxConstraints(),
-                                          onPressed: () {
-                                            onShowComplianceReportDetails(
-                                              true,
-                                              data,
-                                              doc.id,
-                                              stationName,
-                                            );
-                                          },
+                                      ),
+                                    ),
+                                    DataColumn(
+                                      label: SizedBox(
+                                        width: 86,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Expanded(
+                                                child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 12)),
+                                              ),
+                                              if (_registeredStationsSortColumnIndex == 2)
+                                                Icon(
+                                                  _registeredStationsSortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                                  size: 12,
+                                                  color: const Color(0xFF1976D2),
+                                                ),
+                                            ],
+                                          ),
                                         ),
-                                      ],
+                                      ),
+                                      onSort: (colIndex, ascending) {
+                                        _registeredStationsSortColumnIndex = colIndex;
+                                        _registeredStationsSortAscending = ascending;
+                                        try {
+                                          setState(() {});
+                                        } catch (_) {}
+                                      },
                                     ),
+                                    DataColumn(
+                                      label: SizedBox(
+                                        width: 140,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                          child: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2), fontSize: 12)),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+                                  ],
+                                  rows: filteredDocs.map((doc) {
+                                    final data = doc.data() as Map<String, dynamic>;
+                                    final stationName = data['stationName'] ?? '';
+                                    final district = data['districtName'] ?? '';
+                                    final rawStatus = (data['status'] ?? '').toString();
+                                    final statusNormalized = rawStatus.toLowerCase() == 'done' ? 'Done' : 'Pending';
+                                    final statusColor = statusNormalized == 'Done' ? const Color(0xFF4CAF50) : const Color(0xFFFFC107);
+                                    double? lat, lng;
+                                    if (data['geopoint'] != null) {
+                                      final geo = data['geopoint'];
+                                      lat = geo.latitude?.toDouble();
+                                      lng = geo.longitude?.toDouble();
+                                    } else if (data['location'] != null && data['location'] is Map) {
+                                      lat = (data['location']['latitude'] as num?)?.toDouble();
+                                      lng = (data['location']['longitude'] as num?)?.toDouble();
+                                    } else {
+                                      lat = (data['latitude'] as num?)?.toDouble();
+                                      lng = (data['longitude'] as num?)?.toDouble();
+                                    }
 
-  Widget _buildMobileLayout(BuildContext context, int rowsPerPage) {
+                                    return DataRow(cells: [
+                                      DataCell(SizedBox(width: 240, child: Text(stationName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis))),
+                                      DataCell(SizedBox(width: 120, child: Text(district, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+                                      DataCell(SizedBox(width: 86, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(6)), child: Text(statusNormalized, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))))),
+                                      DataCell(SizedBox(
+                                        width: 140,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.location_on, color: Colors.blueAccent, size: 20),
+                                              tooltip: "View on Map",
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                if (lat != null && lng != null) {
+                                                  onMapSelectedLocation(LatLng(lat, lng));
+                                                  mapController.move(LatLng(lat, lng), 16.0);
+                                                }
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.description, color: Colors.blueAccent, size: 20),
+                                              tooltip: "View Compliance Report",
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              onPressed: () {
+                                                onShowComplianceReportDetails(true, data, doc.id, stationName);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      )),
+                                    ]);
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Right: Map (larger)
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.blueAccent.withAlpha((0.2 * 255).round()), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blueAccent.withAlpha((0.07 * 255).round()),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: FutureBuilder<QuerySnapshot>(
+                      future: FirestoreRepository.instance.getCollectionOnce(
+                        'station_owners',
+                        () => FirebaseFirestore.instance.collection('station_owners'),
+                      ),
+                      builder: (context, snapshot) {
+                        final center = mapSelectedLocation ?? LatLng(10.7202, 122.5621);
+                        List<Marker> markers = [];
+                        if (snapshot.hasData) {
+                          final docs = snapshot.data!.docs;
+                          for (final doc in docs) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            // Respect district filter (applies to district president and federated filter)
+                            final docDistrict = (data['districtName'] ?? '').toString();
+                            if (registeredStationsDistrictFilter != null && registeredStationsDistrictFilter!.isNotEmpty) {
+                              if (docDistrict != registeredStationsDistrictFilter) continue;
+                            }
+                            double? lat, lng;
+                            if (data['geopoint'] != null) {
+                              final geo = data['geopoint'];
+                              lat = geo.latitude?.toDouble();
+                              lng = geo.longitude?.toDouble();
+                            } else if (data['location'] != null && data['location'] is Map) {
+                              lat = (data['location']['latitude'] as num?)?.toDouble();
+                              lng = (data['location']['longitude'] as num?)?.toDouble();
+                            } else {
+                              lat = (data['latitude'] as num?)?.toDouble();
+                              lng = (data['longitude'] as num?)?.toDouble();
+                            }
+                            final stationName = data['stationName'] ?? '';
+                            if (lat != null && lng != null) {
+                              markers.add(Marker(width: 44, height: 44, point: LatLng(lat, lng), child: Tooltip(message: stationName, child: Container(decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.blueAccent.withAlpha((0.15 * 255).round()), blurRadius: 6, spreadRadius: 1),]), child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 32)))));
+                            }
+                          }
+                        }
+                        return FlutterMap(
+                          mapController: mapController,
+                          options: MapOptions(initialCenter: center, initialZoom: mapSelectedLocation != null ? 16.0 : 12.0),
+                          children: [
+                            TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: const ['a', 'b', 'c'], userAgentPackageName: 'com.example.app'),
+                            MarkerLayer(markers: markers),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          );
+
+        }
+
+        Widget _buildMobileLayout(BuildContext context, int rowsPerPage) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= _kTabletBreakpointLower && screenWidth < _kMobileBreakpoint;
     return Column(
@@ -754,6 +569,11 @@ class RegisteredStationsPage extends StatelessWidget {
                   final docs = snapshot.data!.docs;
                   for (final doc in docs) {
                     final data = doc.data() as Map<String, dynamic>;
+                    // Respect district filter on mobile map as well
+                    final docDistrict = (data['districtName'] ?? '').toString();
+                    if (registeredStationsDistrictFilter != null && registeredStationsDistrictFilter!.isNotEmpty) {
+                      if (docDistrict != registeredStationsDistrictFilter) continue;
+                    }
                     double? lat, lng;
                     if (data['geopoint'] != null) {
                       final geo = data['geopoint'];
@@ -820,7 +640,7 @@ class RegisteredStationsPage extends StatelessWidget {
                   decoration: const InputDecoration(
                     hintText: "Search",
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12),
                   ),
                 ),
               ),
@@ -872,7 +692,7 @@ class RegisteredStationsPage extends StatelessWidget {
                         Expanded(
                           child: Container(
                             height: 44,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(22),
@@ -905,6 +725,7 @@ class RegisteredStationsPage extends StatelessWidget {
                           },
                           icon: const Icon(Icons.clear, color: Colors.blueAccent),
                           label: const Text('Clear', style: TextStyle(color: Colors.blueAccent)),
+                          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), minimumSize: const Size(0, 0)),
                         ),
                       ],
                     );

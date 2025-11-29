@@ -353,13 +353,13 @@ class _InspectionPageState extends State<InspectionPage> {
                                 children: [
                                   ElevatedButton(
                                     onPressed: _page > 0 ? _prevPage : null,
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), foregroundColor: Colors.white),
                                     child: const Text('Back'),
                                   ),
                                   const SizedBox(width: 12),
                                   ElevatedButton(
                                     onPressed: (_page + 1) < totalPages ? _nextPage : null,
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), foregroundColor: Colors.white),
                                     child: const Text('Next'),
                                   ),
                                 ],

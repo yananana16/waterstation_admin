@@ -20,6 +20,8 @@ class _LguDashboardState extends State<LguDashboard> {
   bool _isSidebarCollapsed = false;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  String lguName = '';
+
   int totalOwners = 0;
   Map<String, int> areaCounts = {};
   int approvedCount = 0;
@@ -46,6 +48,7 @@ class _LguDashboardState extends State<LguDashboard> {
   void initState() {
     super.initState();
     _fetchTotalOwners();
+    _loadLguName();
   }
 
   Future<void> _fetchTotalOwners() async {
@@ -78,6 +81,32 @@ class _LguDashboardState extends State<LguDashboard> {
       });
     } catch (e) {
       debugPrint('Failed to fetch station_owners count: $e');
+    }
+  }
+
+  Future<void> _loadLguName() async {
+    try {
+      final col = FirebaseFirestore.instance.collection('cho_lgu');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await col.doc(user.uid).get();
+        if (doc.exists) {
+          final data = doc.data();
+          final nameFromDoc = (data?['name'] ?? data?['adminName'] ?? data?['displayName'] ?? '').toString();
+          if (mounted) setState(() => lguName = nameFromDoc);
+          return;
+        }
+      }
+      var snap = await col.where('admin', isEqualTo: true).limit(1).get();
+      if (snap.docs.isEmpty) snap = await col.limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first;
+        final data = d.data();
+        final nameFromDoc = (data['name'] ?? data['adminName'] ?? data['displayName'] ?? '').toString();
+        if (mounted) setState(() => lguName = nameFromDoc);
+      }
+    } catch (e) {
+      debugPrint('Failed to load LGU display name: $e');
     }
   }
 
@@ -168,9 +197,9 @@ class _LguDashboardState extends State<LguDashboard> {
                     child: Icon(Icons.person, size: 40, color: Color(0xFF004687)),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "LGU Admin",
-                    style: TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
+                  Text(
+                    lguName.isNotEmpty ? lguName : "LGU Admin",
+                    style: const TextStyle(fontSize: 20, color: Color(0xFF004687), fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -375,24 +404,6 @@ class _LguDashboardState extends State<LguDashboard> {
                 child: _CalendarWidget(),
               ),
               const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8)],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Reminders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                    const SizedBox(height: 12),
-                    _ReminderCard(icon: Icons.circle, text: "Monthly bacteriological water analysis starts this week."),
-                    const SizedBox(height: 8),
-                    _ReminderCard(icon: Icons.circle, text: "Physical and chemical water analysis coming up in a month."),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

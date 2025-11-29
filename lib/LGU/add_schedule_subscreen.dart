@@ -280,6 +280,33 @@ class _AddScheduleSubscreenState extends State<AddScheduleSubscreen> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
+                    // Search field for stations (moved above the Station selector)
+                    Container(
+                      margin: EdgeInsets.only(bottom: 12 * scale),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: labelWidth,
+                            padding: EdgeInsets.symmetric(vertical: 12 * scale, horizontal: 16 * scale),
+                            color: const Color(0xFFF2F6FA),
+                            child: Text('Search Stations', style: TextStyle(fontWeight: FontWeight.w600, color: const Color(0xFF0B63B7), fontSize: 14 * scale)),
+                          ),
+                          SizedBox(width: 12 * scale),
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Search by name or district',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6 * scale)),
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(vertical: 12 * scale, horizontal: 12 * scale),
+                              ),
+                              onChanged: (v) => setState(() => _stationSearch = v.trim()),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                     FutureBuilder<List<QueryDocumentSnapshot>>(
                       future: _loadStations(),
                       builder: (context, snap) {
@@ -339,45 +366,7 @@ class _AddScheduleSubscreenState extends State<AddScheduleSubscreen> {
                       },
                     ),
                     // Status is fixed to 'Pending' by default and cannot be changed in the scheduling UI.
-                    _fieldRow(
-                      'Status',
-                      // Read-only display to prevent changes
-                      Container(
-                        padding: EdgeInsets.symmetric(vertical: 12 * scale, horizontal: 12 * scale),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(6 * scale), border: Border.all(color: Colors.grey.shade300)),
-                        child: Text(_status, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14 * scale)),
-                      ),
-                      labelWidth,
-                      scale,
-                    ),
                     const SizedBox(height: 18),
-                    // Search field for stations
-                    Container(
-                      margin: EdgeInsets.only(bottom: 12 * scale),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: labelWidth,
-                            padding: EdgeInsets.symmetric(vertical: 12 * scale, horizontal: 16 * scale),
-                            color: const Color(0xFFF2F6FA),
-                            child: Text('Search Stations', style: TextStyle(fontWeight: FontWeight.w600, color: const Color(0xFF0B63B7), fontSize: 14 * scale)),
-                          ),
-                          SizedBox(width: 12 * scale),
-                          Expanded(
-                            child: TextField(
-                              decoration: InputDecoration(
-                                hintText: 'Search by name or district',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6 * scale)),
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(vertical: 12 * scale, horizontal: 12 * scale),
-                              ),
-                              onChanged: (v) => setState(() => _stationSearch = v.trim()),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
                     // Stations list (filtered)
                     Container(
                       width: double.infinity,
@@ -436,7 +425,7 @@ class _AddScheduleSubscreenState extends State<AddScheduleSubscreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: 24 * scale, vertical: 12 * scale),
-                          child: _isSaving ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text('Add Schedule', style: TextStyle(fontSize: 14 * scale)),
+                          child: _isSaving ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text('Add Schedule', style: TextStyle(fontSize: 14 * scale, color: Colors.white)),
                         ),
                       ),
                     ),

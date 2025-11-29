@@ -186,28 +186,6 @@ class _SchedulePageState extends State<SchedulePage> {
     ];
     return Column(
       children: [
-        // Date and time row
-        Container(
-          color: const Color(0xFFF2F4F8),
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 10 * scale),
-          child: Row(
-            children: [
-              Icon(Icons.calendar_today, color: Colors.black54, size: 18 * scale),
-              SizedBox(width: 8 * scale),
-              Text(
-                'Monday, May 5, 2025',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16 * scale),
-              ),
-              const Spacer(),
-              Icon(Icons.access_time, color: Colors.black54, size: 18 * scale),
-              SizedBox(width: 8 * scale),
-              Text(
-                '11:25 AM PST',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16 * scale),
-              ),
-            ],
-          ),
-        ),
         // Main content
         Expanded(
           child: Padding(

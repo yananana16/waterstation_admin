@@ -135,6 +135,7 @@ class Recommendation {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
@@ -155,9 +156,21 @@ class Recommendation {
                   Text(rec.district, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
                   if (rec.historySeries != null && rec.historySeries!.isNotEmpty)
-                    SizedBox(height: 140, child: _OverviewLineChart(points: rec.historySeries!))
+                    Container(
+                      height: 140,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                      clipBehavior: Clip.antiAlias,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: _OverviewLineChart(points: rec.historySeries!),
+                      ),
+                    )
                   else
-                    SizedBox(height: 140, child: Center(child: Text('No series data for ${rec.district}'))),
+                    Container(
+                      height: 140,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                      child: Center(child: Text('No series data for ${rec.district}')),
+                    ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -170,11 +183,6 @@ class Recommendation {
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1976D2)),
-              child: const Text('Details'),
-            ),
           ],
         ),
       ),
@@ -278,8 +286,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   bool _showAbout = true;
   // Toggle whether to show the PNG image for the overall chart (if available).
   bool _overviewShowImage = false;
-  // Track which recommendation cards have their explanation expanded
-  final Set<String> _expandedCards = {};
+  // (explanation removed) previously tracked expanded cards
   // Selected district filter for charts/listing. 'All' shows everything.
   String _selectedDistrictFilter = 'All';
 
@@ -1089,86 +1096,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    // Explanation box with expand/collapse (limit height to avoid overflow)
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(maxHeight: 110),
-                      decoration: BoxDecoration(
-                        color: Colors.yellow.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200, width: 0.5),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.lightbulb_outline, size: 18, color: Colors.amber[700]),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Builder(builder: (context) {
-                                  final isExpanded = _expandedCards.contains(rec.district);
-                                  final explanation = rec.explanation.trim();
-                                  if (explanation.isEmpty) {
-                                    return const Text('No additional details.', style: TextStyle(fontSize: 13));
-                                  }
-                                  if (isExpanded) {
-                                    return SizedBox(
-                                      height: 100,
-                                      child: SingleChildScrollView(
-                                        child: Text(explanation, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400)),
-                                      ),
-                                    );
-                                  }
-
-                                  // truncated
-                                  final truncated = explanation.length > 140 ? explanation.substring(0, 140).trim() + '...' : explanation;
-                                  if (explanation.length > 140) {
-                                    return RichText(
-                                      text: TextSpan(
-                                        style: const TextStyle(fontSize: 13, color: Color(0xFF1F2937)),
-                                        children: [
-                                          TextSpan(text: truncated),
-                                          TextSpan(
-                                            text: ' Read more',
-                                            style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w700),
-                                            recognizer: TapGestureRecognizer()
-                                              ..onTap = () {
-                                                setState(() {
-                                                  _expandedCards.add(rec.district);
-                                                });
-                                              },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-
-                                  return Text(explanation, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400));
-                                }),
-                              ),
-                            ],
-                          ),
-                          // collapse control when expanded
-                          if (_expandedCards.contains(rec.district))
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _expandedCards.remove(rec.district);
-                                  });
-                                },
-                                child: const Text('Show less', style: TextStyle(fontSize: 13, color: Color(0xFF4A5568))),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
+                          const SizedBox(height: 8),
+                          // Explanation removed per request
+                          const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -1545,15 +1475,8 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [kPrimaryColor.withOpacity(0.95), kSecondaryColor.withOpacity(0.9)]),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.dashboard, color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 16),
+            // leading icon removed per request
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1561,7 +1484,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text('Overall Forecast Summary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                        child: Text('Water Demand Trend Graph', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                       ),
                       if ((chartUrl != null && chartUrl.isNotEmpty) || (chartBase64 != null && chartBase64.isNotEmpty))
                         Padding(
@@ -1666,11 +1589,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
-              child: const Text('Details'),
-            ),
           ],
         ),
       ),

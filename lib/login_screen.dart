@@ -115,12 +115,12 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         return;
       }
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (_) {
       setState(() { _isLoading = false; });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message ?? 'Invalid username or password.'),
+        const SnackBar(
+          content: Text('Login failed, incorrect password or not existing'),
           backgroundColor: Colors.redAccent,
         ),
       );

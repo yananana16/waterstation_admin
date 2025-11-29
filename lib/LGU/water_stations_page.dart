@@ -240,7 +240,8 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
                   final data = doc.data() as Map<String, dynamic>;
                   final stationName = data['stationName'] ?? '';
                   final ownerName = '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
-                  final status = data['status'] ?? 'Unknown';
+                  final rawStatus = (data['status'] ?? '').toString().toLowerCase();
+                  final status = rawStatus == 'approved' ? 'Approved' : 'Pending';
                   final districtName = data['districtName'] ?? 'Unknown';
                   final address = data['address'] ?? 'Unknown';
                   final email = data['email'] ?? 'Unknown';
@@ -256,15 +257,15 @@ class _WaterStationsPageState extends State<WaterStationsPage> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: status == 'approved'
+                              color: status == 'Approved'
                                   ? const Color(0xFF4CAF50).withAlpha((0.1 * 255).round())
-                                  : const Color(0xFFD32F2F).withAlpha((0.1 * 255).round()),
+                                  : const Color.fromARGB(255, 228, 138, 21).withAlpha((0.1 * 255).round()),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               status,
                               style: TextStyle(
-                                color: status == 'approved' ? const Color(0xFF4CAF50) : const Color(0xFFD32F2F),
+                                color: status == 'Approved' ? const Color(0xFF4CAF50) : const Color(0xFFD32F2F),
                                 fontWeight: FontWeight.bold,
                               ),
                               overflow: TextOverflow.ellipsis,

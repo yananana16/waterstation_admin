@@ -32,6 +32,19 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
   final TextEditingController _contactController = TextEditingController();
   String _profileEmail = '';
   String? _inspectorDocId;
+  // Additional inspector fields to display
+  String _displayName = '';
+  String _firstName = '';
+  String _lastName = '';
+  String _inspectorNo = '';
+  String _phone = '';
+  String _inspectorUid = '';
+  String _createdAtStr = '';
+  String _updatedAtStr = '';
+  // Editing state + controllers
+  bool _editingProfile = false;
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
 
   @override
   void initState() {
@@ -57,6 +70,8 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
     _nameController.dispose();
     _roleController.dispose();
     _contactController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -74,9 +89,18 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
         final d = snap.docs.first;
         final data = d.data();
         _inspectorDocId = d.id;
-        _nameController.text = (data['name'] ?? data['fullName'] ?? '') as String? ?? '';
-        _roleController.text = (data['role'] ?? '') as String? ?? '';
-        _contactController.text = (data['contact'] ?? data['phone'] ?? '') as String? ?? '';
+        _displayName = (data['displayName'] ?? data['name'] ?? data['fullName'] ?? '').toString();
+        _firstName = (data['firstName'] ?? '').toString();
+        _lastName = (data['lastName'] ?? '').toString();
+        _inspectorNo = (data['inspectorNo'] ?? data['inspectorNumber'] ?? '').toString();
+        _phone = (data['phone'] ?? data['contact'] ?? '').toString();
+        _inspectorUid = (data['uid'] ?? '').toString();
+        // fill existing controllers for backward compatibility and edit fields
+        _nameController.text = _displayName.isNotEmpty ? _displayName : ('${_firstName} ${_lastName}'.trim());
+        _firstNameController.text = _firstName;
+        _lastNameController.text = _lastName;
+        _roleController.text = (data['role'] ?? '').toString();
+        _contactController.text = _phone;
       } else {
         // optional: try to find by email if inspectors indexed differently
         final snap2 = await FirebaseFirestore.instance.collection('inspectors').where('email', isEqualTo: email).limit(1).get();
@@ -84,9 +108,17 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
           final d = snap2.docs.first;
           final data = d.data();
           _inspectorDocId = d.id;
-          _nameController.text = (data['name'] ?? data['fullName'] ?? '') as String? ?? '';
-          _roleController.text = (data['role'] ?? '') as String? ?? '';
-          _contactController.text = (data['contact'] ?? data['phone'] ?? '') as String? ?? '';
+          _displayName = (data['displayName'] ?? data['name'] ?? data['fullName'] ?? '').toString();
+          _firstName = (data['firstName'] ?? '').toString();
+          _lastName = (data['lastName'] ?? '').toString();
+          _inspectorNo = (data['inspectorNo'] ?? data['inspectorNumber'] ?? '').toString();
+          _phone = (data['phone'] ?? data['contact'] ?? '').toString();
+          _inspectorUid = (data['uid'] ?? '').toString();
+          _nameController.text = _displayName.isNotEmpty ? _displayName : ('${_firstName} ${_lastName}'.trim());
+          _firstNameController.text = _firstName;
+          _lastNameController.text = _lastName;
+          _roleController.text = (data['role'] ?? '').toString();
+          _contactController.text = _phone;
         }
       }
       setState(() {});
@@ -104,8 +136,12 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
       final data = {
         'uid': uid,
         'email': email,
+        'displayName': _nameController.text.trim(),
         'name': _nameController.text.trim(),
+        'firstName': _firstNameController.text.trim(),
+        'lastName': _lastNameController.text.trim(),
         'role': _roleController.text.trim(),
+        'phone': _contactController.text.trim(),
         'contact': _contactController.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -123,10 +159,92 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
         }
       }
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved')));
+      // update local state to reflect saved values
+      _displayName = _nameController.text.trim();
+      _firstName = _firstNameController.text.trim();
+      _lastName = _lastNameController.text.trim();
+      _phone = _contactController.text.trim();
+      setState(() {
+        _editingProfile = false;
+      });
     } catch (err) {
       debugPrint('Failed saving inspector profile: $err');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save profile: $err')));
     }
+  }
+
+  Future<void> _showChangePasswordDialog() async {
+    final currentPwdController = TextEditingController();
+    final newPwdController = TextEditingController();
+    final confirmPwdController = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Change Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: currentPwdController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Current password'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: newPwdController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'New password'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmPwdController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Confirm new password'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final cur = currentPwdController.text;
+                final nw = newPwdController.text;
+                final cf = confirmPwdController.text;
+                if (nw.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('New password must be at least 6 characters')));
+                  return;
+                }
+                if (nw != cf) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+                  return;
+                }
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) return;
+                try {
+                  final email = user.email ?? _profileEmail;
+                  if (email.isEmpty) throw 'No email available for reauthentication';
+                  final cred = EmailAuthProvider.credential(email: email, password: cur);
+                  await user.reauthenticateWithCredential(cred);
+                  await user.updatePassword(nw);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated')));
+                  Navigator.of(context).pop();
+                } catch (err) {
+                  debugPrint('Change password failed: $err');
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to change password: $err')));
+                }
+              },
+              child: const Text('Change'),
+            ),
+          ],
+        );
+      },
+    );
+    currentPwdController.dispose();
+    newPwdController.dispose();
+    confirmPwdController.dispose();
   }
 
   /// Convert various stored date formats into a DateTime (if possible)
@@ -392,7 +510,7 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 children: [
                   CircleAvatar(radius: 28, backgroundColor: primary, child: const Icon(Icons.person, color: Colors.white, size: 28)),
                   const SizedBox(height: 8),
-                  Text('Admin', style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
+                  Text(_firstName.isNotEmpty ? _firstName : 'Admin', style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(FirebaseAuth.instance.currentUser?.email ?? '', style: const TextStyle(color: Color(0xFF7A93B4), fontSize: 11)),
                 ],
@@ -474,7 +592,6 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 ),
               ),
               const SizedBox(width: 12),
-              CircleAvatar(radius: 16, backgroundColor: primary, child: const Icon(Icons.person, color: Colors.white, size: 16)),
             ],
           ),
         ],
@@ -501,12 +618,10 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today, color: primary, size: isWide ? 24 : 20),
                     SizedBox(width: isWide ? 12 : 8),
                     Expanded(
                       child: Text('Hello, Inspector!', style: TextStyle(color: primary, fontWeight: FontWeight.bold, fontSize: isWide ? 16 : 14)),
                     ),
-                    Text(DateFormat.yMd().format(DateTime.now()), style: TextStyle(color: Colors.black54, fontSize: isWide ? 14 : 12)),
                   ],
                 ),
               ),
@@ -1080,29 +1195,67 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
               ),
             ] else ...[
               _whiteCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _roleController,
-                      decoration: const InputDecoration(labelText: 'Role', border: OutlineInputBorder()),
-                      enabled: false,
-                    ),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 12),
-                    Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: Text('Email: $_profileEmail', style: TextStyle(fontSize: isWide ? 14 : 13))),
-                        SizedBox(
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            Row(children: [
+                              if (!_editingProfile)
+                                TextButton.icon(onPressed: () { setState(() { _editingProfile = true; }); }, icon: const Icon(Icons.edit), label: const Text('Edit')),
+                              const SizedBox(width: 6),
+                              OutlinedButton.icon(onPressed: _showChangePasswordDialog, icon: const Icon(Icons.lock_outline), label: const Text('Change Password')),
+                            ])
+                          ],
                         ),
+                        const SizedBox(height: 12),
+                        if (_editingProfile) ...[
+                          // editable fields
+                          TextField(controller: _firstNameController, decoration: const InputDecoration(labelText: 'First name')),
+                          const SizedBox(height: 8),
+                          TextField(controller: _lastNameController, decoration: const InputDecoration(labelText: 'Last name')),
+                          const SizedBox(height: 8),
+                          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Display name')),
+                          const SizedBox(height: 8),
+                          TextField(controller: _roleController, decoration: const InputDecoration(labelText: 'Role')),
+                          const SizedBox(height: 8),
+                          TextField(controller: _contactController, decoration: const InputDecoration(labelText: 'Phone')),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            ElevatedButton(onPressed: () async { await _saveInspectorProfile(); }, child: const Text('Save')),
+                            const SizedBox(width: 8),
+                            OutlinedButton(onPressed: () { 
+                              // revert changes
+                              _firstNameController.text = _firstName;
+                              _lastNameController.text = _lastName;
+                              _nameController.text = _displayName.isNotEmpty ? _displayName : ('${_firstName} ${_lastName}'.trim());
+                              _roleController.text = _roleController.text; // keep current
+                              _contactController.text = _phone;
+                              setState(() { _editingProfile = false; });
+                            }, child: const Text('Cancel')),
+                          ]),
+                        ] else ...[
+                          // read-only display
+                          _profileLine('Display Name', _displayName),
+                          const SizedBox(height: 8),
+                          _profileLine('First Name', _firstName),
+                          const SizedBox(height: 8),
+                          _profileLine('Last Name', _lastName),
+                          const SizedBox(height: 8),
+                          _profileLine('Inspector No.', _inspectorNo),
+                          const SizedBox(height: 8),
+                          _profileLine('Role', _roleController.text),
+                          const SizedBox(height: 8),
+                          _profileLine('Email', _profileEmail),
+                          const SizedBox(height: 8),
+                          _profileLine('Phone', _phone),
+                          const SizedBox(height: 8),
+                        ],
                       ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
             ],
           ],
         ),
@@ -1137,6 +1290,17 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(padding: const EdgeInsets.all(16), child: child),
+    );
+  }
+
+  Widget _profileLine(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 140, child: Text('$label', style: const TextStyle(fontWeight: FontWeight.w600))),
+        const SizedBox(width: 12),
+        Expanded(child: Text(value.isNotEmpty ? value : '-', style: const TextStyle(color: Colors.black87))),
+      ],
     );
   }
 

@@ -250,7 +250,7 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
                   onPressed: _showAddInspectorDialog,
                   icon: const Icon(Icons.person_add),
                   label: const Text('Add Inspector'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), foregroundColor: Colors.white),
                 ),
               ],
             ),
@@ -281,7 +281,7 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
                       const SizedBox(width: 12),
                       ElevatedButton(
                         onPressed: () {},
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7)),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), foregroundColor: Colors.white),
                         child: const Text('Filter'),
                       ),
                     ],

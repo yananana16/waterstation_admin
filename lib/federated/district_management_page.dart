@@ -409,18 +409,50 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                               icon: const Icon(Icons.check_circle, color: Colors.blueAccent, size: 30),
                                               tooltip: "Assign as President",
                                               onPressed: () async {
-                                                  await FirebaseFirestore.instance
+                                                try {
+                                                  // Use a batched write to update the district and related users atomically
+                                                  final districtSnap = await FirebaseFirestore.instance
                                                       .collection('districts')
                                                       .where('districtName', isEqualTo: widget.districtName)
-                                                      .get()
-                                                      .then((districtSnap) async {
-                                                    if (districtSnap.docs.isNotEmpty) {
-                                                      await districtSnap.docs.first.reference.update({'customUID': ownerUID});
+                                                      .get();
+
+                                                  // Find the station_owner doc to retrieve linked userId (if any)
+                                                  final ownerDoc = await FirebaseFirestore.instance.collection('station_owners').doc(ownerUID).get();
+                                                  String? linkedUserId;
+                                                  if (ownerDoc.exists) {
+                                                    final od = ownerDoc.data();
+                                                    if (od is Map<String, dynamic> && od.containsKey('userId')) linkedUserId = od['userId']?.toString();
+                                                  }
+
+                                                  final batch = FirebaseFirestore.instance.batch();
+                                                  if (districtSnap.docs.isNotEmpty) {
+                                                    batch.update(districtSnap.docs.first.reference, {'customUID': ownerUID});
+                                                  }
+
+                                                  // Update users collection: set selected user to admin + district_president=true
+                                                  // and set all other users in the same district to role='user' and district_president=false
+                                                  final usersSnap = await FirebaseFirestore.instance
+                                                      .collection('users')
+                                                      .where('districtName', isEqualTo: widget.districtName)
+                                                      .get();
+                                                  for (final u in usersSnap.docs) {
+                                                    if (linkedUserId != null && u.id == linkedUserId) {
+                                                      batch.update(u.reference, {'role': 'admin', 'district_president': true});
+                                                    } else {
+                                                      batch.update(u.reference, {'role': 'user', 'district_president': false});
                                                     }
-                                                  });
+                                                  }
+
+                                                  await batch.commit();
+
                                                   if (!mounted) return;
                                                   Navigator.of(context).pop();
-                                                },
+                                                } catch (err) {
+                                                  debugPrint('Failed assigning president for ${widget.districtName}: $err');
+                                                  if (!mounted) return;
+                                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to assign president')));
+                                                }
+                                              },
                                             ),
                                         ],
                                       ),

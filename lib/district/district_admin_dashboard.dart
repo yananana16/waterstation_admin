@@ -29,6 +29,9 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
   // Store the district of the current user
   String? _userDistrict;
   late Future<void> _userDistrictFuture;
+  // Cached list of barangays for the current district (from station_owners)
+  List<Map<String, String>> _barangays = [];
+  bool _loadingBarangays = false;
 
   // Add state for compliance report details navigation from Water Stations page
   bool _showComplianceReportDetails = false;
@@ -109,6 +112,50 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
       setState(() {
         _userDistrict = (doc.data() as Map<String, dynamic>?)?['districtName']?.toString();
       });
+      // once we know the user's district, load barangays for that district
+      if (_userDistrict != null && _userDistrict!.isNotEmpty) {
+        _fetchBarangaysForDistrict();
+      }
+    }
+  }
+
+  /// Load distinct barangays for the current district by scanning station_owners
+  Future<void> _fetchBarangaysForDistrict() async {
+    if (_userDistrict == null || _userDistrict!.isEmpty) return;
+    setState(() {
+      _loadingBarangays = true;
+      _barangays = [];
+    });
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('station_owners')
+          .where('districtName', isEqualTo: _userDistrict)
+          .get();
+
+      // Map key => {name, count}
+      final Map<String, Map<String, dynamic>> counts = {};
+      for (final d in snap.docs) {
+        final data = d.data();
+        String id = '';
+        if (data.containsKey('barangayID')) id = (data['barangayID'] ?? '').toString();
+        if (id.isEmpty && data.containsKey('barangayId')) id = (data['barangayId'] ?? '').toString();
+        final name = (data['barangayName'] ?? data['barangay'] ?? '').toString();
+
+        final key = id.isNotEmpty ? id : (name.isNotEmpty ? name : d.id);
+        if (!counts.containsKey(key)) counts[key] = {'id': id.isNotEmpty ? id : key, 'name': name.isNotEmpty ? name : key, 'count': 0};
+        counts[key]!['count'] = (counts[key]!['count'] as int) + 1;
+      }
+
+      final list = counts.values.map((e) => {'id': e['id'].toString(), 'name': e['name'].toString(), 'count': (e['count'] as int)}).toList();
+      list.sort((a, b) => (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase()));
+      if (mounted) setState(() {
+        // cast to List<Map<String, String>> while keeping count as string inside map
+        _barangays = list.map((m) => {'id': m['id'].toString(), 'name': m['name'].toString(), 'count': m['count'].toString()}).toList();
+      });
+    } catch (err) {
+      debugPrint('Failed loading barangays for district $_userDistrict: $err');
+    } finally {
+      if (mounted) setState(() => _loadingBarangays = false);
     }
   }
 
@@ -467,6 +514,15 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
         return LayoutBuilder(builder: (context, constraints) {
           final isWide = constraints.maxWidth >= 900;
 
+          // compute current date/time strings
+          final now = DateTime.now();
+          const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          final dateStr = '${monthNames[now.month-1]} ${now.day}, ${now.year}';
+          int hour = now.hour % 12 == 0 ? 12 : now.hour % 12;
+          final minute = now.minute.toString().padLeft(2, '0');
+          final ampm = now.hour >= 12 ? 'PM' : 'AM';
+          final timeStr = '$hour:$minute $ampm';
+
           final header = Container(
             width: double.infinity,
             color: Colors.white,
@@ -476,14 +532,14 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                 const Icon(Icons.calendar_today, color: Colors.blueAccent),
                 const SizedBox(width: 8),
                 Text(
-                  'Today',
+                  dateStr,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const Spacer(),
                 const Icon(Icons.access_time, color: Colors.blueAccent),
                 const SizedBox(width: 8),
                 Text(
-                  'Now',
+                  timeStr,
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ],
@@ -525,133 +581,8 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         flex: 2,
                         child: Column(
                           children: [
-                            const SizedBox(height: 18),
-                            Row(
-                              children: [
-                                // Top 3 High
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withAlpha((0.04 * 255).round()),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: const [
-                                        Text(
-                                          "Top 3 Barangays with High Number of WRS (La Paz)",
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
-                                        ),
-                                        SizedBox(height: 10),
-                                        Text("1. Jereos"),
-                                        Text("2. Luna"),
-                                        Text("3. Magdalo"),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 18),
-                                // Top 6 Low
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withAlpha((0.04 * 255).round()),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: const [
-                                        Text(
-                                          "Top 6 Barangays with Low Number of WRS (La Paz)",
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
-                                        ),
-                                        SizedBox(height: 10),
-                                        Text("1. Ingore"),
-                                        Text("2. Railway"),
-                                        Text("3. Tabuc Suba"),
-                                        Text("4. Laguda"),
-                                        Text("5. Buntud"),
-                                        Text("6. Divinagracia"),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      // Right: Stations summary and compliance (flex 1)
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            // Water Refilling Stations summary
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withAlpha((0.04 * 255).round()),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        "Water Refilling Stations\n$_userDistrict",
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
-                                      ),
-                                      const Spacer(),
-                                      const Text("See More", style: TextStyle(fontSize: 12, color: Colors.blueAccent)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      _StationCountBox("Magdalo", 24),
-                                      _StationCountBox("Gustilo", 24),
-                                      _StationCountBox("Molo", 17),
-                                      _StationCountBox("Jereos", 30),
-                                      _StationCountBox("Luna", 26),
-                                      _StationCountBox("Nabitasan", 14),
-                                      _StationCountBox("Ticad", 19),
-                                      _StationCountBox("Calingin", 9),
-                                      _StationCountBox("Baldoza", 9),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            // Compliance summary (data-driven)
+                            const SizedBox(height: 8),
+                            // Moved Compliance Overview to top-left per request
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(16),
@@ -719,8 +650,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 24),
-                                  // Bigger status cards in a grid (district-scoped)
+                                  const SizedBox(height: 16),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
@@ -760,7 +690,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 12),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
@@ -813,6 +743,247 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 18),
+                            Row(
+                              children: [
+                                // Top 3 Highest-count barangays (data-driven)
+                                Expanded(
+                                  child: Container(
+                                    height: 200,
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha((0.04 * 255).round()),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "Top 3 Barangays (Most WRS)",
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Expanded(
+                                          child: _loadingBarangays
+                                              ? const Center(child: CircularProgressIndicator())
+                                              : (_barangays.isEmpty
+                                                  ? const Text('No barangay data')
+                                                  : Builder(builder: (context) {
+                                                      final items = List<Map<String, String>>.from(_barangays);
+                                                      items.sort((a, b) => (int.tryParse(b['count'] ?? '0') ?? 0).compareTo(int.tryParse(a['count'] ?? '0') ?? 0));
+                                                      final top3 = items.take(3).toList();
+                                                      return Column(
+                                                        children: top3.map((b) {
+                                                          final name = b['name'] ?? '';
+                                                          final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                                          return Expanded(
+                                                            child: InkWell(
+                                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              child: Container(
+                                                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                                decoration: BoxDecoration(
+                                                                  color: const Color(0xFFEAF5FF),
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                ),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Expanded(
+                                                                        child: Text(name, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                                                                    const SizedBox(width: 8),
+                                                                    Container(
+                                                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                                                                      decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(20)),
+                                                                      child: Text(cnt.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }).toList(),
+                                                      );
+                                                    })),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 18),
+                                // Bottom 6 Lowest-count barangays (data-driven)
+                                Expanded(
+                                  child: Container(
+                                    height: 200,
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha((0.04 * 255).round()),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "6 Barangays (Lowest WRS)",
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Expanded(
+                                          child: _loadingBarangays
+                                              ? const Center(child: CircularProgressIndicator())
+                                              : (_barangays.isEmpty
+                                                  ? const Text('No barangay data')
+                                                  : Builder(builder: (context) {
+                                                      final items = List<Map<String, String>>.from(_barangays);
+                                                      items.sort((a, b) => (int.tryParse(a['count'] ?? '0') ?? 0).compareTo(int.tryParse(b['count'] ?? '0') ?? 0));
+                                                      final bottom6 = items.take(6).toList();
+                                                      return Column(
+                                                        children: bottom6.map((b) {
+                                                          final name = b['name'] ?? '';
+                                                          final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                                          return Expanded(
+                                                            child: InkWell(
+                                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              child: Container(
+                                                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                                decoration: BoxDecoration(
+                                                                  color: const Color(0xFFF7F9FC),
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                ),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                                                                    const SizedBox(width: 8),
+                                                                    Text(cnt.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }).toList(),
+                                                      );
+                                                    })),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      // Right: Stations summary and compliance (flex 1)
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            // Water Refilling Stations summary
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha((0.04 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        "Water Refilling Stations\n$_userDistrict",
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
+                                      ),
+                                      const Spacer(),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _loadingBarangays
+                                      ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+                                          : (_barangays.isEmpty
+                                          ? const Text('No barangay data')
+                                          : SizedBox(
+                                              height: 420,
+                                              child: SingleChildScrollView(
+                                                child: Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 8,
+                                                  children: _barangays.map((b) {
+                                                    final name = b['name'] ?? '';
+                                                    final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                                    final id = b['id'] ?? '';
+                                                    return InkWell(
+                                                      onTap: () => _showBarangayStations({'id': id, 'name': name}),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      child: Container(
+                                                        width: 110,
+                                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFEAF5FF),
+                                                          borderRadius: BorderRadius.circular(12),
+                                                          boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 6, offset: const Offset(0, 2))],
+                                                        ),
+                                                        child: Column(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Flexible(
+                                                              child: Text(name, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 2),
+                                                            ),
+                                                            const SizedBox(height: 8),
+                                                            Text(cnt.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }).toList(),
+                                                ),
+                                              ),
+                                            )),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            // Compliance summary (data-driven)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha((0.04 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -833,7 +1004,7 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                     children: [
                       // Keep same greeting and widgets but stacked
                       const SizedBox(height: 8),
-                      // Barangay lists stacked
+                      // Barangay lists stacked (mobile): dynamic top3 and bottom6
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -849,15 +1020,37 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              "Top 3 Barangays with High Number of WRS (La Paz)",
+                          children: [
+                            const Text(
+                              "Top 3 Barangays (Most WRS)",
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
                             ),
-                            SizedBox(height: 10),
-                            Text("1. Jereos"),
-                            Text("2. Luna"),
-                            Text("3. Magdalo"),
+                            const SizedBox(height: 10),
+                            _loadingBarangays
+                                ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+                                : (_barangays.isEmpty
+                                    ? const Text('No barangay data')
+                                    : Builder(builder: (context) {
+                                        final items = List<Map<String, String>>.from(_barangays);
+                                        items.sort((a, b) => (int.tryParse(b['count'] ?? '0') ?? 0).compareTo(int.tryParse(a['count'] ?? '0') ?? 0));
+                                        final top3 = items.take(3).toList();
+                                        return Column(
+                                          children: top3.map((b) {
+                                            final name = b['name'] ?? '';
+                                            final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                            return ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: Text(name),
+                                              trailing: Container(
+                                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                                                decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(20)),
+                                                child: Text(cnt.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                              ),
+                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
+                                            );
+                                          }).toList(),
+                                        );
+                                      })),
                           ],
                         ),
                       ),
@@ -877,18 +1070,33 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              "Top 6 Barangays with Low Number of WRS (La Paz)",
+                          children: [
+                            const Text(
+                              "6 Barangays (Lowest WRS)",
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1976D2)),
                             ),
-                            SizedBox(height: 10),
-                            Text("1. Ingore"),
-                            Text("2. Railway"),
-                            Text("3. Tabuc Suba"),
-                            Text("4. Laguda"),
-                            Text("5. Buntud"),
-                            Text("6. Divinagracia"),
+                            const SizedBox(height: 10),
+                            _loadingBarangays
+                                ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+                                : (_barangays.isEmpty
+                                    ? const Text('No barangay data')
+                                    : Builder(builder: (context) {
+                                        final items = List<Map<String, String>>.from(_barangays);
+                                        items.sort((a, b) => (int.tryParse(a['count'] ?? '0') ?? 0).compareTo(int.tryParse(b['count'] ?? '0') ?? 0));
+                                        final bottom6 = items.take(6).toList();
+                                        return Column(
+                                          children: bottom6.map((b) {
+                                            final name = b['name'] ?? '';
+                                            final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                            return ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: Text(name),
+                                              trailing: Text(cnt.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
+                                            );
+                                          }).toList(),
+                                        );
+                                      })),
                           ],
                         ),
                       ),
@@ -918,25 +1126,22 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1976D2)),
                                 ),
                                 const Spacer(),
-                                const Text("See More", style: TextStyle(fontSize: 12, color: Colors.blueAccent)),
                               ],
                             ),
                             const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _StationCountBox("Magdalo", 24),
-                                _StationCountBox("Gustilo", 24),
-                                _StationCountBox("Molo", 17),
-                                _StationCountBox("Jereos", 30),
-                                _StationCountBox("Luna", 26),
-                                _StationCountBox("Nabitasan", 14),
-                                _StationCountBox("Ticad", 19),
-                                _StationCountBox("Calingin", 9),
-                                _StationCountBox("Baldoza", 9),
-                              ],
-                            ),
+                            _loadingBarangays
+                                ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+                                : (_barangays.isEmpty
+                                    ? const Text('No barangay data')
+                                    : Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: _barangays.map((b) {
+                                          final name = b['name'] ?? '';
+                                          final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
+                                          return _StationCountBox(name, cnt);
+                                        }).toList(),
+                                      )),
                           ],
                         ),
                       ),
@@ -1117,6 +1322,81 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
         );
       },
     );
+  }
+
+  /// Show a dialog listing station owners for the given barangay (id/name map)
+  Future<void> _showBarangayStations(Map<String, String> barangay) async {
+    if (_userDistrict == null) return;
+    final id = barangay['id'] ?? '';
+    final name = barangay['name'] ?? '';
+
+    try {
+      final List<QueryDocumentSnapshot> results = [];
+
+      if (id.isNotEmpty) {
+        try {
+          final snap = await FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('districtName', isEqualTo: _userDistrict)
+              .where('barangayID', isEqualTo: id)
+              .get();
+          results.addAll(snap.docs);
+        } catch (_) {}
+      }
+
+      // also try by barangayName (some docs don't have barangayID)
+      if (name.isNotEmpty) {
+        try {
+          final snap2 = await FirebaseFirestore.instance
+              .collection('station_owners')
+              .where('districtName', isEqualTo: _userDistrict)
+              .where('barangayName', isEqualTo: name)
+              .get();
+          results.addAll(snap2.docs);
+        } catch (_) {}
+      }
+
+      // dedupe by id
+      final Map<String, QueryDocumentSnapshot> keyed = {};
+      for (final d in results) keyed[d.id] = d;
+      final entries = keyed.values.toList();
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('Stations in ${name.isNotEmpty ? name : 'Barangay'}'),
+            content: SizedBox(
+              width: 520,
+              child: entries.isEmpty
+                  ? const Text('No stations found for this barangay.')
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: entries.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final data = entries[i].data() as Map<String, dynamic>;
+                        final stationName = (data['stationName'] ?? data['station'] ?? 'Unknown').toString();
+                        final owner = ((data['firstName'] ?? '') as String) + ' ' + ((data['lastName'] ?? '') as String);
+                        final status = (data['status'] ?? '').toString();
+                        return ListTile(
+                          title: Text(stationName),
+                          subtitle: Text(owner.trim().isEmpty ? (data['stationOwnerName'] ?? '') : owner),
+                          trailing: Text(status.isNotEmpty ? status : 'n/a', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+            ],
+          );
+        },
+      );
+    } catch (err) {
+      debugPrint('Error showing barangay stations: $err');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load stations')));
+    }
   }
 
   // Profile Page for District Admin (federated design)
