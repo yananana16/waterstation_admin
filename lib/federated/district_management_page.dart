@@ -439,7 +439,7 @@ class _StationOwnersDialogState extends State<StationOwnersDialog> {
                                                     if (linkedUserId != null && u.id == linkedUserId) {
                                                       batch.update(u.reference, {'role': 'admin', 'district_president': true});
                                                     } else {
-                                                      batch.update(u.reference, {'role': 'user', 'district_president': false});
+                                                      batch.update(u.reference, {'role': 'owner', 'district_president': false});
                                                     }
                                                   }
 
