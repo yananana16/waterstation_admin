@@ -876,7 +876,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                           child: ElevatedButton(
                             onPressed: _loading ? null : _saveProfile,
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
-                            child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
+                            child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes', style: TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],
@@ -890,10 +890,8 @@ class _ProfilePageState extends State<_ProfilePage> {
                             if (v != null) setState(() => name = v);
                           }),
                           const SizedBox(height: 12),
-                          _ProfileFieldRow(label: 'Role:', value: role, onEdit: () async {
-                            final v = await _showEditDialog(context, 'Role', role);
-                            if (v != null) setState(() => role = v);
-                          }),
+                          // Role: make read-only for LGU profile
+                          _ProfileFieldRow(label: 'Role:', value: role, onEdit: null),
                           const SizedBox(height: 12),
                           _ProfileFieldRow(label: 'Contact Number:', value: contact, onEdit: () async {
                             final v = await _showEditDialog(context, 'Contact Number', contact);
@@ -928,10 +926,8 @@ class _ProfilePageState extends State<_ProfilePage> {
                       if (v != null) setState(() => name = v);
                     }),
                     const SizedBox(height: 12),
-                    _ProfileFieldRow(label: 'Role:', value: role, onEdit: () async {
-                      final v = await _showEditDialog(context, 'Role', role);
-                      if (v != null) setState(() => role = v);
-                    }),
+                    // Role: read-only on narrow layout as well
+                    _ProfileFieldRow(label: 'Role:', value: role, onEdit: null),
                     const SizedBox(height: 12),
                     _ProfileFieldRow(label: 'Contact Number:', value: contact, onEdit: () async {
                       final v = await _showEditDialog(context, 'Contact Number', contact);
@@ -949,7 +945,7 @@ class _ProfilePageState extends State<_ProfilePage> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _saveProfile,
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
-                        child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes'),
+                        child: _loading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save Changes', style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ],
