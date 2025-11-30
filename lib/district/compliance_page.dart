@@ -536,11 +536,11 @@ class _CompliancePageState extends State<CompliancePage> {
                             const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              "Date of Compliance: ",
+                              "District: ",
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             Text(
-                              data['dateOfCompliance'] ?? '',
+                              data['districtName'] ?? '',
                               style: const TextStyle(color: Colors.black87),
                             ),
                           ],

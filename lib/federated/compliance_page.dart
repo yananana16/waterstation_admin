@@ -708,7 +708,7 @@ class _CompliancePageState extends State<CompliancePage> {
                 TableRow(
                   children: [
                     _detailCell(Icons.email, "Email", data['email']),
-                    _detailCell(Icons.calendar_today, "Date of Compliance", data['dateOfCompliance']),
+                    _detailCell(Icons.calendar_today, "District: ", data['districtName']),
                   ],
                 ),
                 TableRow(

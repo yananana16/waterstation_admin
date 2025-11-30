@@ -784,31 +784,27 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                                           final name = b['name'] ?? '';
                                                           final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
                                                           return Expanded(
-                                                            child: InkWell(
-                                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
-                                                              borderRadius: BorderRadius.circular(8),
-                                                              child: Container(
-                                                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                                                decoration: BoxDecoration(
-                                                                  color: const Color(0xFFEAF5FF),
-                                                                  borderRadius: BorderRadius.circular(8),
+                                                                child: Container(
+                                                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                                  decoration: BoxDecoration(
+                                                                    color: const Color(0xFFEAF5FF),
+                                                                    borderRadius: BorderRadius.circular(8),
+                                                                  ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      Expanded(
+                                                                          child: Text(name, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                                                                      const SizedBox(width: 8),
+                                                                      Container(
+                                                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                                                                        decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(20)),
+                                                                        child: Text(cnt.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                                      ),
+                                                                    ],
+                                                                  ),
                                                                 ),
-                                                                child: Row(
-                                                                  children: [
-                                                                    Expanded(
-                                                                        child: Text(name, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-                                                                    const SizedBox(width: 8),
-                                                                    Container(
-                                                                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-                                                                      decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(20)),
-                                                                      child: Text(cnt.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          );
+                                                              );
                                                         }).toList(),
                                                       );
                                                     })),
@@ -856,23 +852,19 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                                           final name = b['name'] ?? '';
                                                           final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
                                                           return Expanded(
-                                                            child: InkWell(
-                                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
-                                                              borderRadius: BorderRadius.circular(8),
-                                                              child: Container(
-                                                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                                                decoration: BoxDecoration(
-                                                                  color: const Color(0xFFF7F9FC),
-                                                                  borderRadius: BorderRadius.circular(8),
-                                                                ),
-                                                                child: Row(
-                                                                  children: [
-                                                                    Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
-                                                                    const SizedBox(width: 8),
-                                                                    Text(cnt.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                                                                  ],
-                                                                ),
+                                                            child: Container(
+                                                              margin: const EdgeInsets.symmetric(vertical: 4),
+                                                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                              decoration: BoxDecoration(
+                                                                color: const Color(0xFFF7F9FC),
+                                                                borderRadius: BorderRadius.circular(8),
+                                                              ),
+                                                              child: Row(
+                                                                children: [
+                                                                  Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                                                                  const SizedBox(width: 8),
+                                                                  Text(cnt.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                                                ],
                                                               ),
                                                             ),
                                                           );
@@ -930,34 +922,30 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                           : SizedBox(
                                               height: 420,
                                               child: SingleChildScrollView(
-                                                child: Wrap(
+                                                    child: Wrap(
                                                   spacing: 8,
                                                   runSpacing: 8,
                                                   children: _barangays.map((b) {
                                                     final name = b['name'] ?? '';
                                                     final cnt = int.tryParse(b['count'] ?? '0') ?? 0;
                                                     final id = b['id'] ?? '';
-                                                    return InkWell(
-                                                      onTap: () => _showBarangayStations({'id': id, 'name': name}),
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      child: Container(
-                                                        width: 110,
-                                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFFEAF5FF),
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 6, offset: const Offset(0, 2))],
-                                                        ),
-                                                        child: Column(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            Flexible(
-                                                              child: Text(name, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 2),
-                                                            ),
-                                                            const SizedBox(height: 8),
-                                                            Text(cnt.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                                                          ],
-                                                        ),
+                                                    return Container(
+                                                      width: 110,
+                                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFEAF5FF),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        boxShadow: [BoxShadow(color: Colors.black.withAlpha((0.03 * 255).round()), blurRadius: 6, offset: const Offset(0, 2))],
+                                                      ),
+                                                      child: Column(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Flexible(
+                                                            child: Text(name, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 2),
+                                                          ),
+                                                          const SizedBox(height: 8),
+                                                          Text(cnt.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
+                                                        ],
                                                       ),
                                                     );
                                                   }).toList(),
@@ -1046,7 +1034,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                                 decoration: BoxDecoration(color: const Color(0xFF1976D2), borderRadius: BorderRadius.circular(20)),
                                                 child: Text(cnt.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                               ),
-                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
                                             );
                                           }).toList(),
                                         );
@@ -1092,7 +1079,6 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
                                               contentPadding: EdgeInsets.zero,
                                               title: Text(name),
                                               trailing: Text(cnt.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1976D2))),
-                                              onTap: () => _showBarangayStations({'id': b['id'] ?? '', 'name': name}),
                                             );
                                           }).toList(),
                                         );
