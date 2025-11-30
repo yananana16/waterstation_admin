@@ -5,10 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // Add Firestore import
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:waterstation_admin/login_screen.dart';
 import 'package:waterstation_admin/district/compliance_page.dart'; // Add this import
 import 'package:waterstation_admin/federated/registered_stations_page.dart';
 import 'package:waterstation_admin/federated/change_password_dialog.dart';
+import 'package:waterstation_admin/federated/logout_dialog.dart';
 import 'package:waterstation_admin/services/firestore_repository.dart';
 
 class DistrictAdminDashboard extends StatefulWidget {
@@ -1796,11 +1796,21 @@ class _DistrictAdminDashboardState extends State<DistrictAdminDashboard> {
     );
   }
 
-  void _logout(BuildContext context) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+  Future<void> _logout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const LogoutDialog(),
     );
+    if (shouldLogout == true) {
+      try {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      } catch (e) {
+        debugPrint('Error signing out: $e');
+      }
+    }
   }
 }
 
