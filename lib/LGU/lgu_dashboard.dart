@@ -870,14 +870,6 @@ class _ProfilePageState extends State<_ProfilePage> {
                       children: [
                         const CircleAvatar(radius: 48, backgroundColor: Color(0xFFEAF6FF), child: Icon(Icons.person, size: 48, color: Color(0xFF0B63B7))),
                         const SizedBox(height: 12),
-                        Row(
-                          children: const [
-                            Icon(Icons.edit, color: Color(0xFF0B63B7), size: 16),
-                            SizedBox(width: 6),
-                            Text('Change Profile Picture', style: TextStyle(color: Color(0xFF0B63B7))),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
                         SizedBox(
                           width: 140,
                           height: 40,

@@ -261,31 +261,7 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
               child: Column(
                 children: [
                   // Search/filter row (kept minimal)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search',
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                          ),
-                          onChanged: (_) {
-                            // implement local filtering if desired
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0B63B7), foregroundColor: Colors.white),
-                        child: const Text('Filter'),
-                      ),
-                    ],
-                  ),
+
                   const SizedBox(height: 16),
                   // table: listen to inspectors collection
                   Expanded(
@@ -371,16 +347,6 @@ class _StaffSubscreenState extends State<StaffSubscreen> {
                                             child: Row(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
-                                                SizedBox(
-                                                  height: 34,
-                                                  child: OutlinedButton(
-                                                    onPressed: () {
-                                                      // editing not implemented in this demo
-                                                    },
-                                                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF0B63B7))),
-                                                    child: const Text('Edit', style: TextStyle(color: Color(0xFF0B63B7)), overflow: TextOverflow.ellipsis),
-                                                  ),
-                                                ),
                                                 const SizedBox(width: 8),
                                                 SizedBox(
                                                   width: 36,

@@ -465,6 +465,63 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
 
   }
 
+  // Calendar state for the mini calendar widget
+  DateTime _calendarDisplayedMonth = DateTime.now();
+
+  void _prevCalendarMonth() {
+    setState(() {
+      _calendarDisplayedMonth = DateTime(_calendarDisplayedMonth.year, _calendarDisplayedMonth.month - 1, 1);
+    });
+  }
+
+  void _nextCalendarMonth() {
+    setState(() {
+      _calendarDisplayedMonth = DateTime(_calendarDisplayedMonth.year, _calendarDisplayedMonth.month + 1, 1);
+    });
+  }
+
+  bool _hasInspectionOn(DateTime day) {
+    return _assignedStations.any((s) {
+      final raw = s['date'];
+      final dt = _toDateTime(raw);
+      if (dt == null) return false;
+      return dt.year == day.year && dt.month == day.month && dt.day == day.day;
+    });
+  }
+
+  void _showInspectionsForDay(DateTime day) {
+    final items = _assignedStations.where((s) {
+      final dt = _toDateTime(s['date']);
+      if (dt == null) return false;
+      return dt.year == day.year && dt.month == day.month && dt.day == day.day;
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        if (items.isEmpty) return Container(padding: const EdgeInsets.all(16), child: const Center(child: Text('No inspections')));
+        return ListView.separated(
+          padding: const EdgeInsets.all(12),
+          itemBuilder: (_, i) {
+            final it = items[i];
+            final dt = _toDateTime(it['date']);
+            return ListTile(
+              title: Text(it['stationName'] ?? 'Unknown'),
+              subtitle: Text(it['owner'] ?? ''),
+              trailing: Text(dt != null ? DateFormat.jm().format(dt) : ''),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showInspectionModal(it);
+              },
+            );
+          },
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemCount: items.length,
+        );
+      },
+    );
+  }
+
   // (removed unused modal helper to keep code focused on tabbed UI)
 
   // detail row helper removed (was used by a modal that's no longer present)
@@ -860,22 +917,70 @@ class _InspectorDashboardState extends State<InspectorDashboard> with SingleTick
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // Calendar card (simple placeholder like LGU)
+                          // Calendar card: interactive month view with inspection dots
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(18),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E0E0))),
                             child: Column(
                               children: [
                                 Row(
                                   children: [
-                                    Text(DateFormat.MMMM().format(DateTime.now()), style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold)),
-                                    const Spacer(),
-                                    Text(DateTime.now().year.toString(), style: const TextStyle(color: Colors.black54)),
+                                    IconButton(onPressed: _prevCalendarMonth, icon: const Icon(Icons.chevron_left)),
+                                    Expanded(
+                                      child: Center(
+                                        child: Text(
+                                          '${DateFormat.MMMM().format(_calendarDisplayedMonth)} ${_calendarDisplayedMonth.year}',
+                                          style: const TextStyle(color: Color(0xFF0B63B7), fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(onPressed: _nextCalendarMonth, icon: const Icon(Icons.chevron_right)),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
-                                SizedBox(height: 160, child: Center(child: Text('📅 Calendar placeholder', style: TextStyle(color: Colors.black54)))),
+                                const SizedBox(height: 8),
+                                Row(children: [
+                                  for (final wd in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])
+                                    Expanded(child: Center(child: Text(wd, style: const TextStyle(fontSize: 12, color: Colors.black54)))),
+                                ]),
+                                const SizedBox(height: 8),
+                                // Month grid (6 rows x 7 days)
+                                Builder(builder: (ctx) {
+                                  final first = DateTime(_calendarDisplayedMonth.year, _calendarDisplayedMonth.month, 1);
+                                  final start = first.subtract(Duration(days: first.weekday % 7));
+                                  final days = List.generate(42, (i) => start.add(Duration(days: i)));
+                                  return Column(
+                                    children: List.generate(6, (week) {
+                                      return Row(
+                                        children: List.generate(7, (d) {
+                                          final day = days[week * 7 + d];
+                                          final isToday = DateTime.now().year == day.year && DateTime.now().month == day.month && DateTime.now().day == day.day;
+                                          final inMonth = day.month == _calendarDisplayedMonth.month;
+                                          final has = _hasInspectionOn(day);
+                                          return Expanded(
+                                            child: GestureDetector(
+                                              onTap: () => _showInspectionsForDay(day),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: isToday ? const Color(0xFFEDF7FF) : Colors.transparent,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    Text(day.day.toString(), style: TextStyle(color: inMonth ? Colors.black87 : Colors.black38, fontWeight: isToday ? FontWeight.bold : FontWeight.normal)),
+                                                    const SizedBox(height: 6),
+                                                    if (has) Container(width: 8, height: 8, decoration: BoxDecoration(color: _statusColor('pending'), shape: BoxShape.circle)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                      );
+                                    }),
+                                  );
+                                }),
                               ],
                             ),
                           ),
