@@ -11,12 +11,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 // Shared color palette and UI constants to keep visuals consistent
 const Color kPrimaryColor = Color(0xFF1976D2);
 const Color kSecondaryColor = Color(0xFF42A5F5);
-// Lighter neutral background used for subtle panels (replaces pinkish tint)
-const Color kScaffoldBg = Color(0xFFF3F4F6);
+// Default scaffold/background color (use white as the app default)
+const Color kScaffoldBg = Color(0xFFFFFFFF);
 const Color kSuccessColor = Color(0xFF48BB78);
 const Color kWarningColor = Color(0xFFED8936);
 
@@ -130,10 +131,19 @@ class Recommendation {
   }
 }
 
+/*
+IMPORTANT:
+Do not change any existing functionality.
+This file adds a 12-month forecast chart (m³) reading Firestore fields
+`forecast_12_months_timeline` (per-district) and
+`overall_forecast_12_months_timeline` (Overall document).
+The new helpers and UI are integrated without removing existing graphs.
+*/
+
   /// Small district overview card that shows the selected district's mini-chart and stats.
   Widget _buildDistrictOverviewCard(BuildContext context, Recommendation rec) {
     return Card(
-      elevation: 4,
+          elevation: 6,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       color: Colors.white,
       child: Padding(
@@ -172,11 +182,13 @@ class Recommendation {
                       child: Center(child: Text('No series data for ${rec.district}')),
                     ),
                   const SizedBox(height: 8),
+                  const Text('All values displayed in cubic meters (m³).', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Text('History: ${rec.districtTotalM3.toStringAsFixed(2)} m³', style: const TextStyle(fontSize: 13)),
                       const SizedBox(width: 12),
-                      Chip(label: Text('Trend: ${rec.districtTrend}'), backgroundColor: Colors.blue.shade50),
+                      Chip(label: Text('Trend: ${rec.districtTrend}'), backgroundColor: Colors.grey.shade100),
                     ],
                   ),
                 ],
@@ -270,6 +282,15 @@ class OverallSummary {
 
     return OverallSummary(total: total, nextMonth: nextMonth, next12: next12, top: top, low: low, series: series);
   }
+}
+
+// -------------------------------
+// Future forecast model
+// -------------------------------
+class FutureForecastPoint {
+  final String label;
+  final double value;
+  FutureForecastPoint({required this.label, required this.value});
 }
  
 /// Recommendations Page
@@ -394,7 +415,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: kScaffoldBg,
           appBar: AppBar(
             automaticallyImplyLeading: false,
             title: Row(
@@ -652,9 +673,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         final doc = snapshot.data!.docs[i];
                         final id = doc.id;
                         if (id.toString().toLowerCase() == 'overall') {
-                          overallData = doc.data() as Map<String, dynamic>?;
+                          final raw = doc.data();
+                          overallData = raw is Map<String, dynamic> ? raw : null;
                         } else {
-                          districtRecs.add(Recommendation.fromRaw(doc.data() as Map<String, dynamic>));
+                          final raw = doc.data();
+                          if (raw is Map<String, dynamic>) {
+                            districtRecs.add(Recommendation.fromRaw(raw));
+                          }
                         }
                       }
 
@@ -725,11 +750,70 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                               ));
 
                               return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                                  child: _buildDistrictOverviewCard(context, rec),
+                                );
+                              })(),
+                          // 12-month future forecast timeline (overall or per-district)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+                            child: buildFuture12MonthForecastSection(context, _selectedDistrictFilter),
+                          ),
+                            // Model accuracy, district comparison & map visualization.
+                            // Render as a responsive 3-column layout on wide screens,
+                            // otherwise stack vertically for narrow screens.
+                            if (overallData != null)
+                              Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-                                child: _buildDistrictOverviewCard(context, rec),
-                              );
-                            })(),
-                          LayoutBuilder(
+                                child: LayoutBuilder(builder: (context, constraints) {
+                                  final w = constraints.maxWidth;
+                                  if (w > 1000) {
+                                    // three columns layout: left=Model, center=District table, right=Map
+                                    return Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(flex: 2, child: _buildModelAccuracyCardFromData(context, overallData!)),
+                                        const SizedBox(width: 16),
+                                        Expanded(flex: 5, child: _buildDistrictComparisonTable(context, districtRecs)),
+                                        const SizedBox(width: 16),
+                                        SizedBox(width: 320, child: _buildMapHeatmapSection(context)),
+                                      ],
+                                    );
+                                  } else if (w > 700) {
+                                    // two column: left combined model+map, right table
+                                    return Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          flex: 3,
+                                          child: Column(
+                                            children: [
+                                              _buildModelAccuracyCardFromData(context, overallData!),
+                                              const SizedBox(height: 12),
+                                              _buildMapHeatmapSection(context),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(flex: 4, child: _buildDistrictComparisonTable(context, districtRecs)),
+                                      ],
+                                    );
+                                  } else {
+                                    // narrow: stack vertically
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildModelAccuracyCardFromData(context, overallData!),
+                                        const SizedBox(height: 12),
+                                        _buildDistrictComparisonTable(context, districtRecs),
+                                        const SizedBox(height: 12),
+                                        _buildMapHeatmapSection(context),
+                                      ],
+                                    );
+                                  }
+                                }),
+                              ),
+                            LayoutBuilder(
                             builder: (context, constraints) {
                               // using Wrap-based layout below (constraints used in inner LayoutBuilder)
 
@@ -906,6 +990,207 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
+  // -------------------------------
+  // 12-month forecast: fetcher + chart builder
+  // -------------------------------
+  Future<List<FutureForecastPoint>> fetchFutureTimeline(String districtName) async {
+    try {
+      final col = FirebaseFirestore.instance.collection('station_recommendations');
+      // Overall timeline
+      if (districtName.toLowerCase() == 'all' || districtName.toLowerCase() == 'overall') {
+        final ds = await col.doc('Overall').get();
+        if (!ds.exists) return [];
+        final rawDoc = ds.data();
+        final Map<String, dynamic>? data = rawDoc is Map<String, dynamic> ? rawDoc : null;
+        final raw = data == null ? null : (data['overall_forecast_12_months_timeline'] ?? data['forecast_12_months_timeline']);
+        if (raw is Map) {
+          final keys = raw.keys.map((k) => k.toString()).toList()..sort();
+          final out = <FutureForecastPoint>[];
+          for (final k in keys) {
+            final entry = raw[k];
+            double v = 0.0;
+            if (entry is Map && entry['forecast_m3'] != null) {
+              v = double.tryParse(entry['forecast_m3'].toString()) ?? 0.0;
+            } else if (entry is num) {
+              v = entry.toDouble();
+            }
+            // format label
+            final parts = k.split('-');
+            if (parts.length >= 2) {
+              final y = int.tryParse(parts[0]) ?? 0;
+              final m = int.tryParse(parts[1]) ?? 1;
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              final label = '${months[(m-1).clamp(0,11)]} $y';
+              out.add(FutureForecastPoint(label: label, value: v));
+            }
+          }
+          return out;
+        }
+        return [];
+      }
+
+      // District timeline: try common doc ids
+      final candidates = [districtName.replaceAll(' ', '_'), districtName, districtName.replaceAll(' ', '_').toLowerCase()];
+      for (final id in candidates) {
+        final ds = await col.doc(id).get();
+        if (ds.exists) {
+          final rawDoc = ds.data();
+          final Map<String, dynamic>? data = rawDoc is Map<String, dynamic> ? rawDoc : null;
+          final raw = data == null ? null : (data['forecast_12_months_timeline'] ?? data['forecast_12_months_timeline_map']);
+          if (raw is Map) {
+            final keys = raw.keys.map((k) => k.toString()).toList()..sort();
+            final out = <FutureForecastPoint>[];
+            for (final k in keys) {
+              final entry = raw[k];
+              double v = 0.0;
+              if (entry is Map && entry['forecast_m3'] != null) {
+                v = double.tryParse(entry['forecast_m3'].toString()) ?? 0.0;
+              } else if (entry is num) {
+                v = entry.toDouble();
+              }
+              final parts = k.split('-');
+              if (parts.length >= 2) {
+                final y = int.tryParse(parts[0]) ?? 0;
+                final m = int.tryParse(parts[1]) ?? 1;
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                final label = '${months[(m-1).clamp(0,11)]} $y';
+                out.add(FutureForecastPoint(label: label, value: v));
+              }
+            }
+            return out;
+          }
+        }
+      }
+
+      // Fallback: try to query by district field
+      final snap = await col.where('district', isEqualTo: districtName).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final raw = snap.docs.first.data()['forecast_12_months_timeline'];
+        if (raw is Map) {
+          final keys = raw.keys.map((k) => k.toString()).toList()..sort();
+          final out = <FutureForecastPoint>[];
+          for (final k in keys) {
+            final entry = raw[k];
+            double v = 0.0;
+            if (entry is Map && entry['forecast_m3'] != null) v = double.tryParse(entry['forecast_m3'].toString()) ?? 0.0;
+            final parts = k.split('-');
+            if (parts.length >= 2) {
+              final y = int.tryParse(parts[0]) ?? 0;
+              final m = int.tryParse(parts[1]) ?? 1;
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              final label = '${months[(m-1).clamp(0,11)]} $y';
+              out.add(FutureForecastPoint(label: label, value: v));
+            }
+          }
+          return out;
+        }
+      }
+
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Widget buildFuture12MonthChart(List<FutureForecastPoint> points) {
+    if (points.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: const Center(child: Text('No future forecast available.')),
+      );
+    }
+
+    final spots = List<FlSpot>.generate(points.length, (i) => FlSpot(i.toDouble(), points[i].value));
+    double minY = points.map((p) => p.value).reduce((a, b) => a < b ? a : b);
+    double maxY = points.map((p) => p.value).reduce((a, b) => a > b ? a : b);
+    if ((maxY - minY).abs() < 0.0001) {
+      maxY = minY + 1.0;
+      minY = (minY - 1.0).clamp(0.0, double.infinity);
+    }
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final minWidthPerPoint = 72.0;
+      final chartWidth = math.max(constraints.maxWidth, points.length * minWidthPerPoint);
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: chartWidth,
+          height: 260,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (v) => FlLine(color: Colors.grey.withOpacity(0.12), strokeWidth: 1)),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 42, getTitlesWidget: (value, meta) {
+                    // fl_chart may request titles for fractional positions (e.g. 0.5, 1.5).
+                    // Only render labels for exact integer positions to avoid duplicated labels
+                    // when the chart places intermediate ticks.
+                    final frac = (value - value.toInt()).abs();
+                    if (frac > 0.001) return const SizedBox.shrink();
+                    final idx = value.toInt();
+                    if (idx < 0 || idx >= points.length) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Text(points[idx].label, style: const TextStyle(fontSize: 11)),
+                    );
+                  })),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 56)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                minY: minY,
+                maxY: maxY,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    color: Colors.deepPurple,
+                    barWidth: 3,
+                    dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 4, color: Colors.deepPurple)),
+                    belowBarData: BarAreaData(show: false),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget buildFuture12MonthForecastSection(BuildContext context, String districtName) {
+    final fetchName = (districtName == 'All') ? 'Overall' : districtName;
+    return FutureBuilder<List<FutureForecastPoint>>(
+      future: fetchFutureTimeline(fetchName),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Card(color: kScaffoldBg, child: Container(padding: const EdgeInsets.all(16), height: 120, child: const Center(child: CircularProgressIndicator())));
+        }
+        final points = snap.data ?? [];
+        return Card(
+          color: kScaffoldBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('12-Month AI Forecast Trend (m³)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                if (points.isEmpty) 
+                  const Padding(padding: EdgeInsets.all(12), child: Text('No future forecast available.'))
+                else
+                  SizedBox(height: 260, child: buildFuture12MonthChart(points)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ...existing code...
 
   
@@ -929,16 +1214,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.white, Colors.blue.shade50.withOpacity(0.18)],
-                ),
+                color: kScaffoldBg,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.blue.withOpacity(0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
@@ -973,10 +1254,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                         if (rec.districtRankByNextMonthDemand != null)
                           Padding(
                             padding: const EdgeInsets.only(left: 8.0),
-                            child: Chip(
-                              label: Text('Rank ${rec.districtRankByNextMonthDemand}'),
-                              backgroundColor: Colors.blue.shade100,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            child: Tooltip(
+                              message: 'Rank is calculated using next-month demand prediction.',
+                              child: Chip(
+                                label: Text('Rank ${rec.districtRankByNextMonthDemand}'),
+                                backgroundColor: Colors.blue.shade100,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              ),
                             ),
                           ),
                       ],
@@ -998,38 +1282,47 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                             children: [
                               Icon(Icons.analytics, size: 18, color: Colors.blue[700]),
                               const SizedBox(width: 8),
-                              // Trend chip with color-coded background and icon
-                              Chip(
-                                backgroundColor: rec.districtTrend.toLowerCase() == 'increasing'
-                                    ? Colors.green.shade50
-                                    : rec.districtTrend.toLowerCase() == 'decreasing'
-                                        ? Colors.red.shade50
-                                        : Colors.orange.shade50,
-                                avatar: Icon(
-                                  rec.districtTrend.toLowerCase() == 'increasing'
-                                      ? Icons.trending_up
-                                      : rec.districtTrend.toLowerCase() == 'decreasing'
-                                          ? Icons.trending_down
-                                          : Icons.trending_flat,
-                                  size: 16,
-                                  color: rec.districtTrend.toLowerCase() == 'increasing'
-                                      ? Colors.green.shade700
-                                      : rec.districtTrend.toLowerCase() == 'decreasing'
-                                          ? Colors.red.shade700
-                                          : Colors.orange.shade700,
-                                ),
-                                label: Text(
-                                  rec.districtTrend,
-                                  style: TextStyle(
-                                    color: rec.districtTrend.toLowerCase() == 'increasing'
-                                        ? Colors.green.shade800
+                              // Trend chip with color-coded background and info tooltip
+                              Row(
+                                children: [
+                                  Chip(
+                                    backgroundColor: rec.districtTrend.toLowerCase() == 'increasing'
+                                        ? Colors.green.shade50
                                         : rec.districtTrend.toLowerCase() == 'decreasing'
-                                            ? Colors.red.shade800
-                                            : Colors.orange.shade800,
-                                    fontWeight: FontWeight.w600,
+                                            ? Colors.red.shade50
+                                            : Colors.orange.shade50,
+                                    avatar: Icon(
+                                      rec.districtTrend.toLowerCase() == 'increasing'
+                                          ? Icons.trending_up
+                                          : rec.districtTrend.toLowerCase() == 'decreasing'
+                                              ? Icons.trending_down
+                                              : Icons.trending_flat,
+                                      size: 16,
+                                      color: rec.districtTrend.toLowerCase() == 'increasing'
+                                          ? Colors.green.shade700
+                                          : rec.districtTrend.toLowerCase() == 'decreasing'
+                                              ? Colors.red.shade700
+                                              : Colors.orange.shade700,
+                                    ),
+                                    label: Text(
+                                      rec.districtTrend,
+                                      style: TextStyle(
+                                        color: rec.districtTrend.toLowerCase() == 'increasing'
+                                            ? Colors.green.shade800
+                                            : rec.districtTrend.toLowerCase() == 'decreasing'
+                                                ? Colors.red.shade800
+                                                : Colors.orange.shade800,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                   ),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  const SizedBox(width: 6),
+                                  Tooltip(
+                                    message: 'Trend classification compares the next 12-month forecast to the total historical demand.\nratio = forecast₁₂ₘ ÷ historical demand\n≥1.20 = Increasing, 0.80–1.19 = Stable, <0.80 = Decreasing.',
+                                    child: Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                                  ),
+                                ],
                               ),
                               const SizedBox(width: 8),
                               // Show range radius if available
@@ -1081,18 +1374,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Icon(Icons.group_work, size: 18, color: Colors.orange[400]),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Cluster: ${rec.highestDemandCluster}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),
@@ -1276,9 +1557,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF7FAFC),
+                      color: kScaffoldBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.blue.shade50),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Column(
                       children: [
@@ -1554,11 +1835,13 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                       child: Center(child: Text('No overview series or image available', style: TextStyle(color: Colors.grey[500]))),
                     ),
                   const SizedBox(height: 8),
+                  const Text('All values displayed in cubic meters (m³).', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Text('Total historical: ${total.toStringAsFixed(2)} m³', style: const TextStyle(fontSize: 13)),
                       const SizedBox(width: 12),
-                      Chip(label: Text('Top: $top'), backgroundColor: Colors.blue.shade50),
+                      Chip(label: Text('Top: $top'), backgroundColor: Colors.grey.shade100),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1594,6 +1877,229 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
       ),
     );
   }
+}
+
+  // -------------------------------
+  // Model Accuracy Card
+  // -------------------------------
+  Widget _buildModelAccuracyCardFromData(BuildContext context, Map<String, dynamic> data) {
+    double parseDouble(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    final mape = data['model_mape'] ?? data['mape'];
+    final rmse_l = parseDouble(data['model_rmse'] ?? data['rmse']);
+    final mae_l = parseDouble(data['model_mae'] ?? data['mae']);
+
+    final rmse_m3 = (rmse_l / 1000.0);
+    final mae_m3 = (mae_l / 1000.0);
+
+    return Card(
+      color: kScaffoldBg,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(child: Text('Model Accuracy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+                Tooltip(
+                  message: 'MAPE may appear high when recorded demand is close to zero. MAE and RMSE (in m³) reflect the actual forecast error more accurately.',
+                  child: Icon(Icons.info_outline, color: Colors.grey[600], size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: Text('MAPE: ${mape != null ? (double.tryParse(mape.toString())?.toStringAsFixed(2) ?? '-') + '%' : '-'}', style: const TextStyle(fontSize: 14))),
+                Expanded(child: Text('MAE (m³): ${mae_m3.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14))),
+                Expanded(child: Text('RMSE (m³): ${rmse_m3.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14))),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text('All values displayed in cubic meters (m³).', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------
+  // District Comparison DataTable
+  // -------------------------------
+  Widget _buildDistrictComparisonTable(BuildContext context, List<Recommendation> recs) {
+    final rows = List<Recommendation>.from(recs);
+    // sort by district_rank_by_next_month_demand ascending if available
+    rows.sort((a, b) {
+      final ai = a.districtRankByNextMonthDemand ?? 9999;
+      final bi = b.districtRankByNextMonthDemand ?? 9999;
+      return ai.compareTo(bi);
+    });
+
+    return Card(
+      color: kScaffoldBg,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('District Comparison', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            LayoutBuilder(builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    columnSpacing: 18,
+                    columns: [
+                      DataColumn(label: Tooltip(message: 'Rank is calculated using next-month demand prediction.', child: Text('Rank'))),
+                      DataColumn(label: Text('District')),
+                      DataColumn(label: Tooltip(message: 'Total recorded water refill volume converted to cubic meters.', child: Text('Historical (m³)'))),
+                      DataColumn(label: Tooltip(message: 'AI forecast for upcoming month.', child: Text('Next Month (m³)'))),
+                      DataColumn(label: Tooltip(message: 'Projected annual demand based on monthly trends.', child: Text('Next 12 Months (m³)'))),
+                    ],
+                    rows: rows.map((r) {
+                      final rank = r.districtRankByNextMonthDemand ?? 0;
+                      final isTop = rank == 1;
+                      return DataRow(cells: [
+                        DataCell(Row(children: [
+                          if (isTop)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.amber[700], borderRadius: BorderRadius.circular(8)),
+                              child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                            )
+                          else
+                            Text(rank > 0 ? rank.toString() : '-'),
+                        ])),
+                        DataCell(Text(r.district)),
+                        DataCell(Text(r.districtTotalM3.toStringAsFixed(2))),
+                        DataCell(Text(r.districtForecastNextMonthM3.toStringAsFixed(2))),
+                        DataCell(Text(r.districtForecast12mM3.toStringAsFixed(2))),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            const Text('Ranking Logic: District rank is based on forecasted next-month demand. Higher expected demand = higher priority for station expansion.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------
+// Map & Heatmap Section (Updated)
+// -------------------------------
+Widget _buildMapHeatmapSection(BuildContext context) {
+  const String baseUrl = "https://ai-recommendation-model.onrender.com";
+
+  Future<void> _openExternal(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Cannot open: $url")),
+      );
+    }
+  }
+
+  return Card(
+    color: kScaffoldBg,
+    elevation: 2,
+    child: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Map & Heatmap Visualization',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'These visualizations are generated by the AI backend using Folium. '
+            'They show station locations, demand hotspots, and recommended expansion zones.',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 14),
+
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              // Use the same gradient style as the top 'Regenerate' button
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kPrimaryColor, kSecondaryColor]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _openExternal("$baseUrl/recommendations_map"),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.map, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text("Open Recommendations Map", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kPrimaryColor, kSecondaryColor]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => _openExternal("$baseUrl/demand_heatmap"),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.local_fire_department, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text("Open Demand Heatmap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+          const Text(
+            "Tip: Make sure to run “Generate Recommendations” first so the map and heatmap files are created on the backend.",
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // (sparkline removed — use _OverviewLineChart for larger/consistent charts)

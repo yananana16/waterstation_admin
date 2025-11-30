@@ -139,7 +139,7 @@ except Exception as e:
 # ----------------------------
 def fetch_sales(db) -> pd.DataFrame:
     rows = []
-    query = db.collection("orders").where("status", "in", ["Completed", "Delivered"])
+    query = db.collection("orders").where(field_path="status", op_string="in", value=["Completed", "Delivered"])
     for doc in query.stream():
         s = doc.to_dict() or {}
         created = to_dt(s.get("createdAt") or s.get("timestamp"))

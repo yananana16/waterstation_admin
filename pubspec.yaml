@@ -56,6 +56,7 @@ dependencies:
   intl: ^0.18.0
   shelf_router: ^1.1.4
   dotenv: ^4.2.0
+  webview_flutter: ^4.13.0
 
 
 dev_dependencies:
