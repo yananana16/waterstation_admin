@@ -166,8 +166,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final userEmail = user?.email ?? "Admin Panel";
     // current date/time for top bar
     final now = DateTime.now();
-    final String _topDateText = DateFormat('EEEE, MMM d, y').format(now);
-    final String _topTimeText = DateFormat('h:mm a').format(now);
+    final String topDateText = DateFormat('EEEE, MMM d, y').format(now);
+    final String topTimeText = DateFormat('h:mm a').format(now);
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,
@@ -232,11 +232,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               const SizedBox(width: 6),
                               const Icon(Icons.calendar_today, color: Colors.blueAccent, size: 18),
                               const SizedBox(width: 8),
-                              Text(_topDateText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(topDateText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                               const SizedBox(width: 16),
                               const Icon(Icons.access_time, color: Colors.blueAccent, size: 18),
                               const SizedBox(width: 8),
-                              Text(_topTimeText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text(topTimeText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                             ],
                           ),
                           const Spacer(),
@@ -536,7 +536,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final isWide = constraints.maxWidth >= 900;
       final now = DateTime.now();
       final String dateText = DateFormat('EEEE, MMM d, y').format(now);
-      final String timeText = "${DateFormat('h:mm a').format(now)}";
+      final String timeText = DateFormat('h:mm a').format(now);
       // header placeholder (moved to top app bar)
       final header = const SizedBox.shrink();
 
