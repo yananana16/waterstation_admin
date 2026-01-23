@@ -33,6 +33,13 @@ class Recommendation {
   final String explanation;
   final List<double>? historySeries;
   final int? districtRankByNextMonthDemand;
+  
+  // NEW: Demand Planning Metrics
+  final double? demandVariabilityCV;
+  final double? safetyStockM3;
+  final double? reorderPointM3;
+  final double? confidenceIntervalLowerM3;
+  final double? confidenceIntervalUpperM3;
 
   Recommendation({
     required this.district,
@@ -47,6 +54,12 @@ class Recommendation {
     required this.explanation,
     this.districtRankByNextMonthDemand,
     this.historySeries,
+    // NEW: Demand Planning
+    this.demandVariabilityCV,
+    this.safetyStockM3,
+    this.reorderPointM3,
+    this.confidenceIntervalLowerM3,
+    this.confidenceIntervalUpperM3,
   });
 
   factory Recommendation.fromRaw(Map<String, dynamic> data) {
@@ -122,6 +135,42 @@ class Recommendation {
         // legacy keys
         if (data['monthly_series_m3'] is List) {
           return (data['monthly_series_m3'] as List).map((e) => parseDouble(e)).toList();
+        }
+        return null;
+      })(),
+      // NEW: Parse demand planning metrics
+      demandVariabilityCV: (() {
+        final metrics = data['demand_planning_metrics'];
+        if (metrics is Map) {
+          return parseDouble(metrics['demand_variability_cv']);
+        }
+        return null;
+      })(),
+      safetyStockM3: (() {
+        final metrics = data['demand_planning_metrics'];
+        if (metrics is Map) {
+          return parseDouble(metrics['safety_stock_m3']);
+        }
+        return null;
+      })(),
+      reorderPointM3: (() {
+        final metrics = data['demand_planning_metrics'];
+        if (metrics is Map) {
+          return parseDouble(metrics['reorder_point_m3']);
+        }
+        return null;
+      })(),
+      confidenceIntervalLowerM3: (() {
+        final metrics = data['demand_planning_metrics'];
+        if (metrics is Map) {
+          return parseDouble(metrics['confidence_interval_lower_m3']);
+        }
+        return null;
+      })(),
+      confidenceIntervalUpperM3: (() {
+        final metrics = data['demand_planning_metrics'];
+        if (metrics is Map) {
+          return parseDouble(metrics['confidence_interval_upper_m3']);
         }
         return null;
       })(),
@@ -811,39 +860,10 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                                   }
                                 }),
                               ),
-                            LayoutBuilder(
-                            builder: (context, constraints) {
-                              // using Wrap-based layout below (constraints used in inner LayoutBuilder)
-
-                              return Padding(
-                                padding: const EdgeInsets.all(12.0),
-                                child: LayoutBuilder(builder: (ctx, childConstraints) {
-                                  final double totalW = childConstraints.maxWidth;
-                                  final double paddingAll = 12.0;
-                                  final double spacing = 16.0;
-                                  final int columns = totalW > 600 ? 2 : 1;
-                                  final double rawItemWidth = (totalW - paddingAll * 2 - spacing * (columns - 1)) / columns;
-                                  final double itemWidth = math.max(280.0, math.min(rawItemWidth, 720.0));
-
-                                  return Wrap(
-                                    spacing: spacing,
-                                    runSpacing: spacing,
-                                    children: List.generate(displayList.length, (index) {
-                                      final rec = displayList[index];
-                                      return SizedBox(
-                                        width: itemWidth,
-                                        child: AnimatedScale(
-                                          scale: 1.0,
-                                          duration: Duration(milliseconds: 250 + (index * 40)),
-                                          child: _buildRecommendationCard(context, rec),
-                                        ),
-                                      );
-                                    }),
-                                  );
-                                }),
-                              );
-                            },
-                          ),
+                            Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: _buildConsolidatedRecommendationsTable(context, displayList),
+                            ),
                         ],
                       );
                     },
@@ -1158,47 +1178,87 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     });
   }
 
-    Widget buildFuture12MonthForecastSection(BuildContext context, String districtName) {
+  Widget buildFuture12MonthForecastSection(BuildContext context, String districtName) {
     final fetchName = (districtName == 'All') ? 'Overall' : districtName;
     return FutureBuilder<List<FutureForecastPoint>>(
       future: fetchFutureTimeline(fetchName),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return Card(color: kScaffoldBg, child: Container(padding: const EdgeInsets.all(16), height: 120, child: const Center(child: CircularProgressIndicator())));
+          return Card(
+            color: kScaffoldBg,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              height: 150,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 10),
+                  Text('Loading forecast...', style: TextStyle(color: Colors.black54)),
+                ],
+              ),
+            ),
+          );
         }
+
         final points = snap.data ?? [];
         return Card(
           color: kScaffoldBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('12-Month Demand Forecast (m³)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                const Text('Projected monthly water demand based on exponential smoothing analysis of historical customer orders.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                const SizedBox(height: 12),
-                if (points.isEmpty) 
-                  const Padding(padding: EdgeInsets.all(12), child: Text('No future forecast available.'))
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: kPrimaryColor, borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.timeline, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text('12-Month Demand Forecast', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text('Projected monthly demand for the year ahead. Use this to schedule supply and avoid shortages.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87)),
+                const SizedBox(height: 14),
+                if (points.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: const Text('No forecast available yet. Generate recommendations to populate this chart.',
+                        style: TextStyle(fontSize: 13, color: Colors.black54)),
+                  )
                 else
-                  SizedBox(height: 260, child: buildFuture12MonthChart(points)),
-                const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: SizedBox(height: 260, child: buildFuture12MonthChart(points)),
+                  ),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.blue.shade200),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('What this graph shows:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
-                      const SizedBox(height: 6),
-                      const Text('• Each point represents the predicted water demand for that month.\n• The line trend helps identify if demand is growing, shrinking, or staying stable.\n• Use this to plan for future capacity and resource allocation.\n• All measurements are in cubic meters (m³).', 
-                        style: TextStyle(fontSize: 11, color: Colors.black54, height: 1.4)),
-                    ],
+                  child: const Text(
+                    'Reading tips:\n• Each point = expected demand for that month\n• Higher points mean more water is needed\n• Plan extra supply for months with the highest peaks',
+                    style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5),
                   ),
                 ),
               ],
@@ -1213,6 +1273,143 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
 
   
 
+  /// Build consolidated table with all recommendations
+  Widget _buildConsolidatedRecommendationsTable(BuildContext context, List<Recommendation> recs) {
+    if (recs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('District Snapshot', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text('Scroll sideways to compare every district. Metrics are in m³.', style: TextStyle(fontSize: 13, color: Colors.black54)),
+            const SizedBox(height: 14),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 80),
+                child: DataTable(
+                  columnSpacing: 18,
+                  horizontalMargin: 12,
+                  headingRowColor: MaterialStateColor.resolveWith((states) => kPrimaryColor.withOpacity(0.08)),
+                  dataRowColor: MaterialStateColor.resolveWith((states) => Colors.white),
+                  headingRowHeight: 56,
+                  dataRowHeight: 50,
+                  border: TableBorder.all(color: Colors.grey.shade200, width: 0.6, borderRadius: BorderRadius.circular(10)),
+                  columns: const [
+                    DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Trend', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Past Usage', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Next Month', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Next Year', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Demand Stability', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Min Expected', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Max Expected', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Buffer Stock', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                    DataColumn(label: Text('Reorder At', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                  ],
+                  rows: recs.map((rec) {
+                    final cv = rec.demandVariabilityCV ?? 0.0;
+                    final variabilityLevel = cv < 0.3 ? 'Low' : cv < 0.6 ? 'Medium' : 'High';
+                    final variabilityColor = cv < 0.3 ? kSuccessColor : cv < 0.6 ? kWarningColor : Colors.redAccent;
+
+                    final trendColor = rec.districtTrend.toLowerCase() == 'increasing'
+                        ? Colors.green
+                        : rec.districtTrend.toLowerCase() == 'decreasing'
+                            ? Colors.red
+                            : Colors.orange;
+
+                    return DataRow(cells: [
+                      DataCell(Text(rec.district, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kPrimaryColor))),
+                      DataCell(Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            rec.districtTrend.toLowerCase() == 'increasing'
+                                ? Icons.trending_up
+                                : rec.districtTrend.toLowerCase() == 'decreasing'
+                                    ? Icons.trending_down
+                                    : Icons.trending_flat,
+                            size: 16,
+                            color: trendColor,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(rec.districtTrend, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: trendColor)),
+                        ],
+                      )),
+                      DataCell(Text(rec.districtTotalM3.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600))),
+                      DataCell(Text(rec.districtForecastNextMonthM3.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kPrimaryColor))),
+                      DataCell(Text(rec.districtForecast12mM3.toStringAsFixed(1), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: kPrimaryColor))),
+                      DataCell(Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: variabilityColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: variabilityColor.withOpacity(0.4)),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(variabilityLevel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: variabilityColor)),
+                            Text(cv.toStringAsFixed(2), style: TextStyle(fontSize: 10, color: variabilityColor)),
+                          ],
+                        ),
+                      )),
+                      DataCell(Text(rec.confidenceIntervalLowerM3?.toStringAsFixed(1) ?? 'N/A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF2196F3)))),
+                      DataCell(Text(rec.confidenceIntervalUpperM3?.toStringAsFixed(1) ?? 'N/A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF2196F3)))),
+                      DataCell(Text(rec.safetyStockM3?.toStringAsFixed(1) ?? 'N/A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kSuccessColor))),
+                      DataCell(Text(rec.reorderPointM3?.toStringAsFixed(1) ?? 'N/A', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFFF9800)))),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: kPrimaryColor, size: 18),
+                      SizedBox(width: 8),
+                      Text('Column Explanations', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kPrimaryColor)),
+                    ],
+                  ),
+                  SizedBox(height: 10),
+                  Text('• District: The geographic district name', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Trend: Shows if demand is Increasing, Stable, or Decreasing', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Past Usage: Total water consumed historically (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Next Month: Forecasted demand for the upcoming month (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Next Year: Total projected demand for next 12 months (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Demand Stability: Coefficient of variation - Low (predictable) vs High (volatile)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Min Expected: Lower confidence interval - minimum likely demand (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Max Expected: Upper confidence interval - maximum likely demand (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Buffer Stock: Safety stock - extra water to keep ready for unexpected demand (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                  Text('• Reorder At: Reorder point - when to place your next water order to avoid stockouts (m³)', style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.5)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Build each recommendation card
   Widget _buildRecommendationCard(BuildContext context, Recommendation rec) {
     return AnimatedContainer(
@@ -1223,7 +1420,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => _showMapSheet(context, rec.lat, rec.lng, rec.district),
+          onTap: null,
           child: Card(
             elevation: 6,
             shadowColor: Colors.blue.withOpacity(0.12),
@@ -1269,18 +1466,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (rec.districtRankByNextMonthDemand != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8.0),
-                            child: Tooltip(
-                              message: 'Rank is calculated using next-month demand prediction.',
-                              child: Chip(
-                                label: Text('Rank ${rec.districtRankByNextMonthDemand}'),
-                                backgroundColor: Colors.blue.shade100,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1398,6 +1583,9 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                           const SizedBox(height: 8),
                           // Explanation removed per request
                           const SizedBox(height: 10),
+                    // NEW: Demand Planning Metrics Card
+                    DemandPlanningCard(rec: rec),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -1415,38 +1603,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                           },
                           icon: Icon(Icons.copy, color: Colors.grey[600]),
                         ),
-                        const SizedBox(width: 6),
-                        // Open in Google Maps
-                        IconButton(
-                          tooltip: 'Open in Google Maps',
-                          onPressed: () async {
-                            final coords = '${rec.lat.toStringAsFixed(6)},${rec.lng.toStringAsFixed(6)}';
-                            final url = 'https://www.google.com/maps/search/?api=1&query=$coords';
-                            if (await canLaunch(url)) {
-                              await launch(url);
-                            } else {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Could not open maps'), behavior: SnackBarBehavior.floating),
-                                );
-                              }
-                            }
-                          },
-                          icon: Icon(Icons.map_outlined, color: Colors.blue[700]),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1976D2),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          ),
-                          child: const Text('View Map', style: TextStyle(fontWeight: FontWeight.w700)),
-                          onPressed: () => _showMapSheet(context, rec.lat, rec.lng, rec.district),
-                        ),
                       ],
                     ),
                   ],
@@ -1459,232 +1615,6 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
     );
   }
 
-  Future<void> _showMapSheet(BuildContext context, double lat, double lng, String district) async {
-    final coords = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(20),
-            child: Container(
-            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.18),
-                  blurRadius: 36,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.location_on, color: Colors.white, size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          district,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(Icons.close, color: Colors.grey[600]),
-                        tooltip: 'Close',
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Container(
-                    height: 400,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.blue.shade100, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.08),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: FlutterMap(
-                      options: MapOptions(
-                        initialCenter: LatLng(lat, lng),
-                        initialZoom: 17.0,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                        ),
-                        CircleLayer(
-                          circles: [
-                            CircleMarker(
-                              point: LatLng(lat, lng),
-                              useRadiusInMeter: true,
-                              radius: 50,
-                              color: Colors.blue.withAlpha((0.18 * 255).round()),
-                              borderColor: Colors.blueAccent.withAlpha((0.6 * 255).round()),
-                              borderStrokeWidth: 2.5,
-                            ),
-                          ],
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: LatLng(lat, lng),
-                              width: 44,
-                              height: 44,
-                              child: const Icon(Icons.location_on, color: Colors.red, size: 44),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: kScaffoldBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.my_location, size: 20, color: Colors.grey[600]),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Latitude: ${lat.toStringAsFixed(6)}',
-                              style: TextStyle(fontSize: 15, color: Colors.grey[800], fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.my_location, size: 20, color: Colors.grey[600]),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Longitude: ${lng.toStringAsFixed(6)}',
-                              style: TextStyle(fontSize: 15, color: Colors.grey[800], fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(14),
-                              onTap: () async {
-                                final url = 'https://www.google.com/maps/search/?api=1&query=$coords';
-                                if (await canLaunch(url)) {
-                                  await launch(url);
-                                }
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(18),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.share_location, color: Colors.white, size: 22),
-                                    SizedBox(width: 10),
-                                    Text('Share Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () async {
-                              await Clipboard.setData(ClipboardData(text: coords));
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Coordinates copied!'),
-                                    backgroundColor: Colors.blueAccent,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Icon(Icons.copy, color: Colors.grey[700], size: 22),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-              ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildOverviewCardFromData(BuildContext context, Map<String, dynamic> data) {
     double parseDouble(dynamic v) {
@@ -1884,7 +1814,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                             const Text('Lowest demand district', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black54)),
                             Text(low, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
                             const SizedBox(height: 4),
-                            const Text('Uses the least water', style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                            const Text('Uses the least water', style: TextStyle(fontSize: 11, color: Colors.black54)),
                           ],
                         ),
                       ),
@@ -2002,84 +1932,90 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   // -------------------------------
   Widget _buildDistrictComparisonTable(BuildContext context, List<Recommendation> recs) {
     final rows = List<Recommendation>.from(recs);
-    // sort by district_rank_by_next_month_demand ascending if available
-    rows.sort((a, b) {
-      final ai = a.districtRankByNextMonthDemand ?? 9999;
-      final bi = b.districtRankByNextMonthDemand ?? 9999;
-      return ai.compareTo(bi);
-    });
+    // sort by next-month demand descending
+    rows.sort((a, b) => b.districtForecastNextMonthM3.compareTo(a.districtForecastNextMonthM3));
 
     return Card(
       color: kScaffoldBg,
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('District Demand Planning Comparison', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            const Text('Which districts need the most water? Here\'s the ranking:', style: TextStyle(fontSize: 12, color: Colors.black54)),
-            const SizedBox(height: 12),
+            const Text('District Priority Ranking', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text('Sorted by next-month demand. Focus on the top rows first.', style: TextStyle(fontSize: 13, color: Colors.black54)),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
+                gradient: LinearGradient(colors: [Colors.blue.shade50, Colors.blue.shade100], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade300),
               ),
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Text('What this table shows:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue)),
-                  SizedBox(height: 6),
-                  Text('• Historical (m³) = Water used so far\n• Next Month = How much water we expect people to use next month\n• Next 12 Months = Total water needed for the whole year\n• Rank = Which districts need the most attention', 
-                    style: TextStyle(fontSize: 11, color: Colors.black54, height: 1.4)),
+                  Icon(Icons.info_outline, color: kPrimaryColor, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Past Usage = water used so far; Next Month = expected demand next month; Next Year = total projected demand for the year.',
+                        style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.4)),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             LayoutBuilder(builder: (context, constraints) {
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minWidth: constraints.maxWidth),
                   child: DataTable(
-                    columnSpacing: 18,
-                    columns: [
-                      DataColumn(label: Tooltip(message: 'Rank is calculated using next-month demand prediction. Rank 1 = highest demand = priority for expansion.', child: Text('Rank'))),
-                      DataColumn(label: Text('District')),
-                      DataColumn(label: Tooltip(message: 'Total recorded water refill volume converted to cubic meters.', child: Text('Historical (m³)'))),
-                      DataColumn(label: Tooltip(message: 'AI forecast for upcoming month based on past trends.', child: Text('Next Month (m³)'))),
-                      DataColumn(label: Tooltip(message: 'Projected annual demand based on monthly trends.', child: Text('Next 12 Months (m³)'))),
+                    headingRowColor: MaterialStateColor.resolveWith((states) => kPrimaryColor.withOpacity(0.08)),
+                    dataRowColor: MaterialStateColor.resolveWith((states) => Colors.white),
+                    columnSpacing: 20,
+                    headingRowHeight: 50,
+                    dataRowHeight: 48,
+                    border: TableBorder.all(color: Colors.grey.shade200, width: 0.6, borderRadius: BorderRadius.circular(10)),
+                    columns: const [
+                      DataColumn(label: Text('Rank', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                      DataColumn(label: Text('District', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                      DataColumn(label: Text('Past Usage (m³)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                      DataColumn(label: Text('Next Month (m³)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                      DataColumn(label: Text('Next Year (m³)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
                     ],
-                    rows: rows.map((r) {
-                      final rank = r.districtRankByNextMonthDemand ?? 0;
-                      final isTop = rank == 1;
-                      return DataRow(cells: [
-                        DataCell(Row(children: [
-                          if (isTop)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.amber[700], borderRadius: BorderRadius.circular(8)),
-                              child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-                            )
-                          else
-                            Text(rank > 0 ? rank.toString() : '-'),
-                        ])),
-                        DataCell(Text(r.district)),
-                        DataCell(Text(r.districtTotalM3.toStringAsFixed(2))),
-                        DataCell(Text(r.districtForecastNextMonthM3.toStringAsFixed(2))),
-                        DataCell(Text(r.districtForecast12mM3.toStringAsFixed(2))),
-                      ]);
+                    rows: rows.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final r = entry.value;
+                      final rank = idx + 1;
+                      final isTop = rank <= 3;
+                      return DataRow(
+                        color: MaterialStateColor.resolveWith((states) => isTop ? Colors.amber.shade50 : Colors.white),
+                        cells: [
+                          DataCell(Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isTop ? Colors.amber : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text('#$rank', style: TextStyle(fontWeight: FontWeight.w800, color: isTop ? Colors.black87 : Colors.black54)),
+                          )),
+                          DataCell(Text(r.district, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                          DataCell(Text(r.districtTotalM3.toStringAsFixed(2), style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(r.districtForecastNextMonthM3.toStringAsFixed(2), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kPrimaryColor))),
+                          DataCell(Text(r.districtForecast12mM3.toStringAsFixed(2), style: const TextStyle(fontSize: 12))),
+                        ],
+                      );
                     }).toList(),
                   ),
                 ),
               );
             }),
             const SizedBox(height: 12),
-            const Text('💡 TIP: Rank 1 district has the highest water demand next month. Build new stations there first to serve customers quickly!', style: TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500)),
+            const Text('Top 3 districts are highlighted — prioritize building there first.', style: TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -2189,85 +2125,148 @@ Widget _buildMapHeatmapSection(BuildContext context) {
 
   return Card(
     color: kScaffoldBg,
-    elevation: 2,
+    elevation: 3,
+    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     child: Padding(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Customer Demand Maps & Heatmap',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'These demand-driven visualizations show customer distribution, demand hotspots, and recommended station locations based on actual customer demand patterns.',
-            style: TextStyle(fontSize: 13, color: Colors.black54),
-          ),
-          const SizedBox(height: 14),
-
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          Row(
             children: [
-              // Use the same gradient style as the top 'Regenerate' button
               Container(
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [kPrimaryColor, kSecondaryColor]),
+                  color: kPrimaryColor,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => _showMapDialog(context, 'Recommendations Map', recommendationsMapUrl),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.map, color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text("Open Recommendations Map", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                child: const Icon(Icons.map, color: Colors.white, size: 20),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [kPrimaryColor, kSecondaryColor]),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => _showMapDialog(context, 'Demand Heatmap', demandHeatmapUrl),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.local_fire_department, color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text("Open Demand Heatmap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Visual Maps',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           const Text(
-            "Tip: Make sure to run “Generate Recommendations” first so the map and heatmap files are created on the backend.",
-            style: TextStyle(fontSize: 12, color: Colors.black54),
+            'See where customers are located and where water demand is highest. These maps help you decide where to build new water stations.',
+            style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 640;
+              final buttons = [
+                _buildMapCTA(
+                  context: context,
+                  label: 'View Station Map',
+                  icon: Icons.location_on,
+                  onTap: () => _showMapDialog(context, 'Recommendations Map', recommendationsMapUrl),
+                  primary: kPrimaryColor,
+                  secondary: kSecondaryColor,
+                ),
+                _buildMapCTA(
+                  context: context,
+                  label: 'View Demand Heatmap',
+                  icon: Icons.thermostat,
+                  onTap: () => _showMapDialog(context, 'Demand Heatmap', demandHeatmapUrl),
+                  primary: kSecondaryColor,
+                  secondary: kPrimaryColor,
+                ),
+              ];
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    buttons[0],
+                    const SizedBox(height: 12),
+                    buttons[1],
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: buttons[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: buttons[1]),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Tip: Run “Generate Recommendations” first so the latest maps and heatmaps are ready.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+Widget _buildMapCTA({
+  required BuildContext context,
+  required String label,
+  required IconData icon,
+  required VoidCallback onTap,
+  required Color primary,
+  required Color secondary,
+}) {
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [primary, secondary]),
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(color: primary.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 6)),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -2308,7 +2307,7 @@ class _OverviewLineChartState extends State<_OverviewLineChart> {
 
     final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     final currentYear = DateTime.now().year;
-    final monthsWithYear = List.generate(months.length, (i) => '${months[i]} ${currentYear}');
+    final monthsWithYear = List.generate(months.length, (i) => '${months[i]} $currentYear');
     final Color chartColor = kPrimaryColor;
 
     // Use a LayoutBuilder + Stack so we can compute chart dimensions and render
@@ -2485,4 +2484,183 @@ class _OverviewLineChartState extends State<_OverviewLineChart> {
     return '';
   }
 }
- 
+
+// ============================================
+// DEMAND PLANNING METRICS CARD
+// ============================================
+class DemandPlanningCard extends StatelessWidget {
+  final Recommendation rec;
+  const DemandPlanningCard({required this.rec, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasMetrics = rec.safetyStockM3 != null && rec.safetyStockM3! > 0;
+    
+    if (!hasMetrics) {
+      return const SizedBox.shrink(); // Hide if no metrics
+    }
+
+    final cv = rec.demandVariabilityCV ?? 0.0;
+    final variabilityLevel = cv < 0.3 ? 'Low' : cv < 0.6 ? 'Medium' : 'High';
+    final variabilityColor = cv < 0.3 ? kSuccessColor : cv < 0.6 ? kWarningColor : Colors.redAccent;
+
+    // Get trend color
+    final trendColor = rec.districtTrend.toLowerCase() == 'increasing'
+        ? Colors.green
+        : rec.districtTrend.toLowerCase() == 'decreasing'
+            ? Colors.red
+            : Colors.orange;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columnSpacing: 10,
+        headingRowColor: MaterialStateColor.resolveWith((states) => Colors.grey[100]!),
+        dataRowColor: MaterialStateColor.resolveWith((states) => Colors.white),
+        headingRowHeight: 50,
+        dataRowHeight: 45,
+        columns: const [
+          DataColumn(label: Text('District', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 10))),
+          DataColumn(label: Text('Trend', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 10))),
+          DataColumn(label: Text('History\n(m³)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('Next Month\n(m³)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('Next 12M\n(m³)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('Variability\n(CV)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('CI Lower\n(95%)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('CI Upper\n(95%)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('Safety\nStock (m³)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+          DataColumn(label: Text('Reorder\nPoint (m³)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 9))),
+        ],
+        rows: [
+          DataRow(cells: [
+            // District Name
+            DataCell(
+              Text(
+                rec.district,
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: kPrimaryColor),
+              ),
+            ),
+            // Trend with Icon
+            DataCell(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    rec.districtTrend.toLowerCase() == 'increasing'
+                        ? Icons.trending_up
+                        : rec.districtTrend.toLowerCase() == 'decreasing'
+                            ? Icons.trending_down
+                            : Icons.trending_flat,
+                    size: 14,
+                    color: trendColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    rec.districtTrend,
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: trendColor),
+                  ),
+                ],
+              ),
+            ),
+            // History
+            DataCell(
+              Tooltip(
+                message: 'Total historical demand',
+                child: Text(
+                  rec.districtTotalM3.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            // Next Month Forecast
+            DataCell(
+              Tooltip(
+                message: 'Forecasted demand for next month',
+                child: Text(
+                  rec.districtForecastNextMonthM3.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF1976D2)),
+                ),
+              ),
+            ),
+            // Next 12 Months Forecast
+            DataCell(
+              Tooltip(
+                message: 'Forecasted demand for next 12 months',
+                child: Text(
+                  rec.districtForecast12mM3.toStringAsFixed(1),
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF1976D2)),
+                ),
+              ),
+            ),
+            // Demand Variability
+            DataCell(
+              Tooltip(
+                message: 'Coefficient of variation (demand stability)',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: variabilityColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        cv.toStringAsFixed(2),
+                        style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: variabilityColor),
+                      ),
+                      Text(
+                        variabilityLevel,
+                        style: TextStyle(fontSize: 7, color: variabilityColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // CI Lower
+            DataCell(
+              Tooltip(
+                message: 'Worst case demand (95% confidence)',
+                child: Text(
+                  '${rec.confidenceIntervalLowerM3?.toStringAsFixed(1) ?? 'N/A'}',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF2196F3)),
+                ),
+              ),
+            ),
+            // CI Upper
+            DataCell(
+              Tooltip(
+                message: 'Best case demand (95% confidence)',
+                child: Text(
+                  '${rec.confidenceIntervalUpperM3?.toStringAsFixed(1) ?? 'N/A'}',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF2196F3)),
+                ),
+              ),
+            ),
+            // Safety Stock
+            DataCell(
+              Tooltip(
+                message: 'Buffer inventory to maintain',
+                child: Text(
+                  '${rec.safetyStockM3?.toStringAsFixed(1) ?? 'N/A'}',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF4CAF50)),
+                ),
+              ),
+            ),
+            // Reorder Point
+            DataCell(
+              Tooltip(
+                message: 'Trigger automatic ordering at this level',
+                child: Text(
+                  '${rec.reorderPointM3?.toStringAsFixed(1) ?? 'N/A'}',
+                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFFFF9800)),
+                ),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+}
